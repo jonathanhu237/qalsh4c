@@ -20,13 +20,13 @@ auto main(int argc, char** argv) -> int {
     unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
+    int left_boundary{0};
     const int kDefaultLeftBoundary = -128;
-    int left_boundary{kDefaultLeftBoundary};
     app.add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
         ->default_val(kDefaultLeftBoundary);
 
+    int right_boundary{0};
     const int kDefaultRightBoundary = 128;
-    int right_boundary{kDefaultRightBoundary};
     app.add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
         ->default_val(kDefaultRightBoundary);
 
