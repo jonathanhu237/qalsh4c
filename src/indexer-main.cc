@@ -13,7 +13,7 @@ auto main(int argc, char** argv) -> int {
     app.add_option("-n,--dataset-name", dataset_name, "Name of the dataset to be indexed")->required();
 
     std::string parent_directory;
-    app.add_option("--parent-directory", parent_directory, "Parent directory for the dataset")->default_val("data");
+    app.add_option("-p,--parent-directory", parent_directory, "Parent directory for the dataset")->default_val("data");
 
     unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();
@@ -27,6 +27,11 @@ auto main(int argc, char** argv) -> int {
                    "automatically)")
         ->default_val(0);
 
+    unsigned int page_size{0};
+    const unsigned int kDefaultPageSize = 4096;
+    app.add_option("-B,--page_size", page_size, "Page size for the indexer (default: 4096 bytes)")
+        ->default_val(kDefaultPageSize);
+
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");
 
@@ -39,6 +44,7 @@ auto main(int argc, char** argv) -> int {
                            .set_num_points(num_points)
                            .set_num_dimensions(num_dimensions)
                            .set_num_hash_tables(num_hash_tables)
+                           .set_page_size(page_size)
                            .set_verbose(verbose)
                            .Build();
 
