@@ -1,8 +1,10 @@
 #include <CLI11/CLI11.hpp>
+#include <exception>
+#include <format>
 
 #include "dataset-generator.h"
 
-auto main(int argc, char **argv) -> int {
+auto main(int argc, char** argv) -> int {
     CLI::App app("Dataset Generator for Chamfer Distance Approximation");
     argv = app.ensure_utf8(argv);
 
@@ -31,22 +33,27 @@ auto main(int argc, char **argv) -> int {
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output")->default_val(false);
 
-    CLI11_PARSE(app, argc, argv);
+    try {
+        CLI11_PARSE(app, argc, argv);
 
-    auto dataset_generator = qalsh_chamfer::DatasetGeneratorBuilder()
-                                 .set_dataset_name(dataset_name)
-                                 .set_parent_directory(parent_directory)
-                                 .set_num_points_(num_points)
-                                 .set_num_dimensions(num_dimensions)
-                                 .set_left_boundary(left_boundary)
-                                 .set_right_boundary(right_boundary)
-                                 .set_verbose(verbose)
-                                 .Build();
+        auto dataset_generator = qalsh_chamfer::DatasetGeneratorBuilder()
+                                     .set_dataset_name(dataset_name)
+                                     .set_parent_directory(parent_directory)
+                                     .set_num_points_(num_points)
+                                     .set_num_dimensions(num_dimensions)
+                                     .set_left_boundary(left_boundary)
+                                     .set_right_boundary(right_boundary)
+                                     .set_verbose(verbose)
+                                     .Build();
 
-    if (verbose) {
-        dataset_generator->PrintConfiguration();
+        if (verbose) {
+            dataset_generator->PrintConfiguration();
+        }
+        dataset_generator->Execute();
+    } catch (const std::exception& e) {
+        std::cerr << std::format("Error: {}\n", e.what());
+        return 1;
     }
-    dataset_generator->Execute();
 
     return 0;
 }
