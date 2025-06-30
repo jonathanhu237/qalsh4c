@@ -1,8 +1,11 @@
 #ifndef DATASET_GENERATOR_H_
 #define DATASET_GENERATOR_H_
 
+#include <Eigen/Dense>
 #include <memory>
+#include <random>
 #include <string>
+#include <vector>
 
 namespace qalsh_chamfer {
 
@@ -34,14 +37,26 @@ class DatasetGeneratorBuilder {
 
 class DatasetGenerator {
    public:
-    void PrintConfiguration() const;
-    void Execute() const;
+    auto PrintConfiguration() const -> void;
+    auto Execute() const -> void;
 
     friend class DatasetGeneratorBuilder;
 
    private:
     DatasetGenerator(std::string dataset_name, std::string parent_directory, unsigned int num_points,
                      unsigned int num_dimensions, int left_boundary, int right_boundary, bool debug);
+
+    [[nodiscard]] auto GenerateSet(std::uniform_real_distribution<double>& dist, std::mt19937& gen,
+                                   const std::string& set_name) const -> std::vector<std::vector<double>>;
+
+    auto WriteSetToFile(const std::string& dataset_directory, const std::string& set_name,
+                        const std::vector<std::vector<double>>& set) const -> void;
+
+    [[nodiscard]] auto ToEigenMatrix(const std::vector<std::vector<double>>& set) const
+        -> Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
+
+    [[nodiscard]] auto CalculateChamfer(const Eigen::MatrixXd& from_matrix, const Eigen::MatrixXd& to_matrix,
+                                        const std::string& from_name, const std::string& to_name) const -> double;
 
     std::string dataset_name_;
     std::string parent_directory_;
