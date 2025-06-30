@@ -3,7 +3,7 @@
 #include <format>
 #include <iostream>
 
-#include "const.h"
+#include "constants.h"
 #include "qalsh_chamfer.h"
 
 auto main(int argc, char **argv) -> int {

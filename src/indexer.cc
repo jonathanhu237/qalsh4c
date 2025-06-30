@@ -6,7 +6,7 @@
 #include <memory>
 #include <numbers>
 
-#include "const.h"
+#include "constants.h"
 
 namespace qalsh_chamfer {
 
@@ -83,7 +83,12 @@ auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> Indexe
 }
 
 auto IndexerBuilder::set_page_size(unsigned int page_size) -> IndexerBuilder& {
-    page_size_ = page_size;
+    if (page_size == 0) {
+        // TODO: the page size should be capable of storing the dot vector and some necessary data for the B+ tree.
+        page_size_ = kBasePageSize;
+    } else {
+        page_size_ = page_size;
+    }
     return *this;
 }
 

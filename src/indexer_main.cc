@@ -4,7 +4,7 @@
 #include <format>
 #include <string>
 
-#include "const.h"
+#include "constants.h"
 #include "indexer.h"
 
 auto main(int argc, char** argv) -> int {
@@ -49,9 +49,9 @@ auto main(int argc, char** argv) -> int {
         ->default_val(0);
 
     unsigned int page_size{0};
-    const unsigned int kDefaultPageSize = 4096;
-    app.add_option("-B,--page_size", page_size, "Page size for the indexer (default: 4096 bytes)")
-        ->default_val(kDefaultPageSize);
+    app.add_option("-B,--page_size", page_size,
+                   "Page size for the indexer (default: 0, which means the page size will be determined automatically)")
+        ->default_val(0);
 
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");

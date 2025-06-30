@@ -2,7 +2,7 @@
 #include <exception>
 #include <format>
 
-#include "const.h"
+#include "constants.h"
 #include "dataset_generator.h"
 
 auto main(int argc, char** argv) -> int {
