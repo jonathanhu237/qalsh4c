@@ -24,12 +24,12 @@ auto main(int argc, char** argv) -> int {
     unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
-    float beta{0.0};
+    double beta{0.0};
     app.add_option("-b, --beta", beta,
                    "Beta parameter for the indexer (default: 0.0, which means the beta will be 100/num_points)")
         ->default_val(0.0);
 
-    float error_probability{0.0};
+    double error_probability{0.0};
     app.add_option("-e, --error_probability", error_probability, "Error probability for the indexer (default: 1/e)")
         ->default_val(qalsh_chamfer::kDefaultErrorProbability);
 
