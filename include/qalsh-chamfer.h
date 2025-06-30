@@ -16,7 +16,6 @@ class QalshChamferBuilder {
     auto set_parent_directory(const std::string& parent_directory) -> QalshChamferBuilder&;
     auto set_num_points(unsigned int num_points) -> QalshChamferBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> QalshChamferBuilder&;
-    auto set_build_index(bool build_index) -> QalshChamferBuilder&;
     auto set_verbose(bool verbose) -> QalshChamferBuilder&;
 
     [[nodiscard]] auto Build() const -> std::unique_ptr<QalshChamfer>;
@@ -26,7 +25,6 @@ class QalshChamferBuilder {
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
-    bool build_index_{false};
     bool verbose_{false};
 };
 
@@ -39,13 +37,12 @@ class QalshChamfer {
 
    private:
     QalshChamfer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
-                 unsigned int num_dimensions, bool build_index, bool verbose);
+                 unsigned int num_dimensions, bool verbose);
 
     std::string dataset_name_;
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
-    bool build_index_{false};
     bool verbose_{false};
 };
 
