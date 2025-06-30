@@ -50,6 +50,7 @@ auto main(int argc, char** argv) -> int {
             dataset_generator->PrintConfiguration();
         }
         dataset_generator->Execute();
+
     } catch (const std::exception& e) {
         std::cerr << std::format("Error: {}\n", e.what());
         return 1;

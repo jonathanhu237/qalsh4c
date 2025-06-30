@@ -39,6 +39,7 @@ auto main(int argc, char **argv) -> int {
             qalsh_chamfer->PrintConfiguration();
         }
         qalsh_chamfer->Execute();
+
     } catch (const std::exception &e) {
         std::cerr << std::format("Error: {}\n", e.what());
         return 1;
