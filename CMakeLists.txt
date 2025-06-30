@@ -16,3 +16,15 @@ target_include_directories(dataset-generator PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/third_party"
 )
+
+# ------------ QALSH Chamfer ------------
+
+add_executable(qalsh-chamfer
+    src/qalsh-chamfer.cc
+    src/qalsh-chamfer-main.cc
+)
+
+target_include_directories(qalsh-chamfer PRIVATE 
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/third_party"
+)
