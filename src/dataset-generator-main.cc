@@ -2,6 +2,7 @@
 #include <exception>
 #include <format>
 
+#include "const.h"
 #include "dataset-generator.h"
 
 auto main(int argc, char** argv) -> int {
@@ -12,7 +13,8 @@ auto main(int argc, char** argv) -> int {
     app.add_option("-n,--name", dataset_name, "Name of the dataset")->required();
 
     std::string parent_directory;
-    app.add_option("-p,--parent_directory", parent_directory, "Parent directory for the dataset")->default_val("data");
+    app.add_option("-p,--parent_directory", parent_directory, "Parent directory for the dataset")
+        ->default_val(qalsh_chamfer::kDefaultParentDirectory);
 
     unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();
@@ -21,14 +23,12 @@ auto main(int argc, char** argv) -> int {
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
     int left_boundary{0};
-    const int kDefaultLeftBoundary = -128;
     app.add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
-        ->default_val(kDefaultLeftBoundary);
+        ->default_val(qalsh_chamfer::kDefaultLeftBoundary);
 
     int right_boundary{0};
-    const int kDefaultRightBoundary = 128;
     app.add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
-        ->default_val(kDefaultRightBoundary);
+        ->default_val(qalsh_chamfer::kDefaultRightBoundary);
 
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");

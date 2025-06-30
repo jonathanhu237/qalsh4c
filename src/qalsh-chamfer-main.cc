@@ -3,6 +3,7 @@
 #include <format>
 #include <iostream>
 
+#include "const.h"
 #include "qalsh-chamfer.h"
 
 auto main(int argc, char **argv) -> int {
@@ -13,7 +14,8 @@ auto main(int argc, char **argv) -> int {
     app.add_option("-n,--name", dataset_name, "Name of the dataset")->required();
 
     std::string parent_directory;
-    app.add_option("-p,--partent_directory", parent_directory, "Parent directory for the dataset")->default_val("data");
+    app.add_option("-p,--parent_directory", parent_directory, "Parent directory for the dataset")
+        ->default_val(qalsh_chamfer::kDefaultParentDirectory);
 
     unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();
