@@ -30,6 +30,12 @@ auto IndexerBuilder::set_num_dimensions(unsigned int num_dimensions) -> IndexerB
     return *this;
 }
 
+auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder& {
+    // TODO: add the logic to determine the number of hash tables based on the formula provided in the paper
+    num_hash_tables_ = num_hash_tables;
+    return *this;
+}
+
 auto IndexerBuilder::set_verbose(bool verbose) -> IndexerBuilder& {
     verbose_ = verbose;
     return *this;
@@ -56,6 +62,7 @@ auto Indexer::PrintConfiguration() const -> void {
     std::cout << std::format("Parent Directory: {}\n", parent_directory_);
     std::cout << std::format("Number of Points: {}\n", num_points_);
     std::cout << std::format("Number of Dimensions: {}\n", num_dimensions_);
+    std::cout << std::format("Number of Hash Tables: {}\n", num_hash_tables_);
     std::cout << "-------------------------------------------------\n";
 }
 

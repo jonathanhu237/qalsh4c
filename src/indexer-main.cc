@@ -21,8 +21,14 @@ auto main(int argc, char** argv) -> int {
     unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
+    unsigned int num_hash_tables{0};
+    app.add_option("-m,--num_hash_tables", num_hash_tables,
+                   "Number of hash tables to use for indexing (default: 0, which means the number will be determined "
+                   "automatically)")
+        ->default_val(0);
+
     bool verbose{false};
-    app.add_flag("-v,--verbose", verbose, "Enable verbose output")->default_val(false);
+    app.add_flag("-v,--verbose", verbose, "Enable verbose output");
 
     try {
         CLI11_PARSE(app, argc, argv);
@@ -32,6 +38,7 @@ auto main(int argc, char** argv) -> int {
                            .set_parent_directory(parent_directory)
                            .set_num_points(num_points)
                            .set_num_dimensions(num_dimensions)
+                           .set_num_hash_tables(num_hash_tables)
                            .set_verbose(verbose)
                            .Build();
 

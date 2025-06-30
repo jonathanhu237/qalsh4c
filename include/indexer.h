@@ -16,6 +16,7 @@ class IndexerBuilder {
     auto set_parent_directory(const std::string& parent_directory) -> IndexerBuilder&;
     auto set_num_points(unsigned int num_points) -> IndexerBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> IndexerBuilder&;
+    auto set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder&;
     auto set_verbose(bool verbose) -> IndexerBuilder&;
 
     [[nodiscard]] auto Build() const -> std::unique_ptr<Indexer>;
@@ -25,6 +26,7 @@ class IndexerBuilder {
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    unsigned int num_hash_tables_{0};
     bool verbose_{false};
 };
 
@@ -43,6 +45,7 @@ class Indexer {
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    unsigned int num_hash_tables_{0};
     bool verbose_{false};
 };
 
