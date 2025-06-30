@@ -17,6 +17,8 @@ class IndexerBuilder {
     auto set_num_points(unsigned int num_points) -> IndexerBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> IndexerBuilder&;
     auto set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder&;
+    auto set_beta(float beta) -> IndexerBuilder&;
+    auto set_error_probability(float error_probability) -> IndexerBuilder&;
     auto set_page_size(unsigned int page_size) -> IndexerBuilder&;
     auto set_verbose(bool verbose) -> IndexerBuilder&;
 
@@ -28,6 +30,8 @@ class IndexerBuilder {
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
     unsigned int num_hash_tables_{0};
+    float beta_{0.0};
+    float error_probability_{0.0};
     unsigned int page_size_{0};
     bool verbose_{false};
 };
@@ -41,13 +45,16 @@ class Indexer {
 
    private:
     Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
-            unsigned int num_dimensions, unsigned int num_hash_tables, unsigned int page_size, bool verbose);
+            unsigned int num_dimensions, unsigned int num_hash_tables, float beta, float error_probability,
+            unsigned int page_size, bool verbose);
 
     std::string dataset_name_;
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
     unsigned int num_hash_tables_{0};
+    float beta_{0.0};
+    float error_probability_{0.0};
     unsigned int page_size_{0};
     bool verbose_{false};
 };
