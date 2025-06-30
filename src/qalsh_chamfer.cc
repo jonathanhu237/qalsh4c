@@ -1,4 +1,4 @@
-#include "qalsh-chamfer.h"
+#include "qalsh_chamfer.h"
 
 #include <format>
 #include <iostream>

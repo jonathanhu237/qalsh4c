@@ -3,7 +3,7 @@
 #include <format>
 
 #include "const.h"
-#include "dataset-generator.h"
+#include "dataset_generator.h"
 
 auto main(int argc, char** argv) -> int {
     CLI::App app("Dataset Generator for Chamfer Distance Approximation");

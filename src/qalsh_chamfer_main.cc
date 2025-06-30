@@ -4,7 +4,7 @@
 #include <iostream>
 
 #include "const.h"
-#include "qalsh-chamfer.h"
+#include "qalsh_chamfer.h"
 
 auto main(int argc, char **argv) -> int {
     CLI::App app{"Approximate Chamfer Distance using QALSH"};

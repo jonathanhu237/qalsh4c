@@ -7,12 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ------------ Dataset Generator ------------
 
-add_executable(dataset-generator 
-    src/dataset-generator.cc
-    src/dataset-generator-main.cc
+add_executable(dataset_generator 
+    src/dataset_generator.cc
+    src/dataset_generator_main.cc
 )
 
-target_include_directories(dataset-generator PRIVATE 
+target_include_directories(dataset_generator PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/third_party"
 )
@@ -21,7 +21,7 @@ target_include_directories(dataset-generator PRIVATE
 
 add_executable(indexer
     src/indexer.cc
-    src/indexer-main.cc
+    src/indexer_main.cc
 )
 
 target_include_directories(indexer PRIVATE
@@ -32,12 +32,12 @@ target_include_directories(indexer PRIVATE
 
 # ------------ QALSH Chamfer ------------
 
-add_executable(qalsh-chamfer
-    src/qalsh-chamfer.cc
-    src/qalsh-chamfer-main.cc
+add_executable(qalsh_chamfer
+    src/qalsh_chamfer.cc
+    src/qalsh_chamfer_main.cc
 )
 
-target_include_directories(qalsh-chamfer PRIVATE 
+target_include_directories(qalsh_chamfer PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/third_party"
 )

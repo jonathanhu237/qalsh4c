@@ -1,4 +1,4 @@
-#include "dataset-generator.h"
+#include "dataset_generator.h"
 
 #include <Eigen/Dense>
 #include <algorithm>
