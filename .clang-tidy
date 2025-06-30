@@ -4,6 +4,7 @@ Checks: >
   -bugprone-easily-swappable-parameters,
   cppcoreguidelines-*,
   -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-avoid-magic-numbers,
   clang-analyzer-*,
   modernize-*,
   performance-*,
