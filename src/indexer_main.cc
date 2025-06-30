@@ -48,10 +48,9 @@ auto main(int argc, char** argv) -> int {
                    "automatically)")
         ->default_val(0);
 
-    unsigned int page_size{0};
-    const unsigned int kDefaultPageSize = 4096;
-    app.add_option("-B,--page_size", page_size, "Page size for the indexer (default: 4096 bytes)")
-        ->default_val(kDefaultPageSize);
+    unsigned int block_size{0};
+    app.add_option("-B,--block_size", block_size, "Block size for the indexer (default: 4096 bytes)")
+        ->default_val(qalsh_chamfer::kDefaultBlockSize);
 
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");
@@ -69,7 +68,7 @@ auto main(int argc, char** argv) -> int {
                            .set_beta(beta)
                            .set_error_probability(error_probability)
                            .set_num_hash_tables(num_hash_tables)
-                           .set_page_size(page_size)
+                           .set_block_size(block_size)
                            .set_verbose(verbose)
                            .Build();
 

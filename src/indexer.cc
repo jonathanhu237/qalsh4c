@@ -82,8 +82,8 @@ auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> Indexe
     return *this;
 }
 
-auto IndexerBuilder::set_page_size(unsigned int page_size) -> IndexerBuilder& {
-    page_size_ = page_size;
+auto IndexerBuilder::set_block_size(unsigned int block_size) -> IndexerBuilder& {
+    block_size_ = block_size;
     return *this;
 }
 
@@ -95,14 +95,14 @@ auto IndexerBuilder::set_verbose(bool verbose) -> IndexerBuilder& {
 auto IndexerBuilder::Build() const -> std::unique_ptr<Indexer> {
     return std::unique_ptr<Indexer>(new Indexer(dataset_name_, parent_directory_, num_points_, num_dimensions_,
                                                 approximation_ratio_, bucket_width_, beta_, error_probability_,
-                                                num_hash_tables_, page_size_, verbose_));
+                                                num_hash_tables_, block_size_, verbose_));
 }
 
 // ------ Indexer Implementation ------
 
 Indexer::Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
                  unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
-                 double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose)
+                 double error_probability, unsigned int num_hash_tables, unsigned int block_size, bool verbose)
     : dataset_name_(std::move(dataset_name)),
       parent_directory_(std::move(parent_directory)),
       num_points_(num_points),
@@ -112,7 +112,7 @@ Indexer::Indexer(std::string dataset_name, std::string parent_directory, unsigne
       beta_(beta),
       error_probability_(error_probability),
       num_hash_tables_(num_hash_tables),
-      page_size_(page_size),
+      block_size_(block_size),
       verbose_(verbose) {}
 
 auto Indexer::PrintConfiguration() const -> void {
@@ -126,7 +126,7 @@ auto Indexer::PrintConfiguration() const -> void {
     std::cout << std::format("Beta: {}\n", beta_);
     std::cout << std::format("Error Probability: {}\n", error_probability_);
     std::cout << std::format("Number of Hash Tables: {}\n", num_hash_tables_);
-    std::cout << std::format("Page Size: {}\n", page_size_);
+    std::cout << std::format("Block Size: {}\n", block_size_);
     std::cout << "-------------------------------------------------\n";
 }
 

@@ -21,7 +21,7 @@ class IndexerBuilder {
     auto set_beta(double beta) -> IndexerBuilder&;
     auto set_error_probability(double error_probability) -> IndexerBuilder&;
     auto set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder&;
-    auto set_page_size(unsigned int page_size) -> IndexerBuilder&;
+    auto set_block_size(unsigned int block_size) -> IndexerBuilder&;
     auto set_verbose(bool verbose) -> IndexerBuilder&;
 
     [[nodiscard]] auto Build() const -> std::unique_ptr<Indexer>;
@@ -36,7 +36,7 @@ class IndexerBuilder {
     double beta_{0.0};
     double error_probability_{0.0};
     unsigned int num_hash_tables_{0};
-    unsigned int page_size_{0};
+    unsigned int block_size_{0};
     bool verbose_{false};
 };
 
@@ -50,7 +50,7 @@ class Indexer {
    private:
     Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
             unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
-            double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose);
+            double error_probability, unsigned int num_hash_tables, unsigned int block_size, bool verbose);
 
     std::string dataset_name_;
     std::string parent_directory_;
@@ -61,7 +61,7 @@ class Indexer {
     double beta_{0.0};
     double error_probability_{0.0};
     unsigned int num_hash_tables_{0};
-    unsigned int page_size_{0};
+    unsigned int block_size_{0};
     bool verbose_{false};
 };
 
