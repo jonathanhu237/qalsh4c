@@ -24,14 +24,23 @@ auto main(int argc, char** argv) -> int {
     unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
+    double approximation_ratio{0.0};
+    app.add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")->default_val(2.0);
+
+    double bucket_width{0.0};
+    app.add_option("-w, --bucket_width", bucket_width,
+                   "Bucket width for the indexer (default: 0, which means the bucket width will be 2\\sqrt(c))")
+        ->default_val(0.0);
+
     double beta{0.0};
     app.add_option("-b, --beta", beta,
-                   "Beta parameter for the indexer (default: 0.0, which means the beta will be 100/num_points)")
+                   "Beta parameter for the indexer (default: 0, which means the beta will be 100/num_points)")
         ->default_val(0.0);
 
     double error_probability{0.0};
     app.add_option("-e, --error_probability", error_probability, "Error probability for the indexer (default: 1/e)")
-        ->default_val(qalsh_chamfer::kDefaultErrorProbability);
+        ->default_val(qalsh_chamfer::kDefaultErrorProbability)
+        ->default_str("1/e");
 
     unsigned int num_hash_tables{0};
     app.add_option("-m,--num_hash_tables", num_hash_tables,
@@ -55,6 +64,8 @@ auto main(int argc, char** argv) -> int {
                            .set_parent_directory(parent_directory)
                            .set_num_points(num_points)
                            .set_num_dimensions(num_dimensions)
+                           .set_approximation_ratio(approximation_ratio)
+                           .set_bucket_width(bucket_width)
                            .set_beta(beta)
                            .set_error_probability(error_probability)
                            .set_num_hash_tables(num_hash_tables)

@@ -16,6 +16,8 @@ class IndexerBuilder {
     auto set_parent_directory(const std::string& parent_directory) -> IndexerBuilder&;
     auto set_num_points(unsigned int num_points) -> IndexerBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> IndexerBuilder&;
+    auto set_approximation_ratio(double approximation_ratio) -> IndexerBuilder&;
+    auto set_bucket_width(double bucket_width) -> IndexerBuilder&;
     auto set_beta(double beta) -> IndexerBuilder&;
     auto set_error_probability(double error_probability) -> IndexerBuilder&;
     auto set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder&;
@@ -29,6 +31,8 @@ class IndexerBuilder {
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
     double beta_{0.0};
     double error_probability_{0.0};
     unsigned int num_hash_tables_{0};
@@ -45,13 +49,15 @@ class Indexer {
 
    private:
     Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
-            unsigned int num_dimensions, double beta, double error_probability, unsigned int num_hash_tables,
-            unsigned int page_size, bool verbose);
+            unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
+            double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose);
 
     std::string dataset_name_;
     std::string parent_directory_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
     double beta_{0.0};
     double error_probability_{0.0};
     unsigned int num_hash_tables_{0};
