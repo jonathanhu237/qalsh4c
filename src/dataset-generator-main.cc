@@ -14,19 +14,19 @@ auto main(int argc, char** argv) -> int {
     std::string parent_directory;
     app.add_option("-p,--parent_directory", parent_directory, "Parent directory for the dataset")->default_val("data");
 
-    unsigned int num_points{};
+    unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();
 
-    unsigned int num_dimensions{};
+    unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
-    int left_boundary{};
     const int kDefaultLeftBoundary = -128;
+    int left_boundary{kDefaultLeftBoundary};
     app.add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
         ->default_val(kDefaultLeftBoundary);
 
-    int right_boundary{};
     const int kDefaultRightBoundary = 128;
+    int right_boundary{kDefaultRightBoundary};
     app.add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
         ->default_val(kDefaultRightBoundary);
 
