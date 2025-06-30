@@ -17,6 +17,19 @@ target_include_directories(dataset-generator PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party"
 )
 
+# ------------ Indexer ------------
+
+add_executable(indexer
+    src/indexer.cc
+    src/indexer-main.cc
+)
+
+target_include_directories(indexer PRIVATE
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/third_party"
+)
+
+
 # ------------ QALSH Chamfer ------------
 
 add_executable(qalsh-chamfer
