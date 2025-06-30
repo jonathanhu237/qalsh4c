@@ -31,7 +31,7 @@ auto main(int argc, char** argv) -> int {
         ->default_val(kDefaultRightBoundary);
 
     bool verbose{false};
-    app.add_flag("-v,--verbose", verbose, "Enable verbose output")->default_val(false);
+    app.add_flag("-v,--verbose", verbose, "Enable verbose output");
 
     try {
         CLI11_PARSE(app, argc, argv);
