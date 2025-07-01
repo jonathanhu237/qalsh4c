@@ -5,6 +5,8 @@
 #include "constants.h"
 #include "dataset_generator.h"
 
+namespace fs = std::filesystem;
+
 auto main(int argc, char** argv) -> int {
     CLI::App app("Dataset Generator for Chamfer Distance Approximation");
     argv = app.ensure_utf8(argv);
@@ -12,9 +14,9 @@ auto main(int argc, char** argv) -> int {
     std::string dataset_name;
     app.add_option("-n,--name", dataset_name, "Name of the dataset")->required();
 
-    std::string parent_directory;
+    fs::path parent_directory;
     app.add_option("-p,--parent_directory", parent_directory, "Parent directory for the dataset")
-        ->default_val(qalsh_chamfer::kDefaultParentDirectory);
+        ->default_val(fs::path("data"));
 
     unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();

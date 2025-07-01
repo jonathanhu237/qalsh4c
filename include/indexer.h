@@ -1,10 +1,13 @@
 #ifndef INDEXER_H_
 #define INDEXER_H_
 
+#include <filesystem>
 #include <memory>
 #include <string>
 
 namespace qalsh_chamfer {
+
+namespace fs = std::filesystem;
 
 class Indexer;
 
@@ -13,7 +16,7 @@ class IndexerBuilder {
     IndexerBuilder();
 
     auto set_dataset_name(const std::string& dataset_name) -> IndexerBuilder&;
-    auto set_parent_directory(const std::string& parent_directory) -> IndexerBuilder&;
+    auto set_parent_directory(const fs::path& parent_directory) -> IndexerBuilder&;
     auto set_num_points(unsigned int num_points) -> IndexerBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> IndexerBuilder&;
     auto set_approximation_ratio(double approximation_ratio) -> IndexerBuilder&;
@@ -28,7 +31,7 @@ class IndexerBuilder {
 
    private:
     std::string dataset_name_;
-    std::string parent_directory_;
+    fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
     double approximation_ratio_;
@@ -48,12 +51,12 @@ class Indexer {
     friend class IndexerBuilder;
 
    private:
-    Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
-            unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
-            double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose);
+    Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points, unsigned int num_dimensions,
+            double approximation_ratio, double bucket_width, double beta, double error_probability,
+            unsigned int num_hash_tables, unsigned int page_size, bool verbose);
 
     std::string dataset_name_;
-    std::string parent_directory_;
+    fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
     double approximation_ratio_;

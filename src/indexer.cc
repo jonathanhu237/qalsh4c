@@ -1,6 +1,7 @@
 #include "indexer.h"
 
 #include <cmath>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <memory>
@@ -28,7 +29,7 @@ auto IndexerBuilder::set_dataset_name(const std::string& dataset_name) -> Indexe
     return *this;
 }
 
-auto IndexerBuilder::set_parent_directory(const std::string& parent_directory) -> IndexerBuilder& {
+auto IndexerBuilder::set_parent_directory(const fs::path& parent_directory) -> IndexerBuilder& {
     parent_directory_ = parent_directory;
     return *this;
 }
@@ -114,7 +115,7 @@ auto IndexerBuilder::Build() const -> std::unique_ptr<Indexer> {
 
 // ------ Indexer Implementation ------
 
-Indexer::Indexer(std::string dataset_name, std::string parent_directory, unsigned int num_points,
+Indexer::Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
                  unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
                  double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose)
     : dataset_name_(std::move(dataset_name)),
@@ -132,7 +133,7 @@ Indexer::Indexer(std::string dataset_name, std::string parent_directory, unsigne
 auto Indexer::PrintConfiguration() const -> void {
     std::cout << "------------- Indexer Configuration -------------\n";
     std::cout << std::format("Dataset Name: {}\n", dataset_name_);
-    std::cout << std::format("Parent Directory: {}\n", parent_directory_);
+    std::cout << std::format("Parent Directory: {}\n", parent_directory_.string());
     std::cout << std::format("Number of Points: {}\n", num_points_);
     std::cout << std::format("Number of Dimensions: {}\n", num_dimensions_);
     std::cout << std::format("Approximation Ratio: {}\n", approximation_ratio_);

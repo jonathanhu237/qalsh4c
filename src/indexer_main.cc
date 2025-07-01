@@ -1,11 +1,14 @@
 #include <CLI11/CLI11.hpp>
 #include <cmath>
 #include <exception>
+#include <filesystem>
 #include <format>
 #include <string>
 
 #include "constants.h"
 #include "indexer.h"
+
+namespace fs = std::filesystem;
 
 auto main(int argc, char** argv) -> int {
     CLI::App app{"Indexer for Approximating Chamfer Distance using QALSH"};
@@ -14,9 +17,9 @@ auto main(int argc, char** argv) -> int {
     std::string dataset_name;
     app.add_option("-n,--dataset-name", dataset_name, "Name of the dataset to be indexed")->required();
 
-    std::string parent_directory;
+    fs::path parent_directory;
     app.add_option("-p,--parent-directory", parent_directory, "Parent directory for the dataset")
-        ->default_val(qalsh_chamfer::kDefaultParentDirectory);
+        ->default_val(fs::path("data"));
 
     unsigned int num_points{0};
     app.add_option("-N,--num_points", num_points, "Number of points within each set in the dataset")->required();

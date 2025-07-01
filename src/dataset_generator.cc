@@ -13,6 +13,8 @@
 
 namespace qalsh_chamfer {
 
+namespace fs = std::filesystem;
+
 // ---------- DatasetGeneratorBuilder Implementation ----------
 
 DatasetGeneratorBuilder::DatasetGeneratorBuilder()
@@ -23,7 +25,7 @@ auto DatasetGeneratorBuilder::set_dataset_name(const std::string& dataset_name) 
     return *this;
 }
 
-auto DatasetGeneratorBuilder::set_parent_directory(const std::string& parent_directory) -> DatasetGeneratorBuilder& {
+auto DatasetGeneratorBuilder::set_parent_directory(const fs::path& parent_directory) -> DatasetGeneratorBuilder& {
     parent_directory_ = parent_directory;
     return *this;
 }
@@ -60,7 +62,7 @@ auto DatasetGeneratorBuilder::Build() const -> std::unique_ptr<DatasetGenerator>
 
 // ---------- DatasetGenerator Implementation ----------
 
-DatasetGenerator::DatasetGenerator(std::string dataset_name, std::string parent_directory, unsigned int num_points,
+DatasetGenerator::DatasetGenerator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
                                    unsigned int num_dimensions, int left_boundary, int right_boundary, bool debug)
     : dataset_name_(std::move(dataset_name)),
       parent_directory_(std::move(parent_directory)),
@@ -73,7 +75,7 @@ DatasetGenerator::DatasetGenerator(std::string dataset_name, std::string parent_
 auto DatasetGenerator::PrintConfiguration() const -> void {
     std::cout << std::format("---------- Dataset Generator Configuration ----------\n");
     std::cout << std::format("Dataset Name: {}\n", dataset_name_);
-    std::cout << std::format("Parent Directory: {}\n", parent_directory_);
+    std::cout << std::format("Parent Directory: {}\n", parent_directory_.string());
     std::cout << std::format("Number of Points: {}\n", num_points_);
     std::cout << std::format("Number of Dimensions: {}\n", num_dimensions_);
     std::cout << std::format("Left Boundary: {}\n", left_boundary_);
@@ -88,9 +90,9 @@ auto DatasetGenerator::Execute() const -> void {
     std::vector<std::vector<double>> set_a = GenerateSet(dist, gen, "A");
     std::vector<std::vector<double>> set_b = GenerateSet(dist, gen, "B");
 
-    std::string dataset_directory = std::format("{}/{}", parent_directory_, dataset_name_);
-    if (!std::filesystem::exists(dataset_directory)) {
-        std::filesystem::create_directories(dataset_directory);
+    fs::path dataset_directory = parent_directory_ / dataset_name_;
+    if (!fs::exists(dataset_directory)) {
+        fs::create_directories(dataset_directory);
     }
 
     WriteSetToFile(dataset_directory, "A", set_a);
@@ -105,11 +107,11 @@ auto DatasetGenerator::Execute() const -> void {
     double chamfer_b_to_a = CalculateChamfer(eigen_set_b, eigen_set_a, "B", "A");
     double total_chamfer_distance = chamfer_a_to_b + chamfer_b_to_a;
 
-    std::string gt_file_path = std::format("{}/{}_gt.bin", dataset_directory, dataset_name_);
+    fs::path gt_file_path = dataset_directory / std::format("{}_gt.bin", dataset_name_);
     std::ofstream gt_ofs(gt_file_path, std::ios::binary | std::ios::trunc);
 
     if (!gt_ofs.is_open()) {
-        throw std::runtime_error(std::format("Error: Could not open file for writing: {}", gt_file_path));
+        throw std::runtime_error(std::format("Error: Could not open file for writing: {}", gt_file_path.string()));
     }
 
     gt_ofs.write(reinterpret_cast<const char*>(&total_chamfer_distance), sizeof(double));

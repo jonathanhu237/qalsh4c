@@ -9,7 +9,6 @@ namespace qalsh_chamfer {
 const double kEpsilon = 1e-6;
 const unsigned int kBasePageSize = 4096;
 
-const std::string kDefaultParentDirectory = "data";
 const int kDefaultLeftBoundary = -128;  // For dataset generation
 const int kDefaultRightBoundary = 128;  // For dataset generation
 const double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
