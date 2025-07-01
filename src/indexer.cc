@@ -1,12 +1,16 @@
 #include "indexer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <format>
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <random>
+#include <vector>
 
+#include "b_plus_tree.h"
 #include "constants.h"
 
 namespace qalsh_chamfer {
@@ -147,6 +151,28 @@ auto Indexer::PrintConfiguration() const -> void {
 
 auto Indexer::Execute() const -> void {
     // TODO: Implement the execution logic for the indexer.
+    std::mt19937 rng(std::random_device{}());
+    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+    fs::path index_directory = parent_directory_ / dataset_name_ / "qalsh";
+
+    // Create the index directory if it does not exist
+    if (!fs::exists(index_directory)) {
+        fs::create_directories(index_directory);
+    }
+
+    for (unsigned int i = 0; i < num_hash_tables_; i++) {
+        if (verbose_) {
+            std::cout << std::format("Indexing with hash table {}/{}\r", i + 1, num_hash_tables_) << std::flush;
+        }
+
+        std::vector<double> dot_vector(num_dimensions_);
+        std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
+
+        BPlusTreeBulkLoader bulk_loader(index_directory / std::format("{}_idx_{}.bin", dataset_name_, i), page_size_,
+                                        dot_vector);
+    }
+
+    std::cout << "\n";
 }
 
 }  // namespace qalsh_chamfer
