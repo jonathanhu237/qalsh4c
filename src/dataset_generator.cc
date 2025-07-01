@@ -97,8 +97,8 @@ auto DatasetGenerator::Execute() const -> void {
         fs::create_directories(dataset_directory);
     }
 
-    WriteSetToFile(dataset_directory, "A", set_a);
-    WriteSetToFile(dataset_directory, "B", set_b);
+    Utils::WriteSetToFile(dataset_directory / std::format("{}_A.bin", dataset_name_), set_a, "A", verbose_);
+    Utils::WriteSetToFile(dataset_directory / std::format("{}_B.bin", dataset_name_), set_b, "B", verbose_);
 
     // Calculate the chamfer distance from set A to set B and vice versa
 
@@ -139,27 +139,6 @@ auto DatasetGenerator::GenerateSet(std::uniform_real_distribution<double>& dist,
         std::cout << "\n";
     }
     return set;
-}
-
-auto DatasetGenerator::WriteSetToFile(const std::string& dataset_directory, const std::string& set_name,
-                                      const std::vector<std::vector<double>>& set) const -> void {
-    std::string file_path = std::format("{}/{}_{}.bin", dataset_directory, dataset_name_, set_name);
-    std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
-
-    if (!ofs.is_open()) {
-        throw std::runtime_error(std::format("Error: Could not open file for writing: {}", file_path));
-    }
-
-    for (const auto& point : set) {
-        if (verbose_) {
-            std::cout << std::format("Writing set {} to file ... ({}/{})\r", set_name, &point - set.data() + 1,
-                                     set.size())
-                      << std::flush;
-        }
-
-        ofs.write(reinterpret_cast<const char*>(point.data()),
-                  static_cast<std::streamsize>(sizeof(double) * num_dimensions_));
-    }
 }
 
 };  // namespace qalsh_chamfer

@@ -3,14 +3,33 @@
 #include <Eigen/Dense>
 #include <cstddef>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
-#include "Eigen/src/Core/Map.h"
-#include "Eigen/src/Core/Matrix.h"
-#include "Eigen/src/Core/util/Meta.h"
-
 namespace qalsh_chamfer {
+
+auto Utils::WriteSetToFile(const fs::path& file_path, const std::vector<std::vector<double>>& set,
+                           const std::string& set_name, bool verbose) -> void {
+    std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
+
+    if (!ofs.is_open()) {
+        throw std::runtime_error(std::format("Error: Could not open file for writing: {}", file_path.string()));
+    }
+
+    size_t num_dimensions = set.empty() ? 0 : set[0].size();
+
+    for (const auto& point : set) {
+        if (verbose) {
+            std::cout << std::format("Writing set {} to file ... ({}/{})\r", set_name, &point - set.data() + 1,
+                                     set.size())
+                      << std::flush;
+        }
+
+        ofs.write(reinterpret_cast<const char*>(point.data()),
+                  static_cast<std::streamsize>(sizeof(double) * num_dimensions));
+    }
+}
 
 auto Utils::CalculateChamfer(const std::vector<std::vector<double>>& from_set,
                              const std::vector<std::vector<double>>& to_set, const std::string& from_set_name,

@@ -52,9 +52,6 @@ class DatasetGenerator {
     [[nodiscard]] auto GenerateSet(std::uniform_real_distribution<double>& dist, std::mt19937& gen,
                                    const std::string& set_name) const -> std::vector<std::vector<double>>;
 
-    auto WriteSetToFile(const std::string& dataset_directory, const std::string& set_name,
-                        const std::vector<std::vector<double>>& set) const -> void;
-
     std::string dataset_name_;
     fs::path parent_directory_;
     unsigned int num_points_;
