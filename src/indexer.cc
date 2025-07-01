@@ -150,7 +150,6 @@ auto Indexer::PrintConfiguration() const -> void {
 }
 
 auto Indexer::Execute() const -> void {
-    // TODO: Implement the execution logic for the indexer.
     std::mt19937 rng(std::random_device{}());
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     fs::path index_directory = parent_directory_ / dataset_name_ / "qalsh";
@@ -170,6 +169,7 @@ auto Indexer::Execute() const -> void {
 
         BPlusTreeBulkLoader bulk_loader(index_directory / std::format("{}_idx_{}.bin", dataset_name_, i), page_size_,
                                         dot_vector);
+        bulk_loader.BulkLoad();
     }
 
     std::cout << "\n";
