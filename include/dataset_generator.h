@@ -28,11 +28,11 @@ class DatasetGeneratorBuilder {
    private:
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    int left_boundary_{0};
-    int right_boundary_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    int left_boundary_;
+    int right_boundary_;
+    bool verbose_;
 };
 
 class DatasetGenerator {
@@ -60,11 +60,11 @@ class DatasetGenerator {
 
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    int left_boundary_{0};
-    int right_boundary_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    int left_boundary_;
+    int right_boundary_;
+    bool verbose_;
 };
 
 }  // namespace qalsh_chamfer

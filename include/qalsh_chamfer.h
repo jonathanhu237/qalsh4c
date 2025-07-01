@@ -23,9 +23,9 @@ class QalshChamferBuilder {
    private:
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    bool verbose_;
 };
 
 class QalshChamfer {
@@ -41,9 +41,9 @@ class QalshChamfer {
 
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    bool verbose_;
 };
 
 }  // namespace qalsh_chamfer

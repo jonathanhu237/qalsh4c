@@ -10,7 +10,7 @@ namespace qalsh_chamfer {
 
 // ---------- QalshChamferBuilder Implementation ----------
 
-QalshChamferBuilder::QalshChamferBuilder() = default;
+QalshChamferBuilder::QalshChamferBuilder() : num_points_(0), num_dimensions_(0), verbose_(false) {};
 
 auto QalshChamferBuilder::set_dataset_name(const std::string& dataset_name) -> QalshChamferBuilder& {
     dataset_name_ = dataset_name;

@@ -29,15 +29,15 @@ class IndexerBuilder {
    private:
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    double approximation_ratio_{0.0};
-    double bucket_width_{0.0};
-    double beta_{0.0};
-    double error_probability_{0.0};
-    unsigned int num_hash_tables_{0};
-    unsigned int page_size_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int page_size_;
+    bool verbose_;
 };
 
 class Indexer {
@@ -54,15 +54,15 @@ class Indexer {
 
     std::string dataset_name_;
     std::string parent_directory_;
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    double approximation_ratio_{0.0};
-    double bucket_width_{0.0};
-    double beta_{0.0};
-    double error_probability_{0.0};
-    unsigned int num_hash_tables_{0};
-    unsigned int page_size_{0};
-    bool verbose_{false};
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int page_size_;
+    bool verbose_;
 };
 
 }  // namespace qalsh_chamfer
