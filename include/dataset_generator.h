@@ -13,7 +13,7 @@ class DatasetGenerator;
 
 class DatasetGeneratorBuilder {
    public:
-    DatasetGeneratorBuilder();
+    DatasetGeneratorBuilder() = default;
 
     auto set_dataset_name(const std::string& dataset_name) -> DatasetGeneratorBuilder&;
     auto set_parent_directory(const std::string& parent_directory) -> DatasetGeneratorBuilder&;

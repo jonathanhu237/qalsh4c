@@ -12,8 +12,6 @@ namespace qalsh_chamfer {
 
 // ------ IndexerBuilder Implementation ------
 
-IndexerBuilder::IndexerBuilder() = default;
-
 auto IndexerBuilder::set_dataset_name(const std::string& dataset_name) -> IndexerBuilder& {
     dataset_name_ = dataset_name;
     return *this;

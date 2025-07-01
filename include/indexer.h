@@ -10,7 +10,7 @@ class Indexer;
 
 class IndexerBuilder {
    public:
-    IndexerBuilder();
+    IndexerBuilder() = default;
 
     auto set_dataset_name(const std::string& dataset_name) -> IndexerBuilder&;
     auto set_parent_directory(const std::string& parent_directory) -> IndexerBuilder&;

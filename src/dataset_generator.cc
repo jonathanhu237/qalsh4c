@@ -15,8 +15,6 @@ namespace qalsh_chamfer {
 
 // ---------- DatasetGeneratorBuilder Implementation ----------
 
-DatasetGeneratorBuilder::DatasetGeneratorBuilder() = default;
-
 auto DatasetGeneratorBuilder::set_dataset_name(const std::string& dataset_name) -> DatasetGeneratorBuilder& {
     dataset_name_ = dataset_name;
     return *this;
