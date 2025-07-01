@@ -9,6 +9,7 @@ add_library(qalsh_chamfer_lib
     src/b_plus_tree.cc
     src/dataset_generator.cc
     src/indexer.cc
+    src/utils.cc
 )
 
 target_include_directories(qalsh_chamfer_lib PUBLIC

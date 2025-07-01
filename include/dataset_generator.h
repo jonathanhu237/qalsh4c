@@ -55,12 +55,6 @@ class DatasetGenerator {
     auto WriteSetToFile(const std::string& dataset_directory, const std::string& set_name,
                         const std::vector<std::vector<double>>& set) const -> void;
 
-    [[nodiscard]] auto ToEigenMatrix(const std::vector<std::vector<double>>& set) const
-        -> Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
-
-    [[nodiscard]] auto CalculateChamfer(const Eigen::MatrixXd& from_matrix, const Eigen::MatrixXd& to_matrix,
-                                        const std::string& from_name, const std::string& to_name) const -> double;
-
     std::string dataset_name_;
     fs::path parent_directory_;
     unsigned int num_points_;
