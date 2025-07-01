@@ -14,6 +14,10 @@ class Utils {
     auto static WriteSetToFile(const fs::path& file_path, const std::vector<std::vector<double>>& set,
                                const std::string& set_name = "", bool verbose = false) -> void;
 
+    auto static ReadSetFromFile(const fs::path& file_path, unsigned int num_points, unsigned int num_dimensions,
+                                const std::string& set_name = "", bool verbose = false)
+        -> std::vector<std::vector<double>>;
+
     auto static CalculateChamfer(const std::vector<std::vector<double>>& from_set,
                                  const std::vector<std::vector<double>>& to_set, const std::string& from_set_name = "",
                                  const std::string& to_set_name = "", bool verbose = false) -> double;
