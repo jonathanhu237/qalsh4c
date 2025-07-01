@@ -10,7 +10,7 @@ class QalshChamfer;
 
 class QalshChamferBuilder {
    public:
-    QalshChamferBuilder() = default;
+    QalshChamferBuilder();
 
     auto set_dataset_name(const std::string& dataset_name) -> QalshChamferBuilder&;
     auto set_parent_directory(const std::string& parent_directory) -> QalshChamferBuilder&;
