@@ -1,6 +1,7 @@
 #ifndef B_PLUS_TREE_H_
 #define B_PLUS_TREE_H_
 
+#include <cstddef>
 #include <utility>
 #include <vector>
 
@@ -15,7 +16,7 @@ class InternalNode {
 
    private:
     InternalNode(unsigned int order);
-    auto static GetHeaderSize() -> unsigned long;
+    auto static GetHeaderSize() -> size_t;
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
@@ -33,7 +34,7 @@ class LeafNode {
 
    private:
     LeafNode(unsigned int order);
-    auto static GetHeaderSize() -> unsigned long;
+    auto static GetHeaderSize() -> size_t;
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
@@ -50,7 +51,7 @@ class LeafNode {
 class BPlusTree {
    public:
     BPlusTree(Pager&& pager, const std::vector<double>& dot_vector);
-    auto static GetHeaderBasicInfoSize() -> unsigned long;
+    auto static GetHeaderBasicInfoSize() -> size_t;
     auto BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void;
 
    private:

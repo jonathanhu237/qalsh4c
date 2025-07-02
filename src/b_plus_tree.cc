@@ -19,7 +19,7 @@ InternalNode::InternalNode(unsigned int order) : node_type_(NodeType::kInternalN
     pointers_.resize(order);
 };
 
-auto InternalNode::GetHeaderSize() -> unsigned long { return sizeof(node_type_) + sizeof(num_children_); }
+auto InternalNode::GetHeaderSize() -> size_t { return sizeof(node_type_) + sizeof(num_children_); }
 
 auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
     std::span<char> write_view(buffer);
@@ -47,7 +47,7 @@ LeafNode::LeafNode(unsigned int order)
     values_.resize(order);
 };
 
-auto LeafNode::GetHeaderSize() -> unsigned long {
+auto LeafNode::GetHeaderSize() -> size_t {
     return sizeof(node_type_) + sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
 }
 
@@ -83,12 +83,13 @@ BPlusTree::BPlusTree(Pager&& pager, const std::vector<double>& dot_vector)
       dot_vector_(dot_vector) {
     // Calculate the order of InternalNode and LeafNode
     unsigned int page_size = pager_.get_page_size();
-    internal_node_order_ =
-        (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int);
-    leaf_node_order_ = (((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int);
+    internal_node_order_ = static_cast<unsigned>(
+        (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int));
+    leaf_node_order_ =
+        static_cast<unsigned>((((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int));
 }
 
-auto BPlusTree::GetHeaderBasicInfoSize() -> unsigned long {
+auto BPlusTree::GetHeaderBasicInfoSize() -> size_t {
     return sizeof(root_page_num_) + sizeof(level_) + sizeof(internal_node_order_) + sizeof(leaf_node_order_);
 }
 
