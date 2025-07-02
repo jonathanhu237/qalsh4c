@@ -66,7 +66,6 @@ auto Utils::CalculateChamfer(const std::vector<std::vector<double>>& from_set,
                              const std::vector<std::vector<double>>& to_set, const std::string& from_set_name,
                              const std::string& to_set_name, bool verbose) -> double {
     size_t num_points = from_set.size();
-    size_t num_dimensions = from_set.empty() ? 0 : from_set[0].size();
 
     Eigen::MatrixXd from_matrix = ToEigenMatrix(from_set);
     Eigen::MatrixXd to_matrix = ToEigenMatrix(to_set);
