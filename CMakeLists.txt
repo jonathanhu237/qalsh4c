@@ -5,6 +5,8 @@ project(QALSH-Chamfer LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -fsanitize=address -fsanitize=undefined")
+
 add_library(qalsh_chamfer_lib
     src/b_plus_tree.cc
     src/dataset_generator.cc
