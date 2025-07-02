@@ -8,6 +8,7 @@
 #include <memory>
 #include <numbers>
 #include <random>
+#include <utility>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -100,8 +101,10 @@ auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> Indexe
 
 auto IndexerBuilder::set_page_size(unsigned int page_size) -> IndexerBuilder& {
     if (page_size == 0) {
-        // TODO: the page size should be capable of storing the dot vector and some necessary data for the B+ tree.
-        page_size_ = kBasePageSize;
+        page_size_ = static_cast<unsigned int>(ceil((static_cast<double>(BPlusTree::GetHeaderBasicInfoSize()) +
+                                                     static_cast<double>(num_dimensions_) * sizeof(double)) /
+                                                    kBasePageSize)) *
+                     kBasePageSize;
     } else {
         page_size_ = page_size;
     }
@@ -194,18 +197,18 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, const fs::path& 
         Utils::ReadSetFromFile(set_file_path, num_points_, num_dimensions_, "A", verbose_);
 
     // Calculate the dot products and sort them
-    std::vector<double> dot_products(num_points_);
+    std::vector<std::pair<double, unsigned int>> dot_products_with_id(num_points_);
 
     for (unsigned int j = 0; j < num_points_; j++) {
-        dot_products[j] = Utils::DotProduct(set[j], dot_vector);
+        dot_products_with_id.emplace_back(Utils::DotProduct(set[j], dot_vector), j);
     }
-    std::ranges::sort(dot_products);
+    std::ranges::sort(dot_products_with_id);
 
     // Bulk load the B+ tree with sorted dot products
     Pager pager(index_file_path, page_size_);
-    BPlusTree b_plus_tree(pager);
+    BPlusTree b_plus_tree(std::move(pager), dot_vector);
 
-    b_plus_tree.BulkLoad(dot_products);
+    b_plus_tree.BulkLoad(dot_products_with_id);
 }
 
 }  // namespace qalsh_chamfer

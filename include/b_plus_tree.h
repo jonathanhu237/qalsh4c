@@ -1,45 +1,68 @@
 #ifndef B_PLUS_TREE_H_
 #define B_PLUS_TREE_H_
 
-#include <filesystem>
+#include <utility>
 #include <vector>
 
 #include "constants.h"
+#include "pager.h"
 
 namespace qalsh_chamfer {
 
-namespace fs = std::filesystem;
-
 class InternalNode {
    public:
-    friend class BPlusTreeBulkLoader;
+    friend class BPlusTree;
 
    private:
-    InternalNode();
-    auto Serialize(std::vector<char> &buffer) -> void;
+    InternalNode(unsigned int order);
+    auto static GetHeaderSize() -> unsigned long;
+    auto Serialize(std::vector<char>& buffer) const -> void;
 
+    // Header
     NodeType node_type_;
+    unsigned int num_children_;
+
+    // Data
+    std::vector<double> keys_;
+    std::vector<unsigned int> pointers_;
 };
 
 class LeafNode {
    public:
-    friend class BPlusTreeBulkLoader;
+    friend class BPlusTree;
 
    private:
-    LeafNode();
-    auto Serialize(std::vector<char> &buffer) -> void;
+    LeafNode(unsigned int order);
+    auto static GetHeaderSize() -> unsigned long;
+    auto Serialize(std::vector<char>& buffer) const -> void;
 
+    // Header
     NodeType node_type_;
+    unsigned int num_entries_;
+    unsigned int prev_leaf_page_num_;
+    unsigned int next_leaf_page_num_;
+
+    // Data
+    std::vector<double> keys_;
+    std::vector<unsigned int> values_;
 };
 
-class BPlusTreeBulkLoader {
+class BPlusTree {
    public:
-    BPlusTreeBulkLoader(fs::path file_path, unsigned int page_size, std::vector<double> &dot_vector);
-    auto BulkLoad() -> void;
+    BPlusTree(Pager&& pager, const std::vector<double>& dot_vector);
+    auto static GetHeaderBasicInfoSize() -> unsigned long;
+    auto BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void;
 
    private:
-    fs::path file_path_;
-    unsigned int page_size_;
+    Pager pager_;
+
+    // Header (base information)
+    unsigned int root_page_num_;
+    unsigned int level_;
+    unsigned int internal_node_order_;
+    unsigned int leaf_node_order_;
+
+    // Header (dot vector)
     std::vector<double> dot_vector_;
 };
 
