@@ -38,7 +38,7 @@ auto Utils::ReadSetFromFile(const fs::path& file_path, unsigned int num_points, 
                             const std::string& set_name, bool verbose) -> std::vector<std::vector<double>> {
     std::ifstream ifs(file_path, std::ios::binary);
 
-    if (ifs.is_open()) {
+    if (!ifs.is_open()) {
         throw std::runtime_error(std::format("Could not open file for reading: {}", file_path.string()));
     }
 
