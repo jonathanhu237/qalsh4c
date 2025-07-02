@@ -3,3 +3,9 @@ build/
 
 # clangd
 .cache/
+
+# data
+data/
+!data/toy/toy_A.bin
+!data/toy/toy_B.bin
+!data/toy/toy_gt.bin
