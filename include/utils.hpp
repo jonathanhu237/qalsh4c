@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <filesystem>
+#include <span>
 #include <vector>
 
 namespace qalsh_chamfer {
@@ -23,6 +24,14 @@ class Utils {
                                  const std::string& to_set_name = "", bool verbose = false) -> double;
 
     auto static DotProduct(const std::vector<double>& vec1, const std::vector<double>& vec2) -> double;
+
+    template <typename T>
+    auto static AppendToBuffer(std::vector<char>& buffer, const T& data) -> void {
+        const auto* data_ptr = reinterpret_cast<const char*>(&data);
+        std::span<const char> data_span(data_ptr, sizeof(T));
+
+        buffer.insert(buffer.end(), data_span.begin(), data_span.end());
+    }
 
    private:
     auto static ToEigenMatrix(const std::vector<std::vector<double>>& set)

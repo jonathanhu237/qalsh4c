@@ -10,6 +10,7 @@
 
 #include "constants.h"
 #include "pager.h"
+#include "utils.hpp"
 
 namespace qalsh_chamfer {
 
@@ -22,21 +23,16 @@ InternalNode::InternalNode(unsigned int order) : node_type_(NodeType::kInternalN
 auto InternalNode::GetHeaderSize() -> size_t { return sizeof(node_type_) + sizeof(num_children_); }
 
 auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
-    std::span<char> write_view(buffer);
+    buffer.clear();
 
-    std::memcpy(write_view.data(), &node_type_, sizeof(node_type_));
-    write_view = write_view.subspan(sizeof(node_type_));
-    std::memcpy(write_view.data(), &num_children_, sizeof(num_children_));
-    write_view = write_view.subspan(sizeof(num_children_));
+    Utils::AppendToBuffer(buffer, node_type_);
+    Utils::AppendToBuffer(buffer, num_children_);
 
     for (auto key : keys_) {
-        std::memcpy(write_view.data(), &key, sizeof(double));
-        write_view = write_view.subspan(sizeof(double));
+        Utils::AppendToBuffer(buffer, key);
     }
-
     for (auto pointer : pointers_) {
-        std::memcpy(write_view.data(), &pointer, sizeof(unsigned int));
-        write_view = write_view.subspan(sizeof(unsigned int));
+        Utils::AppendToBuffer(buffer, pointer);
     }
 }
 
@@ -52,24 +48,18 @@ auto LeafNode::GetHeaderSize() -> size_t {
 }
 
 auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
-    std::span<char> write_view(buffer);
+    buffer.clear();
 
-    std::memcpy(write_view.data(), &node_type_, sizeof(node_type_));
-    write_view = write_view.subspan(sizeof(node_type_));
-    std::memcpy(write_view.data(), &num_entries_, sizeof(num_entries_));
-    write_view = write_view.subspan(sizeof(num_entries_));
-    std::memcpy(write_view.data(), &prev_leaf_page_num_, sizeof(prev_leaf_page_num_));
-    write_view = write_view.subspan(sizeof(prev_leaf_page_num_));
-    std::memcpy(write_view.data(), &next_leaf_page_num_, sizeof(next_leaf_page_num_));
-    write_view = write_view.subspan(sizeof(next_leaf_page_num_));
+    Utils::AppendToBuffer(buffer, node_type_);
+    Utils::AppendToBuffer(buffer, num_entries_);
+    Utils::AppendToBuffer(buffer, prev_leaf_page_num_);
+    Utils::AppendToBuffer(buffer, next_leaf_page_num_);
 
     for (auto key : keys_) {
-        std::memcpy(write_view.data(), &key, sizeof(double));
-        write_view = write_view.subspan(sizeof(double));
+        Utils::AppendToBuffer(buffer, key);
     }
     for (auto value : values_) {
-        std::memcpy(write_view.data(), &value, sizeof(unsigned int));
-        write_view = write_view.subspan(sizeof(unsigned int));
+        Utils::AppendToBuffer(buffer, value);
     }
 }
 
@@ -170,16 +160,10 @@ auto BPlusTree::BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> 
 
     // write the header
     std::vector<char> buffer(pager_.get_page_size(), 0);
-    std::span<char> write_view(buffer);
-
-    std::memcpy(write_view.data(), &root_page_num_, sizeof(root_page_num_));
-    write_view = write_view.subspan(sizeof(root_page_num_));
-    std::memcpy(write_view.data(), &level_, sizeof(level_));
-    write_view = write_view.subspan(sizeof(level_));
-    std::memcpy(write_view.data(), &internal_node_order_, sizeof(internal_node_order_));
-    write_view = write_view.subspan(sizeof(internal_node_order_));
-    std::memcpy(write_view.data(), &leaf_node_order_, sizeof(leaf_node_order_));
-    write_view = write_view.subspan(sizeof(leaf_node_order_));
+    Utils::AppendToBuffer(buffer, root_page_num_);
+    Utils::AppendToBuffer(buffer, level_);
+    Utils::AppendToBuffer(buffer, internal_node_order_);
+    Utils::AppendToBuffer(buffer, leaf_node_order_);
 
     pager_.WritePage(0, buffer);
 };
