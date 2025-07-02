@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace qalsh_chamfer {
 
@@ -54,6 +55,9 @@ class Indexer {
     Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points, unsigned int num_dimensions,
             double approximation_ratio, double bucket_width, double beta, double error_probability,
             unsigned int num_hash_tables, unsigned int page_size, bool verbose);
+
+    auto BuildIndexForSet(std::vector<double>& dot_vector, const fs::path& set_file_path,
+                          const fs::path& index_file_path) const -> void;
 
     std::string dataset_name_;
     fs::path parent_directory_;

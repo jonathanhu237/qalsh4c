@@ -12,6 +12,8 @@
 
 #include "b_plus_tree.h"
 #include "constants.h"
+#include "pager.h"
+#include "utils.hpp"
 
 namespace qalsh_chamfer {
 
@@ -159,20 +161,51 @@ auto Indexer::Execute() const -> void {
         fs::create_directories(index_directory);
     }
 
-    for (unsigned int i = 0; i < num_hash_tables_; i++) {
-        if (verbose_) {
-            std::cout << std::format("Indexing with hash table {}/{}\r", i + 1, num_hash_tables_) << std::flush;
+    auto indexing_helper = [this, &standard_cauchy_dist, &rng](const std::string& set_name) -> void {
+        for (unsigned int i = 0; i < num_hash_tables_; i++) {
+            if (verbose_) {
+                std::cout << std::format("Indexing set {} ... ({}/{})\r", set_name, i + 1, num_hash_tables_)
+                          << std::flush;
+            }
+
+            // Generate the dot vector
+            std::vector<double> dot_vector(num_dimensions_);
+            std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
+
+            // Build the index
+            fs::path set_file_path =
+                parent_directory_ / dataset_name_ / std::format("{}_{}.bin", dataset_name_, set_name);
+            fs::path index_file_path = parent_directory_ / dataset_name_ / "qalsh" /
+                                       std::format("{}_{}_idx_{}.bin", dataset_name_, set_name, i);
+            BuildIndexForSet(dot_vector, set_file_path, index_file_path);
         }
 
-        std::vector<double> dot_vector(num_dimensions_);
-        std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
+        std::cout << "\n";
+    };
 
-        BPlusTreeBulkLoader bulk_loader(index_directory / std::format("{}_idx_{}.bin", dataset_name_, i), page_size_,
-                                        dot_vector);
-        bulk_loader.BulkLoad();
+    indexing_helper("A");
+    indexing_helper("B");
+}
+
+auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, const fs::path& set_file_path,
+                               const fs::path& index_file_path) const -> void {
+    // Read the set from the file
+    std::vector<std::vector<double>> set =
+        Utils::ReadSetFromFile(set_file_path, num_points_, num_dimensions_, "A", verbose_);
+
+    // Calculate the dot products and sort them
+    std::vector<double> dot_products(num_points_);
+
+    for (unsigned int j = 0; j < num_points_; j++) {
+        dot_products[j] = Utils::DotProduct(set[j], dot_vector);
     }
+    std::ranges::sort(dot_products);
 
-    std::cout << "\n";
+    // Bulk load the B+ tree with sorted dot products
+    Pager pager(index_file_path, page_size_);
+    BPlusTree b_plus_tree(pager);
+
+    b_plus_tree.BulkLoad(dot_products);
 }
 
 }  // namespace qalsh_chamfer
