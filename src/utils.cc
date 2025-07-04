@@ -59,6 +59,10 @@ auto Utils::ReadSetFromFile(const fs::path& file_path, unsigned int num_points, 
         ifs.read(reinterpret_cast<char*>(set[i].data()), static_cast<std::streamsize>(sizeof(double) * num_dimensions));
     }
 
+    if (verbose) {
+        std::cout << "\n";
+    }
+
     return set;
 }
 
