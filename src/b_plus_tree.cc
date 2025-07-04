@@ -142,6 +142,7 @@ auto BPlusTree::BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> 
                 new_internal_node.pointers_.push_back(parent_level_entries[i].second);
                 new_internal_node.num_children_++;
             }
+            entry_idx = chunk_end;
 
             // Serialize the internal node and write it to the file
             std::vector<char> buffer(pager_.get_page_size(), 0);
