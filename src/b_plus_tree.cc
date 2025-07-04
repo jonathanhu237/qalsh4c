@@ -9,7 +9,7 @@
 
 #include "constants.h"
 #include "pager.h"
-#include "utils.hpp"
+#include "utils.h"
 
 namespace qalsh_chamfer {
 

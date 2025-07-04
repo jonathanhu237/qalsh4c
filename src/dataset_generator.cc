@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "utils.hpp"
+#include "utils.h"
 
 namespace qalsh_chamfer {
 
