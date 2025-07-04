@@ -51,6 +51,12 @@ auto main(int argc, char** argv) -> int {
                    "automatically)")
         ->default_val(0);
 
+    unsigned int collision_threshold{0};
+    app.add_option("-l,--collision_threshold", collision_threshold,
+                   "Collision threshold for the indexer (default: 0, which means the collision threshold will be "
+                   "determined automatically)")
+        ->default_val(0);
+
     unsigned int page_size{0};
     app.add_option("-B,--page_size", page_size,
                    "Page size for the indexer (default: 0, which means the page size will be determined automatically)")
@@ -71,7 +77,7 @@ auto main(int argc, char** argv) -> int {
                            .set_bucket_width(bucket_width)
                            .set_beta(beta)
                            .set_error_probability(error_probability)
-                           .set_num_hash_tables(num_hash_tables)
+                           .set_collision_schema_param(num_hash_tables, collision_threshold)
                            .set_page_size(page_size)
                            .set_verbose(verbose)
                            .Build();

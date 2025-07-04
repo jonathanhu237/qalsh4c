@@ -24,7 +24,7 @@ class IndexerBuilder {
     auto set_bucket_width(double bucket_width) -> IndexerBuilder&;
     auto set_beta(double beta) -> IndexerBuilder&;
     auto set_error_probability(double error_probability) -> IndexerBuilder&;
-    auto set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder&;
+    auto set_collision_schema_param(unsigned int num_hash_tables, unsigned int collision_threshold) -> IndexerBuilder&;
     auto set_page_size(unsigned int page_size) -> IndexerBuilder&;
     auto set_verbose(bool verbose) -> IndexerBuilder&;
 
@@ -40,6 +40,7 @@ class IndexerBuilder {
     double beta_;
     double error_probability_;
     unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
     unsigned int page_size_;
     bool verbose_;
 };
@@ -54,7 +55,7 @@ class Indexer {
    private:
     Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points, unsigned int num_dimensions,
             double approximation_ratio, double bucket_width, double beta, double error_probability,
-            unsigned int num_hash_tables, unsigned int page_size, bool verbose);
+            unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size, bool verbose);
 
     auto BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
                           const fs::path& index_file_path) const -> void;
@@ -68,6 +69,7 @@ class Indexer {
     double beta_;
     double error_probability_;
     unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
     unsigned int page_size_;
     bool verbose_;
 };

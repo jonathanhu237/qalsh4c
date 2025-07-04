@@ -28,6 +28,7 @@ IndexerBuilder::IndexerBuilder()
       beta_(0.0),
       error_probability_(0.0),
       num_hash_tables_(0),
+      collision_threshold_(0),
       page_size_(0),
       verbose_(false) {}
 
@@ -79,16 +80,18 @@ auto IndexerBuilder::set_error_probability(double error_probability) -> IndexerB
     return *this;
 }
 
-auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> IndexerBuilder& {
+auto IndexerBuilder::set_collision_schema_param(unsigned int num_hash_tables, unsigned int collision_threshold)
+    -> IndexerBuilder& {
+    double term1 = std::sqrt(std::log(2.0 / beta_));
+    double term2 = std::sqrt(std::log(1.0 / error_probability_));
+    double p1 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width_ / 2.0);
+    double p2 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width_ / (2.0 * approximation_ratio_));
+
     if (num_hash_tables == 0) {
         // Calculate the numerator
-        double term1 = std::sqrt(std::log(2.0 / beta_));
-        double term2 = std::sqrt(std::log(1.0 / error_probability_));
         double numerator = std::pow(term1 + term2, 2.0);
 
         // Calculate the denominator
-        double p1 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width_ / 2.0);
-        double p2 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width_ / (2.0 * approximation_ratio_));
         double denominator = 2.0 * std::pow(p1 - p2, 2.0);
 
         // Calculate the number of hash tables
@@ -96,6 +99,15 @@ auto IndexerBuilder::set_num_hash_tables(unsigned int num_hash_tables) -> Indexe
     } else {
         num_hash_tables_ = num_hash_tables;
     }
+
+    if (collision_threshold == 0) {
+        double eta = term1 / term2;
+        double alpha = (eta * p1 + p2) / (1 + eta);
+        collision_threshold_ = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables_));
+    } else {
+        collision_threshold_ = collision_threshold;
+    }
+
     return *this;
 }
 
@@ -119,14 +131,15 @@ auto IndexerBuilder::set_verbose(bool verbose) -> IndexerBuilder& {
 auto IndexerBuilder::Build() const -> std::unique_ptr<Indexer> {
     return std::unique_ptr<Indexer>(new Indexer(dataset_name_, parent_directory_, num_points_, num_dimensions_,
                                                 approximation_ratio_, bucket_width_, beta_, error_probability_,
-                                                num_hash_tables_, page_size_, verbose_));
+                                                num_hash_tables_, collision_threshold_, page_size_, verbose_));
 }
 
 // ------ Indexer Implementation ------
 
 Indexer::Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
                  unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
-                 double error_probability, unsigned int num_hash_tables, unsigned int page_size, bool verbose)
+                 double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
+                 unsigned int page_size, bool verbose)
     : dataset_name_(std::move(dataset_name)),
       parent_directory_(std::move(parent_directory)),
       num_points_(num_points),
@@ -136,6 +149,7 @@ Indexer::Indexer(std::string dataset_name, fs::path parent_directory, unsigned i
       beta_(beta),
       error_probability_(error_probability),
       num_hash_tables_(num_hash_tables),
+      collision_threshold_(collision_threshold),
       page_size_(page_size),
       verbose_(verbose) {}
 
@@ -150,6 +164,7 @@ auto Indexer::PrintConfiguration() const -> void {
     std::cout << std::format("Beta: {}\n", beta_);
     std::cout << std::format("Error Probability: {}\n", error_probability_);
     std::cout << std::format("Number of Hash Tables: {}\n", num_hash_tables_);
+    std::cout << std::format("Collision Threshold: {}\n", collision_threshold_);
     std::cout << std::format("Page Size: {}\n", page_size_);
     std::cout << "-------------------------------------------------\n";
 }
