@@ -197,7 +197,8 @@ auto Indexer::Execute() const -> void {
 auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
                                const fs::path& index_file_path) const -> void {
     // Calculate the dot products and sort them
-    std::vector<std::pair<double, unsigned int>> dot_products_with_id(num_points_);
+    std::vector<std::pair<double, unsigned int>> dot_products_with_id;
+    dot_products_with_id.reserve(num_points_);
 
     for (unsigned int j = 0; j < num_points_; j++) {
         dot_products_with_id.emplace_back(Utils::DotProduct(set[j], dot_vector), j);
