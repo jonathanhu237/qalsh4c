@@ -165,6 +165,11 @@ auto Indexer::Execute() const -> void {
     }
 
     auto indexing_helper = [this, &standard_cauchy_dist, &rng](const std::string& set_name) -> void {
+        // Read the set from the file
+        fs::path set_file_path = parent_directory_ / dataset_name_ / std::format("{}_{}.bin", dataset_name_, set_name);
+        std::vector<std::vector<double>> set =
+            Utils::ReadSetFromFile(set_file_path, num_points_, num_dimensions_, set_name, verbose_);
+
         for (unsigned int i = 0; i < num_hash_tables_; i++) {
             if (verbose_) {
                 std::cout << std::format("Indexing set {} ... ({}/{})\r", set_name, i + 1, num_hash_tables_)
@@ -176,11 +181,11 @@ auto Indexer::Execute() const -> void {
             std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
 
             // Build the index
-            fs::path set_file_path =
-                parent_directory_ / dataset_name_ / std::format("{}_{}.bin", dataset_name_, set_name);
+
             fs::path index_file_path = parent_directory_ / dataset_name_ / "qalsh" /
                                        std::format("{}_{}_idx_{}.bin", dataset_name_, set_name, i);
-            BuildIndexForSet(dot_vector, set_file_path, index_file_path);
+
+            BuildIndexForSet(dot_vector, set, index_file_path);
         }
 
         std::cout << "\n";
@@ -190,12 +195,8 @@ auto Indexer::Execute() const -> void {
     indexing_helper("B");
 }
 
-auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, const fs::path& set_file_path,
+auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
                                const fs::path& index_file_path) const -> void {
-    // Read the set from the file
-    std::vector<std::vector<double>> set =
-        Utils::ReadSetFromFile(set_file_path, num_points_, num_dimensions_, "A", verbose_);
-
     // Calculate the dot products and sort them
     std::vector<std::pair<double, unsigned int>> dot_products_with_id(num_points_);
 

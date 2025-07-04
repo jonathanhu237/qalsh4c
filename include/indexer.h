@@ -56,7 +56,7 @@ class Indexer {
             double approximation_ratio, double bucket_width, double beta, double error_probability,
             unsigned int num_hash_tables, unsigned int page_size, bool verbose);
 
-    auto BuildIndexForSet(std::vector<double>& dot_vector, const fs::path& set_file_path,
+    auto BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
                           const fs::path& index_file_path) const -> void;
 
     std::string dataset_name_;
