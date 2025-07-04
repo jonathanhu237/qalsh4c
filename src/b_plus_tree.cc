@@ -15,8 +15,8 @@ namespace qalsh_chamfer {
 
 // ----- InternalNode Implementation -----
 InternalNode::InternalNode(unsigned int order) : node_type_(NodeType::kInternalNode), num_children_(0) {
-    keys_.resize(order - 1);
-    pointers_.resize(order);
+    keys_.reserve(order - 1);
+    pointers_.reserve(order);
 };
 
 auto InternalNode::GetHeaderSize() -> size_t { return sizeof(node_type_) + sizeof(num_children_); }
@@ -38,8 +38,8 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
 // ----- LeafNode Implementation -----
 LeafNode::LeafNode(unsigned int order)
     : node_type_(NodeType::kLeafNode), num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
-    keys_.resize(order);
-    values_.resize(order);
+    keys_.reserve(order);
+    values_.reserve(order);
 };
 
 auto LeafNode::GetHeaderSize() -> size_t {
