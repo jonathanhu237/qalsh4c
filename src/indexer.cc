@@ -157,7 +157,7 @@ auto Indexer::PrintConfiguration() const -> void {
 auto Indexer::Execute() const -> void {
     std::mt19937 rng(std::random_device{}());
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
-    fs::path index_directory = parent_directory_ / dataset_name_ / "qalsh";
+    fs::path index_directory = parent_directory_ / dataset_name_ / "index";
 
     // Create the index directory if it does not exist
     if (!fs::exists(index_directory)) {
@@ -181,7 +181,7 @@ auto Indexer::Execute() const -> void {
             std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
 
             // Build the index
-            fs::path index_file_path = parent_directory_ / dataset_name_ / "qalsh" /
+            fs::path index_file_path = parent_directory_ / dataset_name_ / "index" /
                                        std::format("{}_{}_idx_{}.bin", dataset_name_, set_name, i);
 
             BuildIndexForSet(dot_vector, set, index_file_path);
