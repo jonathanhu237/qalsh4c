@@ -181,7 +181,6 @@ auto Indexer::Execute() const -> void {
             std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
 
             // Build the index
-
             fs::path index_file_path = parent_directory_ / dataset_name_ / "qalsh" /
                                        std::format("{}_{}_idx_{}.bin", dataset_name_, set_name, i);
 
