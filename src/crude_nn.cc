@@ -52,7 +52,7 @@ CrudeNn::CrudeNn(std::string dataset_name, fs::path parent_directory, unsigned i
       verbose_(verbose) {}
 
 auto CrudeNn::PrintConfiguration() const -> void {
-    std::cout << std::format("---------- Dataset Generator Configuration ----------\n");
+    std::cout << std::format("---------- Crude Nearest Neighbor Configuration ----------\n");
     std::cout << std::format("Dataset Name: {}\n", dataset_name_);
     std::cout << std::format("Parent Directory: {}\n", parent_directory_.string());
     std::cout << std::format("Number of Points: {}\n", num_points_);
