@@ -176,8 +176,8 @@ auto Indexer::Execute() const -> void {
     }
 
     // Generate the dot vectors
-    std::vector<std::vector<double>> dot_vectors(num_dimensions_);
-    for (unsigned int i = 0; i < num_dimensions_; i++) {
+    std::vector<std::vector<double>> dot_vectors(num_hash_tables_, std::vector<double>(num_dimensions_, 0.0));
+    for (unsigned int i = 0; i < num_hash_tables_; i++) {
         std::ranges::generate(dot_vectors[i], [&]() { return standard_cauchy_dist(rng); });
     }
 
