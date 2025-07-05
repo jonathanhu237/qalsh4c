@@ -97,8 +97,8 @@ auto DatasetGenerator::Execute() const -> void {
         fs::create_directories(dataset_directory);
     }
 
-    Utils::WriteSetToFile(dataset_directory / std::format("{}_A.bin", dataset_name_), set_a, "A", verbose_);
-    Utils::WriteSetToFile(dataset_directory / std::format("{}_B.bin", dataset_name_), set_b, "B", verbose_);
+    Utils::WriteSetToFile(dataset_directory / "A.bin", set_a, "A", verbose_);
+    Utils::WriteSetToFile(dataset_directory / "B.bin", set_b, "B", verbose_);
 
     // Calculate the chamfer distance from set A to set B and vice versa
 
@@ -106,7 +106,7 @@ auto DatasetGenerator::Execute() const -> void {
     double chamfer_b_to_a = Utils::CalculateChamfer(set_b, set_a, "B", "A", verbose_);
     double total_chamfer_distance = chamfer_a_to_b + chamfer_b_to_a;
 
-    fs::path gt_file_path = dataset_directory / std::format("{}_gt.bin", dataset_name_);
+    fs::path gt_file_path = dataset_directory / "gt.bin";
     std::ofstream gt_ofs(gt_file_path, std::ios::binary | std::ios::trunc);
 
     if (!gt_ofs.is_open()) {
