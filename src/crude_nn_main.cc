@@ -34,6 +34,7 @@ auto main(int argc, char** argv) -> int {
                             .set_num_points(num_points)
                             .set_num_dimensions(num_dimensions)
                             .set_verbose(verbose)
+                            .ReadParamFromBinaryFile()
                             .Build();
 
         if (verbose) {

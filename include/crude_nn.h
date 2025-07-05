@@ -21,6 +21,7 @@ class CrudeNnBuilder {
     auto set_num_dimensions(unsigned int num_dimensions) -> CrudeNnBuilder&;
     auto set_verbose(bool debug) -> CrudeNnBuilder&;
 
+    auto ReadParamFromBinaryFile() -> CrudeNnBuilder&;
     [[nodiscard]] auto Build() const -> std::unique_ptr<CrudeNn>;
 
    private:
@@ -28,6 +29,13 @@ class CrudeNnBuilder {
     fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
+    unsigned int page_size_;
     bool verbose_;
 };
 
@@ -40,12 +48,20 @@ class CrudeNn {
 
    private:
     CrudeNn(std::string dataset_name, fs::path parent_directory, unsigned int num_points, unsigned int num_dimensions,
-            bool verbose);
+            double approximation_ratio, double bucket_width, double beta, double error_probability,
+            unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size, bool verbose);
 
     std::string dataset_name_;
     fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
+    unsigned int page_size_;
     bool verbose_;
 };
 
