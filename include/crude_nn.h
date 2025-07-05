@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace qalsh_chamfer {
 
@@ -37,6 +38,8 @@ class CrudeNnBuilder {
     unsigned int collision_threshold_;
     unsigned int page_size_;
     bool verbose_;
+
+    std::vector<std::vector<double>> dot_vectors_;
 };
 
 class CrudeNn {
@@ -49,7 +52,8 @@ class CrudeNn {
    private:
     CrudeNn(std::string dataset_name, fs::path parent_directory, unsigned int num_points, unsigned int num_dimensions,
             double approximation_ratio, double bucket_width, double beta, double error_probability,
-            unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size, bool verbose);
+            unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size,
+            std::vector<std::vector<double>> dot_vectors, bool verbose);
 
     std::string dataset_name_;
     fs::path parent_directory_;
@@ -62,6 +66,7 @@ class CrudeNn {
     unsigned int num_hash_tables_;
     unsigned int collision_threshold_;
     unsigned int page_size_;
+    std::vector<std::vector<double>> dot_vectors_;
     bool verbose_;
 };
 

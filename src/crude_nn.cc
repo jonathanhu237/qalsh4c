@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ios>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -64,13 +65,20 @@ auto CrudeNnBuilder::ReadParamFromBinaryFile() -> CrudeNnBuilder& {
     ifs.read(reinterpret_cast<char*>(&collision_threshold_), sizeof(collision_threshold_));
     ifs.read(reinterpret_cast<char*>(&page_size_), sizeof(page_size_));
 
+    dot_vectors_.resize(num_hash_tables_);
+    for (unsigned int i = 0; i < num_hash_tables_; i++) {
+        dot_vectors_[i].resize(num_dimensions_);
+        ifs.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
+                 static_cast<std::streamsize>(sizeof(double) * num_dimensions_));
+    }
+
     return *this;
 }
 
 auto CrudeNnBuilder::Build() const -> std::unique_ptr<CrudeNn> {
-    return std::unique_ptr<CrudeNn>(new CrudeNn(dataset_name_, parent_directory_, num_points_, num_dimensions_,
-                                                approximation_ratio_, bucket_width_, beta_, error_probability_,
-                                                num_hash_tables_, collision_threshold_, page_size_, verbose_));
+    return std::unique_ptr<CrudeNn>(new CrudeNn(
+        dataset_name_, parent_directory_, num_points_, num_dimensions_, approximation_ratio_, bucket_width_, beta_,
+        error_probability_, num_hash_tables_, collision_threshold_, page_size_, dot_vectors_, verbose_));
 }
 
 // ---------- CrudeNn Implementation ----------
@@ -78,7 +86,7 @@ auto CrudeNnBuilder::Build() const -> std::unique_ptr<CrudeNn> {
 CrudeNn::CrudeNn(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
                  unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
                  double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
-                 unsigned int page_size, bool verbose)
+                 unsigned int page_size, std::vector<std::vector<double>> dot_vectors, bool verbose)
     : dataset_name_(std::move(dataset_name)),
       parent_directory_(std::move(parent_directory)),
       num_points_(num_points),
@@ -90,6 +98,7 @@ CrudeNn::CrudeNn(std::string dataset_name, fs::path parent_directory, unsigned i
       num_hash_tables_(num_hash_tables),
       collision_threshold_(collision_threshold),
       page_size_(page_size),
+      dot_vectors_(std::move(dot_vectors)),
       verbose_(verbose) {}
 
 auto CrudeNn::PrintConfiguration() const -> void {
