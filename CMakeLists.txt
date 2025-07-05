@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -Wall -Wextra -Wpedantic
 
 add_library(qalsh_chamfer_lib
     src/b_plus_tree.cc
+    src/crude_nn.cc
     src/dataset_generator.cc
     src/indexer.cc
     src/utils.cc
@@ -22,6 +23,8 @@ target_include_directories(qalsh_chamfer_lib PUBLIC
 
 add_executable(dataset_generator src/dataset_generator_main.cc)
 add_executable(indexer src/indexer_main.cc)
+add_executable(crude_nn src/crude_nn_main.cc)
 
 target_link_libraries(dataset_generator PRIVATE qalsh_chamfer_lib)
 target_link_libraries(indexer PRIVATE qalsh_chamfer_lib)
+target_link_libraries(crude_nn PRIVATE qalsh_chamfer_lib)
