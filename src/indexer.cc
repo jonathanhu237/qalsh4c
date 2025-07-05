@@ -208,7 +208,7 @@ auto Indexer::Execute() const -> void {
 
     // Write the parameters to a binary file
     fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
-    WriteParamInBinary(param_file_path);
+    WriteParamInBinary(param_file_path, dot_vectors);
 }
 
 auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
@@ -229,7 +229,8 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std:
     b_plus_tree.BulkLoad(dot_products_with_id);
 }
 
-auto Indexer::WriteParamInBinary(const fs::path& file_path) const -> void {
+auto Indexer::WriteParamInBinary(const fs::path& file_path, const std::vector<std::vector<double>>& dot_vectors) const
+    -> void {
     std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
@@ -242,6 +243,9 @@ auto Indexer::WriteParamInBinary(const fs::path& file_path) const -> void {
     ofs.write(reinterpret_cast<const char*>(&num_hash_tables_), sizeof(num_hash_tables_));
     ofs.write(reinterpret_cast<const char*>(&collision_threshold_), sizeof(collision_threshold_));
     ofs.write(reinterpret_cast<const char*>(&page_size_), sizeof(page_size_));
+    for (const auto& vec : dot_vectors) {
+        ofs.write(reinterpret_cast<const char*>(vec.data()), static_cast<std::streamsize>(sizeof(double) * vec.size()));
+    }
 }
 
 }  // namespace qalsh_chamfer
