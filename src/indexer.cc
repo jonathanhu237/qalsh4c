@@ -175,11 +175,13 @@ auto Indexer::Execute() const -> void {
         fs::create_directories(index_directory);
     }
 
-    // Write the parameters to a binary file
-    fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
-    WriteParamInBinary(param_file_path);
+    // Generate the dot vectors
+    std::vector<std::vector<double>> dot_vectors(num_dimensions_);
+    for (unsigned int i = 0; i < num_dimensions_; i++) {
+        std::ranges::generate(dot_vectors[i], [&]() { return standard_cauchy_dist(rng); });
+    }
 
-    auto indexing_helper = [this, &standard_cauchy_dist, &rng](const std::string& set_name) -> void {
+    auto indexing_helper = [this, &dot_vectors](const std::string& set_name) -> void {
         // Read the set from the file
         fs::path set_file_path = parent_directory_ / dataset_name_ / std::format("{}.bin", set_name);
         std::vector<std::vector<double>> set =
@@ -191,15 +193,11 @@ auto Indexer::Execute() const -> void {
                           << std::flush;
             }
 
-            // Generate the dot vector
-            std::vector<double> dot_vector(num_dimensions_);
-            std::ranges::generate(dot_vector, [&]() { return standard_cauchy_dist(rng); });
-
             // Build the index
             fs::path index_file_path =
                 parent_directory_ / dataset_name_ / "index" / std::format("{}_idx_{}.bin", set_name, i);
 
-            BuildIndexForSet(dot_vector, set, index_file_path);
+            BuildIndexForSet(dot_vectors[i], set, index_file_path);
         }
 
         std::cout << "\n";
@@ -207,6 +205,10 @@ auto Indexer::Execute() const -> void {
 
     indexing_helper("A");
     indexing_helper("B");
+
+    // Write the parameters to a binary file
+    fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
+    WriteParamInBinary(param_file_path);
 }
 
 auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std::vector<double>>& set,
@@ -222,7 +224,7 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std:
 
     // Bulk load the B+ tree with sorted dot products
     Pager pager(index_file_path, page_size_);
-    BPlusTree b_plus_tree(std::move(pager), dot_vector);
+    BPlusTree b_plus_tree(std::move(pager));
 
     b_plus_tree.BulkLoad(dot_products_with_id);
 }

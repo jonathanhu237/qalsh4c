@@ -63,23 +63,14 @@ auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
 }
 
 // ----- BPlusTree Implementation -----
-BPlusTree::BPlusTree(Pager&& pager, const std::vector<double>& dot_vector)
-    : pager_(std::move(pager)),
-      root_page_num_(0),
-      level_(0),
-      internal_node_order_(0),
-      leaf_node_order_(0),
-      dot_vector_(dot_vector) {
+BPlusTree::BPlusTree(Pager&& pager)
+    : pager_(std::move(pager)), root_page_num_(0), level_(0), internal_node_order_(0), leaf_node_order_(0) {
     // Calculate the order of InternalNode and LeafNode
     unsigned int page_size = pager_.get_page_size();
     internal_node_order_ = static_cast<unsigned>(
         (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int));
     leaf_node_order_ =
         static_cast<unsigned>((((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int));
-}
-
-auto BPlusTree::GetHeaderBasicInfoSize() -> size_t {
-    return sizeof(root_page_num_) + sizeof(level_) + sizeof(internal_node_order_) + sizeof(leaf_node_order_);
 }
 
 auto BPlusTree::BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void {

@@ -50,21 +50,17 @@ class LeafNode {
 
 class BPlusTree {
    public:
-    BPlusTree(Pager&& pager, const std::vector<double>& dot_vector);
-    auto static GetHeaderBasicInfoSize() -> size_t;
+    BPlusTree(Pager&& pager);
     auto BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void;
 
    private:
     Pager pager_;
 
-    // Header (base information)
+    // Header
     unsigned int root_page_num_;
     unsigned int level_;
     unsigned int internal_node_order_;
     unsigned int leaf_node_order_;
-
-    // Header (dot vector)
-    std::vector<double> dot_vector_;
 };
 
 }  // namespace qalsh_chamfer
