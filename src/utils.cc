@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ios>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -64,6 +65,25 @@ auto Utils::ReadSetFromFile(const fs::path& file_path, unsigned int num_points, 
     }
 
     return set;
+}
+
+auto static WriteArrayToFile(const fs::path& file_path, const std::vector<double>& array) -> void {
+    std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
+    if (!ofs.is_open()) {
+        throw std::runtime_error(std::format("Could not open file for writing: {}", file_path.string()));
+    }
+
+    ofs.write(reinterpret_cast<const char*>(array.data()), static_cast<std::streamsize>(sizeof(double) * array.size()));
+}
+
+auto static ReadArrayFromFile(const fs::path& file_path, unsigned int num_entries) -> std::vector<double> {
+    std::vector<double> array(num_entries);
+    std::ifstream ifs(file_path, std::ios::binary);
+    if (!ifs.is_open()) {
+        throw std::runtime_error(std::format("Could not open file for reading: {}", file_path.string()));
+    }
+
+    ifs.read(reinterpret_cast<char*>(array.data()), static_cast<std::streamsize>(sizeof(double) * num_entries));
 }
 
 auto Utils::CalculateChamfer(const std::vector<std::vector<double>>& from_set,

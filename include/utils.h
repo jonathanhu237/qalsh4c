@@ -19,6 +19,10 @@ class Utils {
                                 const std::string& set_name = "", bool verbose = false)
         -> std::vector<std::vector<double>>;
 
+    auto static WriteArrayToFile(const fs::path& file_path, const std::vector<double>& array) -> void;
+
+    auto static ReadArrayFromFile(const fs::path& file_path, unsigned int num_entries) -> std::vector<double>;
+
     auto static CalculateChamfer(const std::vector<std::vector<double>>& from_set,
                                  const std::vector<std::vector<double>>& to_set, const std::string& from_set_name = "",
                                  const std::string& to_set_name = "", bool verbose = false) -> double;
