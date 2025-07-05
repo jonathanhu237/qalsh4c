@@ -188,7 +188,7 @@ auto Indexer::Execute() const -> void {
 
     auto indexing_helper = [this, &standard_cauchy_dist, &rng](const std::string& set_name) -> void {
         // Read the set from the file
-        fs::path set_file_path = parent_directory_ / dataset_name_ / std::format("{}.bin", dataset_name_, set_name);
+        fs::path set_file_path = parent_directory_ / dataset_name_ / std::format("{}.bin", set_name);
         std::vector<std::vector<double>> set =
             Utils::ReadSetFromFile(set_file_path, num_points_, num_dimensions_, set_name, verbose_);
 
