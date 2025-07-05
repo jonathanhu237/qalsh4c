@@ -1,11 +1,13 @@
 # cmake
-build/
+build/*
 
 # clangd
-.cache/
+.cache/*
 
 # data
-data/
-!data/toy/toy_A.bin
-!data/toy/toy_B.bin
-!data/toy/toy_gt.bin
+data/*
+!data/toy/
+data/toy/*
+!data/toy/A.bin
+!data/toy/B.bin
+!data/toy/gt.bin
