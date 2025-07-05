@@ -84,6 +84,7 @@ auto static ReadArrayFromFile(const fs::path& file_path, unsigned int num_entrie
     }
 
     ifs.read(reinterpret_cast<char*>(array.data()), static_cast<std::streamsize>(sizeof(double) * num_entries));
+    return array;
 }
 
 auto Utils::CalculateChamfer(const std::vector<std::vector<double>>& from_set,
