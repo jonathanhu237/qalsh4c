@@ -41,7 +41,7 @@ auto main(int argc, char** argv) -> int {
         auto dataset_generator = qalsh_chamfer::DatasetGeneratorBuilder()
                                      .set_dataset_name(dataset_name)
                                      .set_parent_directory(parent_directory)
-                                     .set_num_points_(num_points)
+                                     .set_num_points(num_points)
                                      .set_num_dimensions(num_dimensions)
                                      .set_left_boundary(left_boundary)
                                      .set_right_boundary(right_boundary)

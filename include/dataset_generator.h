@@ -20,7 +20,7 @@ class DatasetGeneratorBuilder {
 
     auto set_dataset_name(const std::string& dataset_name) -> DatasetGeneratorBuilder&;
     auto set_parent_directory(const fs::path& parent_directory) -> DatasetGeneratorBuilder&;
-    auto set_num_points_(unsigned int num_points) -> DatasetGeneratorBuilder&;
+    auto set_num_points(unsigned int num_points) -> DatasetGeneratorBuilder&;
     auto set_num_dimensions(unsigned int num_dimensions) -> DatasetGeneratorBuilder&;
     auto set_left_boundary(int left_boundary) -> DatasetGeneratorBuilder&;
     auto set_right_boundary(int right_boundary) -> DatasetGeneratorBuilder&;

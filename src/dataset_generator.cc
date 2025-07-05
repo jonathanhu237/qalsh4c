@@ -32,7 +32,7 @@ auto DatasetGeneratorBuilder::set_parent_directory(const fs::path& parent_direct
     return *this;
 }
 
-auto DatasetGeneratorBuilder::set_num_points_(unsigned int num_points) -> DatasetGeneratorBuilder& {
+auto DatasetGeneratorBuilder::set_num_points(unsigned int num_points) -> DatasetGeneratorBuilder& {
     num_points_ = num_points;
     return *this;
 }
