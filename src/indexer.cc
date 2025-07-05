@@ -4,10 +4,13 @@
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <fstream>
+#include <ios>
 #include <iostream>
 #include <memory>
 #include <numbers>
 #include <random>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -179,6 +182,10 @@ auto Indexer::Execute() const -> void {
         fs::create_directories(index_directory);
     }
 
+    // Write the parameters to a binary file
+    fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
+    WriteParamInBinary(param_file_path);
+
     auto indexing_helper = [this, &standard_cauchy_dist, &rng](const std::string& set_name) -> void {
         // Read the set from the file
         fs::path set_file_path = parent_directory_ / dataset_name_ / std::format("{}_{}.bin", dataset_name_, set_name);
@@ -225,6 +232,23 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std:
     BPlusTree b_plus_tree(std::move(pager), dot_vector);
 
     b_plus_tree.BulkLoad(dot_products_with_id);
+}
+
+auto Indexer::WriteParamInBinary(const fs::path& file_path) const -> void {
+    std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
+    if (!ofs.is_open()) {
+        throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
+    }
+
+    ofs.write(reinterpret_cast<const char*>(&num_points_), sizeof(num_points_));
+    ofs.write(reinterpret_cast<const char*>(&num_dimensions_), sizeof(num_dimensions_));
+    ofs.write(reinterpret_cast<const char*>(&approximation_ratio_), sizeof(approximation_ratio_));
+    ofs.write(reinterpret_cast<const char*>(&bucket_width_), sizeof(bucket_width_));
+    ofs.write(reinterpret_cast<const char*>(&beta_), sizeof(beta_));
+    ofs.write(reinterpret_cast<const char*>(&error_probability_), sizeof(error_probability_));
+    ofs.write(reinterpret_cast<const char*>(&num_hash_tables_), sizeof(num_hash_tables_));
+    ofs.write(reinterpret_cast<const char*>(&collision_threshold_), sizeof(collision_threshold_));
+    ofs.write(reinterpret_cast<const char*>(&page_size_), sizeof(page_size_));
 }
 
 }  // namespace qalsh_chamfer
