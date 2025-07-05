@@ -115,14 +115,7 @@ auto IndexerBuilder::set_collision_schema_param(unsigned int num_hash_tables, un
 }
 
 auto IndexerBuilder::set_page_size(unsigned int page_size) -> IndexerBuilder& {
-    if (page_size == 0) {
-        page_size_ = static_cast<unsigned int>(ceil((static_cast<double>(BPlusTree::GetHeaderBasicInfoSize()) +
-                                                     static_cast<double>(num_dimensions_) * sizeof(double)) /
-                                                    kBasePageSize)) *
-                     kBasePageSize;
-    } else {
-        page_size_ = page_size;
-    }
+    page_size_ = page_size;
     return *this;
 }
 

@@ -59,8 +59,8 @@ auto main(int argc, char** argv) -> int {
 
     unsigned int page_size{0};
     app.add_option("-B,--page_size", page_size,
-                   "Page size for the indexer (default: 0, which means the page size will be determined automatically)")
-        ->default_val(0);
+                   std::format("Page size for the indexer (default: {} bytes)", qalsh_chamfer::kDefaultPageSize))
+        ->default_val(qalsh_chamfer::kDefaultPageSize);
 
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");
