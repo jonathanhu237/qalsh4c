@@ -240,8 +240,6 @@ auto Indexer::WriteParamInBinary(const fs::path& file_path) const -> void {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
     }
 
-    ofs.write(reinterpret_cast<const char*>(&num_points_), sizeof(num_points_));
-    ofs.write(reinterpret_cast<const char*>(&num_dimensions_), sizeof(num_dimensions_));
     ofs.write(reinterpret_cast<const char*>(&approximation_ratio_), sizeof(approximation_ratio_));
     ofs.write(reinterpret_cast<const char*>(&bucket_width_), sizeof(bucket_width_));
     ofs.write(reinterpret_cast<const char*>(&beta_), sizeof(beta_));
