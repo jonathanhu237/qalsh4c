@@ -138,8 +138,8 @@ auto CrudeNn::Execute() const -> void {
         Utils::ReadSetFromFile(setB_file_path, num_points_, num_dimensions_, "B", verbose_);
 
     // Generate the D arrays for both sets
-    std::vector<double> d_array_A = GenerateDArrayForSet(setA, setB, "B");
-    std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA, "A");
+    std::vector<double> d_array_A = GenerateDArrayForSet(setA, setB, "A", "B");
+    std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA, "B", "A");
 
     // Write the D arrays to files
     fs::path d_array_A_file_path = parent_directory_ / dataset_name_ / "D_A.bin";
@@ -150,12 +150,21 @@ auto CrudeNn::Execute() const -> void {
 }
 
 auto CrudeNn::GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
-                                   const std::vector<std::vector<double>>& set_to, const std::string& set_to_name) const
-    -> std::vector<double> {
+                                   const std::vector<std::vector<double>>& set_to, const std::string& set_from_name,
+                                   const std::string& set_to_name) const -> std::vector<double> {
     std::vector<double> d_array(num_points_);
 
     for (unsigned int i = 0; i < num_points_; i++) {
+        if (verbose_) {
+            std::cout << std::format("Processing point {}/{} in set {}...\r", i + 1, num_points_, set_from_name)
+                      << std::flush;
+        }
+
         d_array[i] = CAnnSearch(set_from[i], set_to, set_to_name).first;
+    }
+
+    if (verbose_) {
+        std::cout << "\n";
     }
 
     return d_array;

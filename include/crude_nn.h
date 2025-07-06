@@ -64,7 +64,8 @@ class CrudeNn {
 
     [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
                                             const std::vector<std::vector<double>>& set_to,
-                                            const std::string& set_to_name) const -> std::vector<double>;
+                                            const std::string& set_from_name, const std::string& set_to_name) const
+        -> std::vector<double>;
     [[nodiscard]] auto CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset,
                                   const std::string& set_name) const -> Candidate;
 
