@@ -274,14 +274,9 @@ CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsign
         left_page_num_ = locate_result.left_page_num;
     } else if (index == 0) {
         BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
-        if (left_result.data.empty()) {
-            left_buffer_index_ = 0;
-            left_page_num_ = 0;
-        } else {
-            left_buffer_ = left_result.data;
-            left_buffer_index_ = left_result.data.size() - 1;
-            left_page_num_ = left_result.left_page_num;
-        }
+        left_buffer_ = left_result.data;
+        left_buffer_index_ = left_result.data.size() - 1;
+        left_page_num_ = left_result.left_page_num;
 
         right_buffer_ = locate_result.data;
         right_buffer_index_ = index;
