@@ -79,6 +79,8 @@ auto LeafNode::Deserialize(const std::vector<char>& buffer) -> void {
 
     for (unsigned int i = 0; i < num_entries_; ++i) {
         keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
+    }
+    for (unsigned int i = 0; i < num_entries_; ++i) {
         values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
     }
 }
