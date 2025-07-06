@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <filesystem>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace qalsh_chamfer {
@@ -36,6 +37,19 @@ class Utils {
         std::span<const char> data_span(data_ptr, sizeof(T));
 
         buffer.insert(buffer.end(), data_span.begin(), data_span.end());
+    }
+
+    template <typename T>
+    auto static ReadFromBuffer(const std::vector<char>& buffer, size_t& offset) -> T {
+        if (offset + sizeof(T) > buffer.size()) {
+            throw std::out_of_range("Not enough data in buffer to read.");
+        }
+
+        T data;
+        std::memcpy(&data, &buffer[offset], sizeof(T));
+        offset += sizeof(T);
+
+        return data;
     }
 
    private:
