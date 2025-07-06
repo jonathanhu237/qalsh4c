@@ -225,7 +225,6 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
     return {std::numeric_limits<double>::max(), std::numeric_limits<unsigned int>::max()};
 }
 
-// TODO: simplify the implementation
 CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsigned int page_size, double key)
     : left_buffer_index_(0),
       right_buffer_index_(0),
@@ -292,7 +291,6 @@ CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsign
     }
 }
 
-// TODO: simplify the implementation
 auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigned int> {
     std::vector<unsigned int> result;
 
