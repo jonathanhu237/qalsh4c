@@ -220,11 +220,20 @@ auto BPlusTree::Locate(double key) -> LocateResult {
 }
 
 auto BPlusTree::Locate(unsigned int page_num) -> LocateResult {
+    LocateResult result;
+
+    if (page_num == 0) {
+        result.left_page_num = 0;
+        result.right_page_num = 0;
+        result.data.clear();
+
+        return result;
+    }
+
     LeafNode leaf_node(leaf_node_order_);
     const std::vector<char> buffer = pager_.ReadPage(page_num);
     leaf_node.Deserialize(buffer);
 
-    LocateResult result;
     result.left_page_num = leaf_node.prev_leaf_page_num_;
     result.right_page_num = leaf_node.next_leaf_page_num_;
     result.data.reserve(leaf_node.num_entries_);
