@@ -3,7 +3,6 @@
 
 #include <Eigen/Dense>
 #include <filesystem>
-#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -32,11 +31,12 @@ class Utils {
     auto static DotProduct(const std::vector<double>& vec1, const std::vector<double>& vec2) -> double;
 
     template <typename T>
-    auto static AppendToBuffer(std::vector<char>& buffer, const T& data) -> void {
-        const auto* data_ptr = reinterpret_cast<const char*>(&data);
-        std::span<const char> data_span(data_ptr, sizeof(T));
-
-        buffer.insert(buffer.end(), data_span.begin(), data_span.end());
+    auto static WriteToBuffer(std::vector<char>& buffer, size_t& offset, const T& data) -> void {
+        if (offset + sizeof(T) > buffer.size()) {
+            throw std::out_of_range("Not enough space in buffer to append data.");
+        }
+        std::memcpy(&buffer[offset], &data, sizeof(T));
+        offset += sizeof(T);
     }
 
     template <typename T>

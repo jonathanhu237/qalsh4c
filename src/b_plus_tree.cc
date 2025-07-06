@@ -24,13 +24,14 @@ auto InternalNode::GetHeaderSize() -> size_t { return sizeof(num_children_); }
 auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
     buffer.clear();
 
-    Utils::AppendToBuffer(buffer, num_children_);
+    size_t offset = 0;
+    Utils::WriteToBuffer(buffer, offset, num_children_);
 
     for (auto key : keys_) {
-        Utils::AppendToBuffer(buffer, key);
+        Utils::WriteToBuffer(buffer, offset, key);
     }
     for (auto pointer : pointers_) {
-        Utils::AppendToBuffer(buffer, pointer);
+        Utils::WriteToBuffer(buffer, offset, pointer);
     }
 }
 
@@ -62,15 +63,16 @@ auto LeafNode::GetHeaderSize() -> size_t {
 auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
     buffer.clear();
 
-    Utils::AppendToBuffer(buffer, num_entries_);
-    Utils::AppendToBuffer(buffer, prev_leaf_page_num_);
-    Utils::AppendToBuffer(buffer, next_leaf_page_num_);
+    size_t offset = 0;
+    Utils::WriteToBuffer(buffer, offset, num_entries_);
+    Utils::WriteToBuffer(buffer, offset, prev_leaf_page_num_);
+    Utils::WriteToBuffer(buffer, offset, next_leaf_page_num_);
 
     for (auto key : keys_) {
-        Utils::AppendToBuffer(buffer, key);
+        Utils::WriteToBuffer(buffer, offset, key);
     }
     for (auto value : values_) {
-        Utils::AppendToBuffer(buffer, value);
+        Utils::WriteToBuffer(buffer, offset, value);
     }
 }
 
@@ -194,10 +196,12 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
 
     // write the header
     std::vector<char> buffer(pager_.get_page_size(), 0);
-    Utils::AppendToBuffer(buffer, root_page_num_);
-    Utils::AppendToBuffer(buffer, level_);
-    Utils::AppendToBuffer(buffer, internal_node_order_);
-    Utils::AppendToBuffer(buffer, leaf_node_order_);
+    size_t offset = 0;
+
+    Utils::WriteToBuffer(buffer, offset, root_page_num_);
+    Utils::WriteToBuffer(buffer, offset, level_);
+    Utils::WriteToBuffer(buffer, offset, internal_node_order_);
+    Utils::WriteToBuffer(buffer, offset, leaf_node_order_);
 
     pager_.WritePage(0, buffer);
 };
