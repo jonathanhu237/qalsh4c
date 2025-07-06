@@ -117,6 +117,7 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
 
     // Build the leaf nodes
     unsigned int prev_leaf_page_num = 0;
+    unsigned int new_leaf_page_num = 0;
     size_t data_idx = 0;
 
     while (data_idx < data.size()) {
@@ -136,7 +137,7 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
         // Serialize the leaf node and write it to the file
         std::vector<char> buffer(pager_.get_page_size(), 0);
         new_leaf_node.Serialize(buffer);
-        unsigned int new_leaf_page_num = pager_.Allocate();
+        new_leaf_page_num = pager_.Allocate();
         pager_.WritePage(new_leaf_page_num, buffer);
 
         // Add entry to the parent level
@@ -145,6 +146,10 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
         // Update the previous leaf page number
         prev_leaf_page_num = new_leaf_page_num;
     }
+
+    root_page_num_ = new_leaf_page_num;
+
+    unsigned int new_internal_page_num = 0;
 
     // Build the internal nodes
     while (parent_level_entries.size() > 1) {
@@ -174,7 +179,7 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
             // Serialize the internal node and write it to the file
             std::vector<char> buffer(pager_.get_page_size(), 0);
             new_internal_node.Serialize(buffer);
-            unsigned int new_internal_page_num = pager_.Allocate();
+            new_internal_page_num = pager_.Allocate();
             pager_.WritePage(new_internal_page_num, buffer);
 
             // Add entry to the next parent level
@@ -184,6 +189,8 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
             parent_level_entries = next_parent_level_entries;
         }
     }
+
+    root_page_num_ = new_internal_page_num == 0 ? root_page_num_ : new_internal_page_num;
 
     // write the header
     std::vector<char> buffer(pager_.get_page_size(), 0);
