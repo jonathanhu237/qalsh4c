@@ -35,8 +35,6 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
 
 auto InternalNode::Deserialize(const std::vector<char>& buffer) -> void {
     size_t offset = 0;
-    keys_.clear();
-    pointers_.clear();
 
     num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
 
@@ -74,8 +72,6 @@ auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
 
 auto LeafNode::Deserialize(const std::vector<char>& buffer) -> void {
     size_t offset = 0;
-    keys_.clear();
-    values_.clear();
 
     num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
     prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);

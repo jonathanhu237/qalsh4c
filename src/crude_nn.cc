@@ -263,7 +263,6 @@ CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsign
 
     // Determine the parameters
     if (index == locate_result.data.size()) {
-        right_buffer_.clear();
         right_buffer_index_ = 0;
         right_page_num_ = 0;
 
@@ -273,7 +272,6 @@ CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsign
     } else if (index == 0) {
         BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
         if (left_result.data.empty()) {
-            left_buffer_.clear();
             left_buffer_index_ = 0;
             left_page_num_ = 0;
         } else {
@@ -311,7 +309,6 @@ auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigne
         if (left_buffer_index_ == 0) {
             BPlusTree::LocateResult left_result = b_plus_tree_.Locate(left_page_num_);
             if (left_result.data.empty()) {
-                left_buffer_.clear();
                 left_buffer_index_ = 0;
                 left_page_num_ = 0;
             } else {
@@ -335,7 +332,6 @@ auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigne
         if (right_buffer_index_ == right_buffer_.size() - 1) {
             BPlusTree::LocateResult right_result = b_plus_tree_.Locate(right_page_num_);
             if (right_result.data.empty()) {
-                right_buffer_.clear();
                 right_buffer_index_ = 0;
                 right_page_num_ = 0;
             } else {
