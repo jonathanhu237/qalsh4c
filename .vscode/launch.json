@@ -35,6 +35,22 @@
             ],
             "env": [],
             "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Debug Crude NN",
+            "program": "${workspaceRoot}/build/crude_nn",
+            "args": [
+                "-n",
+                "toy",
+                "-N",
+                "1000",
+                "-D",
+                "64"
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
         }
     ]
 }
