@@ -311,15 +311,9 @@ auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigne
 
         if (left_buffer_index_ == 0) {
             BPlusTree::LocateResult left_result = b_plus_tree_.Locate(left_page_num_);
-            if (left_result.data.empty()) {
-                left_buffer_.clear();
-                left_buffer_index_ = 0;
-                left_page_num_ = 0;
-            } else {
-                left_buffer_ = left_result.data;
-                left_buffer_index_ = left_result.data.size() - 1;
-                left_page_num_ = left_result.left_page_num;
-            }
+            left_buffer_ = left_result.data;
+            left_buffer_index_ = left_result.data.size() - 1;
+            left_page_num_ = left_result.left_page_num;
         } else {
             left_buffer_index_--;
         }
@@ -335,15 +329,9 @@ auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigne
 
         if (right_buffer_index_ == right_buffer_.size() - 1) {
             BPlusTree::LocateResult right_result = b_plus_tree_.Locate(right_page_num_);
-            if (right_result.data.empty()) {
-                right_buffer_.clear();
-                right_buffer_index_ = 0;
-                right_page_num_ = 0;
-            } else {
-                right_buffer_ = right_result.data;
-                right_buffer_index_ = 0;
-                right_page_num_ = right_result.right_page_num;
-            }
+            right_buffer_ = right_result.data;
+            right_buffer_index_ = 0;
+            right_page_num_ = right_result.right_page_num;
         } else {
             right_buffer_index_++;
         }
