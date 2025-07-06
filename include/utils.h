@@ -33,7 +33,7 @@ class Utils {
     template <typename T>
     auto static WriteToBuffer(std::vector<char>& buffer, size_t& offset, const T& data) -> void {
         if (offset + sizeof(T) > buffer.size()) {
-            throw std::out_of_range("Not enough space in buffer to append data.");
+            throw std::out_of_range("Not enough space in buffer to write.");
         }
         std::memcpy(&buffer[offset], &data, sizeof(T));
         offset += sizeof(T);
