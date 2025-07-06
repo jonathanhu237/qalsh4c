@@ -198,11 +198,13 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
                 if (visited.at(point_id)) {
                     continue;
                 }
-                if (++collision_count[point_id] >= collision_threshold_) {
+
+                collision_count[point_id]++;
+                if (collision_count.at(point_id) >= collision_threshold_) {
                     const std::vector<double>& point = dataset[point_id];
                     candidates.emplace(Utils::CalculateManhattan(point, query), point_id);
 
-                    visited[point_id] = true;
+                    visited.at(point_id) = true;
                 }
             }
         }
@@ -212,6 +214,7 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
         }
 
         search_radius *= approximation_ratio_;
+        std::cout << std::format("Candidate Set size: {} | Search Radius: {}\n", candidates.size(), search_radius);
     }
 
     if (!candidates.empty()) {
