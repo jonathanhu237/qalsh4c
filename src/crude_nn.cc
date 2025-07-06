@@ -195,7 +195,7 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
             std::vector<unsigned int> point_ids = search_helper.IncrementalSearch(bucket_width_ * search_radius / 2.0);
 
             for (auto point_id : point_ids) {
-                if (visited[point_id]) {
+                if (visited.at(point_id)) {
                     continue;
                 }
                 if (++collision_count[point_id] >= collision_threshold_) {
