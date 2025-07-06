@@ -96,10 +96,10 @@ BPlusTree::BPlusTree(Pager&& pager)
         leaf_node_order_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
     } else {
         unsigned int page_size = pager_.get_page_size();
-        internal_node_order_ = static_cast<unsigned>(
-            (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int));
-        leaf_node_order_ =
-            static_cast<unsigned>((((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int));
+        internal_node_order_ = static_cast<unsigned int>((page_size - InternalNode::GetHeaderSize() + sizeof(double)) /
+                                                         (sizeof(double) + sizeof(unsigned int)));
+        leaf_node_order_ = static_cast<unsigned int>((page_size - LeafNode::GetHeaderSize()) /
+                                                     (sizeof(double) + sizeof(unsigned int)));
     }
 }
 
