@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -33,6 +34,21 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
     }
 }
 
+auto InternalNode::Deserialize(const std::vector<char>& buffer) -> void {
+    size_t offset = 0;
+    keys_.clear();
+    pointers_.clear();
+
+    num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+
+    for (unsigned int i = 0; i < num_children_ - 1; ++i) {
+        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
+    }
+    for (unsigned int i = 0; i < num_children_; ++i) {
+        pointers_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
+    }
+}
+
 // ----- LeafNode Implementation -----
 LeafNode::LeafNode(unsigned int order) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
     keys_.reserve(order);
@@ -58,19 +74,43 @@ auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
     }
 }
 
+auto LeafNode::Deserialize(const std::vector<char>& buffer) -> void {
+    size_t offset = 0;
+    keys_.clear();
+    values_.clear();
+
+    num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    next_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+
+    for (unsigned int i = 0; i < num_entries_; ++i) {
+        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
+        values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
+    }
+}
+
 // ----- BPlusTree Implementation -----
 BPlusTree::BPlusTree(Pager&& pager)
     : pager_(std::move(pager)), root_page_num_(0), level_(0), internal_node_order_(0), leaf_node_order_(0) {
-    // Calculate the order of InternalNode and LeafNode
-    unsigned int page_size = pager_.get_page_size();
-    internal_node_order_ = static_cast<unsigned>(
-        (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int));
-    leaf_node_order_ =
-        static_cast<unsigned>((((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int));
+    if (pager_.get_mode() == Pager::PagerMode::kRead) {
+        // Read the header from page 0
+        std::vector<char> header_buffer = pager_.ReadPage(0);
+        size_t offset = 0;
+        root_page_num_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
+        level_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
+        internal_node_order_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
+        leaf_node_order_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
+    } else {
+        unsigned int page_size = pager_.get_page_size();
+        internal_node_order_ = static_cast<unsigned>(
+            (((page_size - InternalNode::GetHeaderSize() + sizeof(double))) / sizeof(double)) + sizeof(unsigned int));
+        leaf_node_order_ =
+            static_cast<unsigned>((((page_size - LeafNode::GetHeaderSize())) / sizeof(double)) + sizeof(unsigned int));
+    }
 }
 
-auto BPlusTree::BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void {
-    std::vector<std::pair<double, unsigned int>> parent_level_entries;
+auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
+    std::vector<KeyValuePair> parent_level_entries;
 
     // Reserve page 0 for the file header
     pager_.Allocate();
@@ -154,5 +194,39 @@ auto BPlusTree::BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> 
 
     pager_.WritePage(0, buffer);
 };
+
+auto BPlusTree::Locate(double key) -> LocateResult {
+    unsigned int current_level = level_;
+    unsigned int next_page_num = root_page_num_;
+
+    while (current_level != 0) {
+        const std::vector<char> buffer = pager_.ReadPage(next_page_num);
+        InternalNode internal_node(internal_node_order_);
+        internal_node.Deserialize(buffer);
+
+        auto it = std::ranges::upper_bound(internal_node.keys_, key);
+        auto index = static_cast<size_t>(std::distance(internal_node.keys_.begin(), it));
+        next_page_num = internal_node.pointers_.at(index);
+
+        current_level--;
+    }
+
+    return Locate(next_page_num);
+}
+
+auto BPlusTree::Locate(unsigned int page_num) -> LocateResult {
+    LeafNode leaf_node(leaf_node_order_);
+    const std::vector<char> buffer = pager_.ReadPage(page_num);
+    leaf_node.Deserialize(buffer);
+
+    LocateResult result;
+    result.left_page_num = leaf_node.prev_leaf_page_num_;
+    result.right_page_num = leaf_node.next_leaf_page_num_;
+    result.data.reserve(leaf_node.num_entries_);
+    for (size_t i = 0; i < leaf_node.num_entries_; ++i) {
+        result.data.emplace_back(leaf_node.keys_[i], leaf_node.values_[i]);
+    }
+    return result;
+}
 
 }  // namespace qalsh_chamfer

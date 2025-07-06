@@ -1,12 +1,22 @@
 #include "crude_nn.h"
 
+#include <cmath>
+#include <cstddef>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <memory>
+#include <queue>
 #include <stdexcept>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "b_plus_tree.h"
+#include "pager.h"
+#include "utils.h"
 
 namespace qalsh_chamfer {
 
@@ -117,6 +127,216 @@ auto CrudeNn::PrintConfiguration() const -> void {
     std::cout << std::format("-----------------------------------------------------\n");
 }
 
-auto CrudeNn::Execute() const -> void {}
+auto CrudeNn::Execute() const -> void {
+    // Read the sets from the files
+    fs::path setA_file_path = parent_directory_ / dataset_name_ / "A.bin";
+    std::vector<std::vector<double>> setA =
+        Utils::ReadSetFromFile(setA_file_path, num_points_, num_dimensions_, "Set A", verbose_);
+
+    fs::path setB_file_path = parent_directory_ / dataset_name_ / "B.bin";
+    std::vector<std::vector<double>> setB =
+        Utils::ReadSetFromFile(setB_file_path, num_points_, num_dimensions_, "Set B", verbose_);
+
+    // Generate the D arrays for both sets
+    std::vector<double> d_array_A = GenerateDArrayForSet(setA, setB);
+    std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA);
+
+    // Write the D arrays to files
+    fs::path d_array_A_file_path = parent_directory_ / dataset_name_ / "D_A.bin";
+    Utils::WriteArrayToFile(d_array_A_file_path, d_array_A);
+
+    fs::path d_array_B_file_path = parent_directory_ / dataset_name_ / "D_B.bin";
+    Utils::WriteArrayToFile(d_array_B_file_path, d_array_B);
+}
+
+auto CrudeNn::GenerateDArrayForSet(const std::vector<std::vector<double>>& set1,
+                                   const std::vector<std::vector<double>>& set2) const -> std::vector<double> {
+    std::vector<double> d_array(num_points_);
+
+    for (unsigned int i = 0; i < num_points_; i++) {
+        d_array[i] = CAnnSearch(set1[i], set2).first;
+    }
+
+    return d_array;
+}
+
+auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset) const
+    -> Candidate {
+    std::priority_queue<Candidate, std::vector<Candidate>> candidates;
+    std::vector<bool> visited(num_points_, false);
+    std::unordered_map<unsigned int, unsigned int> collision_count;
+    std::vector<CrudeNnSearchHelper> search_helpers;
+
+    double search_radius = 1.0;
+
+    // Initialize search helpers
+    search_helpers.reserve(num_hash_tables_);
+    for (unsigned int j = 0; j < num_hash_tables_; j++) {
+        search_helpers.push_back(CrudeNnSearchHelper(parent_directory_ / dataset_name_ / "index.bin", page_size_,
+                                                     Utils::DotProduct(dot_vectors_[j], query)));
+    }
+
+    // c-ANN search
+    while (candidates.size() < static_cast<size_t>(std::ceil(beta_ * num_points_))) {
+        for (unsigned int j = 0; j < num_hash_tables_; j++) {
+            CrudeNnSearchHelper& search_helper = search_helpers[j];
+            std::vector<unsigned int> point_ids = search_helper.IncrementalSearch(bucket_width_ * search_radius / 2.0);
+
+            for (auto point_id : point_ids) {
+                if (visited[point_id]) {
+                    continue;
+                }
+                if (++collision_count[point_id] >= collision_threshold_) {
+                    const std::vector<double>& point = dataset[point_id];
+                    candidates.emplace(Utils::CalculateManhattan(point, query), point_id);
+
+                    visited[point_id] = true;
+                }
+            }
+        }
+
+        if (!candidates.empty() && candidates.top().first <= approximation_ratio_ * search_radius) {
+            break;
+        }
+
+        search_radius *= approximation_ratio_;
+    }
+
+    if (!candidates.empty()) {
+        return candidates.top();
+    }
+
+    // Defense programming
+    return {std::numeric_limits<double>::max(), std::numeric_limits<unsigned int>::max()};
+}
+
+// TODO: simplify the implementation
+CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsigned int page_size, double key)
+    : left_buffer_index_(0),
+      right_buffer_index_(0),
+      left_page_num_(0),
+      right_page_num_(0),
+      b_plus_tree_(Pager(index_file_path, page_size, Pager::PagerMode::kRead)),
+      key_(key) {
+    // Locate the first key k satisfying k >= key in the B+ tree
+    BPlusTree::LocateResult locate_result = b_plus_tree_.Locate(key_);
+    auto it = std::ranges::lower_bound(locate_result.data, key_, {},
+                                       [](const BPlusTree::KeyValuePair& kvp) { return kvp.first; });
+    auto index = static_cast<size_t>(std::distance(locate_result.data.begin(), it));
+
+    // The satisfactory key may exist in the left node (imagine the case where every key is the same)
+    while (locate_result.left_page_num != 0 && index == 0) {
+        BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
+        auto it_left = std::ranges::lower_bound(left_result.data, key_, {},
+                                                [](const BPlusTree::KeyValuePair& kvp) { return kvp.first; });
+        auto left_index = static_cast<size_t>(std::distance(left_result.data.begin(), it_left));
+
+        if (left_index == left_result.data.size()) {
+            break;
+        }
+
+        locate_result = left_result;
+        index = left_index;
+    }
+
+    // The satisfactory key may exist in the right node
+    if (locate_result.right_page_num != 0 && index == locate_result.data.size()) {
+        BPlusTree::LocateResult right_result = b_plus_tree_.Locate(locate_result.right_page_num);
+
+        if (!right_result.data.empty() && right_result.data.front().first >= key_) {
+            locate_result = right_result;
+            index = 0;
+        }
+    }
+
+    // Determine the parameters
+    if (index == locate_result.data.size()) {
+        right_buffer_.clear();
+        right_buffer_index_ = 0;
+        right_page_num_ = 0;
+
+        left_buffer_ = locate_result.data;
+        left_buffer_index_ = index - 1;
+        left_page_num_ = locate_result.left_page_num;
+    } else if (index == 0) {
+        BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
+        if (left_result.data.empty()) {
+            left_buffer_.clear();
+            left_buffer_index_ = 0;
+            left_page_num_ = 0;
+        } else {
+            left_buffer_ = left_result.data;
+            left_buffer_index_ = left_result.data.size() - 1;
+            left_page_num_ = left_result.left_page_num;
+        }
+
+        right_buffer_ = locate_result.data;
+        right_buffer_index_ = index;
+        right_page_num_ = locate_result.right_page_num;
+    } else {
+        left_buffer_ = locate_result.data;
+        left_buffer_index_ = index - 1;
+        left_page_num_ = locate_result.left_page_num;
+
+        right_buffer_ = locate_result.data;
+        right_buffer_index_ = index;
+        right_page_num_ = locate_result.right_page_num;
+    }
+}
+
+// TODO: simplify the implementation
+auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigned int> {
+    std::vector<unsigned int> result;
+
+    // Search in the left direction
+    while (!left_buffer_.empty()) {
+        if (std::fabs(left_buffer_.at(left_buffer_index_).first - key_) > bound) {
+            break;
+        }
+
+        result.push_back(left_buffer_.at(left_buffer_index_).second);
+
+        if (left_buffer_index_ == 0) {
+            BPlusTree::LocateResult left_result = b_plus_tree_.Locate(left_page_num_);
+            if (left_result.data.empty()) {
+                left_buffer_.clear();
+                left_buffer_index_ = 0;
+                left_page_num_ = 0;
+            } else {
+                left_buffer_ = left_result.data;
+                left_buffer_index_ = left_result.data.size() - 1;
+                left_page_num_ = left_result.left_page_num;
+            }
+        } else {
+            left_buffer_index_--;
+        }
+    }
+
+    // Search in the right direction
+    while (!right_buffer_.empty()) {
+        if (std::fabs(right_buffer_.at(right_buffer_index_).first - key_) > bound) {
+            break;
+        }
+
+        result.push_back(right_buffer_.at(right_buffer_index_).second);
+
+        if (right_buffer_index_ == right_buffer_.size() - 1) {
+            BPlusTree::LocateResult right_result = b_plus_tree_.Locate(right_page_num_);
+            if (right_result.data.empty()) {
+                right_buffer_.clear();
+                right_buffer_index_ = 0;
+                right_page_num_ = 0;
+            } else {
+                right_buffer_ = right_result.data;
+                right_buffer_index_ = 0;
+                right_page_num_ = right_result.right_page_num;
+            }
+        } else {
+            right_buffer_index_++;
+        }
+    }
+
+    return result;
+}
 
 };  // namespace qalsh_chamfer

@@ -223,7 +223,7 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std:
     std::ranges::sort(dot_products_with_id);
 
     // Bulk load the B+ tree with sorted dot products
-    Pager pager(index_file_path, page_size_);
+    Pager pager(index_file_path, page_size_, Pager::PagerMode::kWrite);
     BPlusTree b_plus_tree(std::move(pager));
 
     b_plus_tree.BulkLoad(dot_products_with_id);

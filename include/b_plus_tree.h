@@ -14,8 +14,10 @@ class InternalNode {
 
    private:
     InternalNode(unsigned int order);
+
     auto static GetHeaderSize() -> size_t;
     auto Serialize(std::vector<char>& buffer) const -> void;
+    auto Deserialize(const std::vector<char>& buffer) -> void;
 
     // Header
     unsigned int num_children_;
@@ -33,6 +35,7 @@ class LeafNode {
     LeafNode(unsigned int order);
     auto static GetHeaderSize() -> size_t;
     auto Serialize(std::vector<char>& buffer) const -> void;
+    auto Deserialize(const std::vector<char>& buffer) -> void;
 
     // Header
     unsigned int num_entries_;
@@ -46,11 +49,23 @@ class LeafNode {
 
 class BPlusTree {
    public:
+    using KeyValuePair = std::pair<double, unsigned int>;
+
+    struct LocateResult {
+        std::vector<KeyValuePair> data;
+        unsigned int left_page_num;
+        unsigned int right_page_num;
+    };
+
     BPlusTree(Pager&& pager);
-    auto BulkLoad(std::vector<std::pair<double, unsigned int>>& data) -> void;
+    auto BulkLoad(std::vector<KeyValuePair>& data) -> void;
+    auto Locate(double key) -> LocateResult;
+    auto Locate(unsigned int page_num) -> LocateResult;
 
    private:
     Pager pager_;
+
+    auto GetLocateResult(unsigned int page_num) const -> LocateResult;
 
     // Header
     unsigned int root_page_num_;

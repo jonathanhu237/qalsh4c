@@ -1,16 +1,21 @@
 #ifndef CHAMFER_APPROX_H_
 #define CHAMFER_APPROX_H_
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "b_plus_tree.h"
 
 namespace qalsh_chamfer {
 
 namespace fs = std::filesystem;
 
 class CrudeNn;
+
+class CrudeNnSearchHelper;
 
 class CrudeNnBuilder {
    public:
@@ -44,6 +49,8 @@ class CrudeNnBuilder {
 
 class CrudeNn {
    public:
+    using Candidate = std::pair<double, unsigned int>;  // Distance, Point ID
+
     auto PrintConfiguration() const -> void;
     auto Execute() const -> void;
 
@@ -54,6 +61,11 @@ class CrudeNn {
             double approximation_ratio, double bucket_width, double beta, double error_probability,
             unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size,
             std::vector<std::vector<double>> dot_vectors, bool verbose);
+
+    [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set1,
+                                            const std::vector<std::vector<double>>& set2) const -> std::vector<double>;
+    [[nodiscard]] auto CAnnSearch(const std::vector<double>& query,
+                                  const std::vector<std::vector<double>>& dataset) const -> Candidate;
 
     std::string dataset_name_;
     fs::path parent_directory_;
@@ -68,6 +80,24 @@ class CrudeNn {
     unsigned int page_size_;
     std::vector<std::vector<double>> dot_vectors_;
     bool verbose_;
+};
+
+class CrudeNnSearchHelper {
+   public:
+    friend class CrudeNn;
+
+   private:
+    CrudeNnSearchHelper(const fs::path& index_file_path, unsigned int page_size, double key);
+    auto IncrementalSearch(double bound) -> std::vector<unsigned int>;
+
+    std::vector<BPlusTree::KeyValuePair> left_buffer_;
+    std::vector<BPlusTree::KeyValuePair> right_buffer_;
+    size_t left_buffer_index_;
+    size_t right_buffer_index_;
+    unsigned int left_page_num_;
+    unsigned int right_page_num_;
+    BPlusTree b_plus_tree_;
+    double key_;
 };
 
 }  // namespace qalsh_chamfer
