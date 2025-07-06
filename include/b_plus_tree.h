@@ -2,10 +2,8 @@
 #define B_PLUS_TREE_H_
 
 #include <cstddef>
-#include <utility>
 #include <vector>
 
-#include "constants.h"
 #include "pager.h"
 
 namespace qalsh_chamfer {
@@ -20,7 +18,6 @@ class InternalNode {
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
-    NodeType node_type_;
     unsigned int num_children_;
 
     // Data
@@ -38,7 +35,6 @@ class LeafNode {
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
-    NodeType node_type_;
     unsigned int num_entries_;
     unsigned int prev_leaf_page_num_;
     unsigned int next_leaf_page_num_;

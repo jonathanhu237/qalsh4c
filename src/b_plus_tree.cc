@@ -7,24 +7,22 @@
 #include <utility>
 #include <vector>
 
-#include "constants.h"
 #include "pager.h"
 #include "utils.h"
 
 namespace qalsh_chamfer {
 
 // ----- InternalNode Implementation -----
-InternalNode::InternalNode(unsigned int order) : node_type_(NodeType::kInternalNode), num_children_(0) {
+InternalNode::InternalNode(unsigned int order) : num_children_(0) {
     keys_.reserve(order - 1);
     pointers_.reserve(order);
 };
 
-auto InternalNode::GetHeaderSize() -> size_t { return sizeof(node_type_) + sizeof(num_children_); }
+auto InternalNode::GetHeaderSize() -> size_t { return sizeof(num_children_); }
 
 auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
     buffer.clear();
 
-    Utils::AppendToBuffer(buffer, node_type_);
     Utils::AppendToBuffer(buffer, num_children_);
 
     for (auto key : keys_) {
@@ -36,20 +34,18 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
 }
 
 // ----- LeafNode Implementation -----
-LeafNode::LeafNode(unsigned int order)
-    : node_type_(NodeType::kLeafNode), num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
+LeafNode::LeafNode(unsigned int order) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
     keys_.reserve(order);
     values_.reserve(order);
 };
 
 auto LeafNode::GetHeaderSize() -> size_t {
-    return sizeof(node_type_) + sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
+    return sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
 }
 
 auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
     buffer.clear();
 
-    Utils::AppendToBuffer(buffer, node_type_);
     Utils::AppendToBuffer(buffer, num_entries_);
     Utils::AppendToBuffer(buffer, prev_leaf_page_num_);
     Utils::AppendToBuffer(buffer, next_leaf_page_num_);

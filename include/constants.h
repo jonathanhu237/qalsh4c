@@ -2,7 +2,6 @@
 #define CONST_H_
 
 #include <cmath>
-#include <cstdint>
 #include <numbers>
 
 namespace qalsh_chamfer {
@@ -13,11 +12,6 @@ const unsigned int kDefaultPageSize = 4096;
 const int kDefaultLeftBoundary = -128;  // For dataset generation
 const int kDefaultRightBoundary = 128;  // For dataset generation
 const double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
-
-enum class NodeType : uint8_t {
-    kLeafNode = 0x01,
-    kInternalNode = 0x02,
-};
 
 }  // namespace qalsh_chamfer
 
