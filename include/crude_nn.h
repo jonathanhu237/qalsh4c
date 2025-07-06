@@ -62,10 +62,11 @@ class CrudeNn {
             unsigned int num_hash_tables, unsigned int collision_threshold, unsigned int page_size,
             std::vector<std::vector<double>> dot_vectors, bool verbose);
 
-    [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set1,
-                                            const std::vector<std::vector<double>>& set2) const -> std::vector<double>;
-    [[nodiscard]] auto CAnnSearch(const std::vector<double>& query,
-                                  const std::vector<std::vector<double>>& dataset) const -> Candidate;
+    [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
+                                            const std::vector<std::vector<double>>& set_to,
+                                            const std::string& set_to_name) const -> std::vector<double>;
+    [[nodiscard]] auto CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset,
+                                  const std::string& set_name) const -> Candidate;
 
     std::string dataset_name_;
     fs::path parent_directory_;

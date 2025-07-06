@@ -131,15 +131,15 @@ auto CrudeNn::Execute() const -> void {
     // Read the sets from the files
     fs::path setA_file_path = parent_directory_ / dataset_name_ / "A.bin";
     std::vector<std::vector<double>> setA =
-        Utils::ReadSetFromFile(setA_file_path, num_points_, num_dimensions_, "Set A", verbose_);
+        Utils::ReadSetFromFile(setA_file_path, num_points_, num_dimensions_, "A", verbose_);
 
     fs::path setB_file_path = parent_directory_ / dataset_name_ / "B.bin";
     std::vector<std::vector<double>> setB =
-        Utils::ReadSetFromFile(setB_file_path, num_points_, num_dimensions_, "Set B", verbose_);
+        Utils::ReadSetFromFile(setB_file_path, num_points_, num_dimensions_, "B", verbose_);
 
     // Generate the D arrays for both sets
-    std::vector<double> d_array_A = GenerateDArrayForSet(setA, setB);
-    std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA);
+    std::vector<double> d_array_A = GenerateDArrayForSet(setA, setB, "B");
+    std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA, "A");
 
     // Write the D arrays to files
     fs::path d_array_A_file_path = parent_directory_ / dataset_name_ / "D_A.bin";
@@ -149,19 +149,20 @@ auto CrudeNn::Execute() const -> void {
     Utils::WriteArrayToFile(d_array_B_file_path, d_array_B);
 }
 
-auto CrudeNn::GenerateDArrayForSet(const std::vector<std::vector<double>>& set1,
-                                   const std::vector<std::vector<double>>& set2) const -> std::vector<double> {
+auto CrudeNn::GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
+                                   const std::vector<std::vector<double>>& set_to, const std::string& set_to_name) const
+    -> std::vector<double> {
     std::vector<double> d_array(num_points_);
 
     for (unsigned int i = 0; i < num_points_; i++) {
-        d_array[i] = CAnnSearch(set1[i], set2).first;
+        d_array[i] = CAnnSearch(set_from[i], set_to, set_to_name).first;
     }
 
     return d_array;
 }
 
-auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset) const
-    -> Candidate {
+auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset,
+                         const std::string& set_name) const -> Candidate {
     std::priority_queue<Candidate, std::vector<Candidate>> candidates;
     std::vector<bool> visited(num_points_, false);
     std::unordered_map<unsigned int, unsigned int> collision_count;
@@ -172,8 +173,10 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
     // Initialize search helpers
     search_helpers.reserve(num_hash_tables_);
     for (unsigned int j = 0; j < num_hash_tables_; j++) {
-        search_helpers.push_back(CrudeNnSearchHelper(parent_directory_ / dataset_name_ / "index.bin", page_size_,
-                                                     Utils::DotProduct(dot_vectors_[j], query)));
+        const fs::path index_file_path =
+            parent_directory_ / dataset_name_ / "index" / std::format("{}_idx_{}.bin", set_name, j);
+        search_helpers.push_back(
+            CrudeNnSearchHelper(index_file_path, page_size_, Utils::DotProduct(dot_vectors_[j], query)));
     }
 
     // c-ANN search
