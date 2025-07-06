@@ -22,8 +22,6 @@ InternalNode::InternalNode(unsigned int order) : num_children_(0) {
 auto InternalNode::GetHeaderSize() -> size_t { return sizeof(num_children_); }
 
 auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
-    buffer.clear();
-
     size_t offset = 0;
     Utils::WriteToBuffer(buffer, offset, num_children_);
 
@@ -61,8 +59,6 @@ auto LeafNode::GetHeaderSize() -> size_t {
 }
 
 auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
-    buffer.clear();
-
     size_t offset = 0;
     Utils::WriteToBuffer(buffer, offset, num_entries_);
     Utils::WriteToBuffer(buffer, offset, prev_leaf_page_num_);
