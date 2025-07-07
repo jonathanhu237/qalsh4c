@@ -6,6 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -125,17 +126,18 @@ auto ChamferApprox::ApproximateChamferDistance(const std::vector<std::vector<dou
     for (unsigned int i = 0; i < num_samples_; i++) {
         if (verbose_) {
             std::cout << std::format("Approximate Chamfer Distance from {} to {}...({}/{})\r", from_set_name,
-                                     to_set_name, i + 1, num_samples_);
+                                     to_set_name, i + 1, num_samples_)
+                      << std::flush;
         }
 
         unsigned int point_id = Utils::SampleFromWeights(from_set_D_array);
         const auto& point = from_set.at(point_id);
         const double min_distance = Utils::MinDistance(point, to_set);
         approximation += sum * min_distance / from_set_D_array.at(point_id);
+    }
 
-        if (verbose_) {
-            std::cout << "\n";
-        }
+    if (verbose_) {
+        std::cout << "\n";
     }
 
     return approximation / num_samples_;
