@@ -220,7 +220,6 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
         }
 
         search_radius *= approximation_ratio_;
-        std::cout << std::format("Candidate Set size: {} | Search Radius: {}\n", candidates.size(), search_radius);
     }
 
     if (!candidates.empty()) {
