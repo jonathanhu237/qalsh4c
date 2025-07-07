@@ -1,5 +1,6 @@
 #include "chamfer_approx.h"
 
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -111,8 +112,8 @@ auto ChamferApprox::Execute() const -> void {
     ifs.read(reinterpret_cast<char*>(&ground_truth), sizeof(ground_truth));
 
     // Calculate the relative error
-    double relative_error = total_approximation / ground_truth;
-    std::cout << std::format("Relative Error: {}\n", relative_error);
+    double relative_error = std::fabs(total_approximation - ground_truth) / ground_truth;
+    std::cout << std::format("Relative Error: {:.3f}%\n", relative_error * 100.0);
 }
 
 auto ChamferApprox::ApproximateChamferDistance(const std::vector<std::vector<double>>& from_set,
