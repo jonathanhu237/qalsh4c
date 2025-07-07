@@ -58,35 +58,6 @@ class LeafNode {
     std::vector<unsigned int> values_;
 };
 
-// class BPlusTree {
-//    public:
-//     using KeyValuePair = std::pair<double, unsigned int>;
-//     using SearchLocation = std::pair<LeafNode, size_t>;
-
-//     BPlusTree(Pager&& pager);
-
-//     auto BulkLoad(std::vector<KeyValuePair>& data) -> void;
-
-//     auto InitIncrementalSearch(double key) -> void;
-//     auto IncrementalSearch(double key, double bound) -> std::vector<unsigned int>;
-
-//    private:
-//     auto LocateLeafMayContainKey(double key) -> LeafNode;
-//     auto LocateLeafByPageNum(unsigned int page_num) -> LeafNode;
-
-//     Pager pager_;
-
-//     // Header
-//     unsigned int root_page_num_;
-//     unsigned int level_;
-//     unsigned int internal_node_order_;
-//     unsigned int leaf_node_order_;
-
-//     // Variables for incremental search
-//     std::optional<SearchLocation> left_search_location_;
-//     std::optional<SearchLocation> right_search_location_;
-// };
-
 class BPlusTreeBulkLoader {
    public:
     using KeyValuePair = std::pair<double, unsigned int>;
