@@ -92,7 +92,6 @@ class BPlusTreeBulkLoader {
     using KeyValuePair = std::pair<double, unsigned int>;
 
     BPlusTreeBulkLoader(const fs::path& file_path, unsigned int page_size);
-    // TODO: should I implement a destructor to close the file?
 
     auto Build(const std::vector<KeyValuePair>& data) -> void;
 
