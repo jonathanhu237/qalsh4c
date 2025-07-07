@@ -169,7 +169,7 @@ auto Utils::SampleFromWeights(const std::vector<double>& weights) -> unsigned in
 
     auto it = std::ranges::upper_bound(cumulative_weights, random_value);
 
-    return std::distance(cumulative_weights.begin(), it);
+    return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
 }
 
 }  // namespace qalsh_chamfer
