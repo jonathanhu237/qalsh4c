@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "b_plus_tree.h"
-#include "pager.h"
 #include "utils.h"
 
 namespace qalsh_chamfer {
@@ -175,7 +174,7 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
     std::priority_queue<Candidate, std::vector<Candidate>> candidates;
     std::vector<bool> visited(num_points_, false);
     std::unordered_map<unsigned int, unsigned int> collision_count;
-    std::vector<BPlusTree> b_plus_trees;
+    std::vector<BPlusTreeSearcher> b_plus_tree_searchers;
     std::vector<double> keys(num_hash_tables_);
     double search_radius = 1.0;
 
@@ -185,20 +184,18 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
     }
 
     // Initialize B+ trees
-    b_plus_trees.reserve(num_hash_tables_);
+    b_plus_tree_searchers.reserve(num_hash_tables_);
     for (unsigned int j = 0; j < num_hash_tables_; j++) {
         const fs::path index_file_path =
             parent_directory_ / dataset_name_ / "index" / std::format("{}_idx_{}.bin", set_name, j);
-        Pager pager(index_file_path, page_size_, Pager::PagerMode::kRead);
-        b_plus_trees.emplace_back(std::move(pager));
-        b_plus_trees.back().InitIncrementalSearch(keys[j]);
+        b_plus_tree_searchers.emplace_back(index_file_path, page_size_, keys[j]);
     }
 
     // c-ANN search
     while (candidates.size() < static_cast<size_t>(std::ceil(beta_ * num_points_))) {
         for (unsigned int j = 0; j < num_hash_tables_; j++) {
             std::vector<unsigned int> point_ids =
-                b_plus_trees[j].IncrementalSearch(keys[j], bucket_width_ * search_radius / 2.0);
+                b_plus_tree_searchers[j].IncrementalSearch(bucket_width_ * search_radius / 2.0);
 
             for (auto point_id : point_ids) {
                 if (visited.at(point_id)) {

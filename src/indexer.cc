@@ -16,7 +16,6 @@
 
 #include "b_plus_tree.h"
 #include "constants.h"
-#include "pager.h"
 #include "utils.h"
 
 namespace qalsh_chamfer {
@@ -223,10 +222,8 @@ auto Indexer::BuildIndexForSet(std::vector<double>& dot_vector, std::vector<std:
     std::ranges::sort(dot_products_with_id);
 
     // Bulk load the B+ tree with sorted dot products
-    Pager pager(index_file_path, page_size_, Pager::PagerMode::kWrite);
-    BPlusTree b_plus_tree(std::move(pager));
-
-    b_plus_tree.BulkLoad(dot_products_with_id);
+    BPlusTreeBulkLoader loader(index_file_path, page_size_);
+    loader.Build(dot_products_with_id);
 }
 
 auto Indexer::WriteParamInBinary(const fs::path& file_path, const std::vector<std::vector<double>>& dot_vectors) const

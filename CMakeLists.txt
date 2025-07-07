@@ -14,7 +14,6 @@ add_library(qalsh_chamfer_lib
     src/dataset_generator.cc
     src/indexer.cc
     src/utils.cc
-    src/pager.cc
 )
 
 target_include_directories(qalsh_chamfer_lib PUBLIC
