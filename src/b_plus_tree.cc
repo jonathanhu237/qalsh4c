@@ -136,12 +136,12 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
         }
         data_idx = chunk_end;
 
+        // Serialize the leaf node and write it to the file
+        new_leaf_page_num = pager_.Allocate();
         new_leaf_node.next_leaf_page_num_ = (data_idx < data.size()) ? pager_.get_next_page_num() : 0;
 
-        // Serialize the leaf node and write it to the file
         std::vector<char> buffer(pager_.get_page_size(), 0);
         new_leaf_node.Serialize(buffer);
-        new_leaf_page_num = pager_.Allocate();
         pager_.WritePage(new_leaf_page_num, buffer);
 
         // Add entry to the parent level
