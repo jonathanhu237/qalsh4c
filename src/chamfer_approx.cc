@@ -76,6 +76,7 @@ auto ChamferApprox::PrintConfiguration() const -> void {
     std::cout << std::format("Parent Directory: {}\n", parent_directory_.string());
     std::cout << std::format("Number of Points: {}\n", num_points_);
     std::cout << std::format("Number of Dimensions: {}\n", num_dimensions_);
+    std::cout << std::format("Number of Samples: {}\n", num_samples_);
     std::cout << std::format("-----------------------------------------------------\n");
 }
 
