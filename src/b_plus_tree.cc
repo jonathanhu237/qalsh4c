@@ -240,42 +240,44 @@ auto BPlusTree::IncrementalSearch(double key, double bound) -> std::vector<unsig
 
     // Search to the left
     while (left_search_location_) {
-        LeafNode& leaf_node = left_search_location_->first;
-        size_t& index = left_search_location_->second;
+        auto& [leaf_node, index] = *left_search_location_;
 
-        while (std::fabs(leaf_node.keys_.at(index) - key) <= bound) {
-            result.push_back(leaf_node.values_.at(index));
+        if (std::fabs(leaf_node.keys_.at(index) - key) > bound) {
+            break;
+        }
 
-            if (index == 0) {
-                if (leaf_node.prev_leaf_page_num_ == 0) {
-                    left_search_location_.reset();
-                } else {
-                    leaf_node = LocateLeafByPageNum(leaf_node.prev_leaf_page_num_);
-                    index = leaf_node.num_entries_ - 1;
-                }
+        result.push_back(leaf_node.values_.at(index));
+
+        if (index > 0) {
+            index--;
+        } else {
+            if (leaf_node.prev_leaf_page_num_ == 0) {
+                left_search_location_.reset();
             } else {
-                index--;
+                leaf_node = LocateLeafByPageNum(leaf_node.prev_leaf_page_num_);
+                index = leaf_node.num_entries_ - 1;
             }
         }
     }
 
     // Search to the right
-    if (right_search_location_) {
-        LeafNode& leaf_node = right_search_location_->first;
-        size_t& index = right_search_location_->second;
+    while (right_search_location_) {
+        auto& [leaf_node, index] = *right_search_location_;
 
-        while (std::fabs(leaf_node.keys_.at(index) - key) <= bound) {
-            result.push_back(leaf_node.values_.at(index));
+        if (std::fabs(leaf_node.keys_.at(index) - key) > bound) {
+            break;
+        }
 
-            if (index == leaf_node.num_entries_ - 1) {
-                if (leaf_node.next_leaf_page_num_ == 0) {
-                    right_search_location_.reset();
-                } else {
-                    leaf_node = LocateLeafByPageNum(leaf_node.next_leaf_page_num_);
-                    index = 0;
-                }
+        result.push_back(leaf_node.values_.at(index));
+
+        if (index < leaf_node.num_entries_ - 1) {
+            index++;
+        } else {
+            if (leaf_node.next_leaf_page_num_ == 0) {
+                right_search_location_.reset();
             } else {
-                index++;
+                leaf_node = LocateLeafByPageNum(leaf_node.next_leaf_page_num_);
+                index = 0;
             }
         }
     }
