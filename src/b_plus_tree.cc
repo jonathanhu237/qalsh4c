@@ -136,7 +136,7 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
         }
         data_idx = chunk_end;
 
-        new_leaf_node.next_leaf_page_num_ = (data_idx < data.size()) ? pager_.get_num_page() : 0;
+        new_leaf_node.next_leaf_page_num_ = (data_idx < data.size()) ? pager_.get_next_page_num() : 0;
 
         // Serialize the leaf node and write it to the file
         std::vector<char> buffer(pager_.get_page_size(), 0);
