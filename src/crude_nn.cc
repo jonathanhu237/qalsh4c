@@ -61,7 +61,7 @@ auto CrudeNnBuilder::set_verbose(bool debug) -> CrudeNnBuilder& {
 
 auto CrudeNnBuilder::ReadParamFromBinaryFile() -> CrudeNnBuilder& {
     // Read the parameters from the file
-    fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
+    fs::path param_file_path = parent_directory_ / dataset_name_ / "index" / "index_params.bin";
     std::ifstream ifs(param_file_path, std::ios::binary);
     if (!ifs.is_open()) {
         throw std::runtime_error("Could not open parameter file, you may need to run the indexer first.");
@@ -142,10 +142,10 @@ auto CrudeNn::Execute() const -> void {
     std::vector<double> d_array_B = GenerateDArrayForSet(setB, setA, "B", "A");
 
     // Write the D arrays to files
-    fs::path d_array_A_file_path = parent_directory_ / dataset_name_ / "D_A.bin";
+    fs::path d_array_A_file_path = parent_directory_ / dataset_name_ / "index" / "D_A.bin";
     Utils::WriteArrayToFile(d_array_A_file_path, d_array_A);
 
-    fs::path d_array_B_file_path = parent_directory_ / dataset_name_ / "D_B.bin";
+    fs::path d_array_B_file_path = parent_directory_ / dataset_name_ / "index" / "D_B.bin";
     Utils::WriteArrayToFile(d_array_B_file_path, d_array_B);
 }
 

@@ -207,7 +207,7 @@ auto Indexer::Execute() const -> void {
     indexing_helper("B");
 
     // Write the parameters to a binary file
-    fs::path param_file_path = parent_directory_ / dataset_name_ / "index_params.bin";
+    fs::path param_file_path = parent_directory_ / dataset_name_ / "index" / "index_params.bin";
     WriteParamInBinary(param_file_path, dot_vectors);
 }
 
