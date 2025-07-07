@@ -8,6 +8,8 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <numeric>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -142,6 +144,32 @@ auto Utils::ToEigenMatrix(const std::vector<std::vector<double>>& set)
         matrix.row(i) = Eigen::Map<const Eigen::VectorXd>(set[i].data(), static_cast<Eigen::Index>(num_dimensions));
     }
     return matrix;
+}
+
+auto Utils::MinDistance(const std::vector<double>& query, const std::vector<std::vector<double>>& set) -> double {
+    Eigen::Map<const Eigen::VectorXd> query_vec(query.data(), static_cast<Eigen::Index>(query.size()));
+    Eigen::MatrixXd set_mat = ToEigenMatrix(set);
+
+    return (set_mat.rowwise() - query_vec.transpose()).rowwise().lpNorm<1>().minCoeff();
+}
+
+auto Utils::SampleFromWeights(const std::vector<double>& weights) -> unsigned int {
+    double total_sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+    if (total_sum <= 0) {
+        throw std::runtime_error("Total sum of weights must be positive.");
+    }
+
+    std::vector<double> cumulative_weights;
+    cumulative_weights.reserve(weights.size());
+    std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights));
+
+    static std::mt19937 gen(std::random_device{}());
+    std::uniform_real_distribution<> dis(0.0, total_sum);
+    double random_value = dis(gen);
+
+    auto it = std::ranges::upper_bound(cumulative_weights, random_value);
+
+    return std::distance(cumulative_weights.begin(), it);
 }
 
 }  // namespace qalsh_chamfer

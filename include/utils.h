@@ -30,6 +30,10 @@ class Utils {
 
     auto static DotProduct(const std::vector<double>& vec1, const std::vector<double>& vec2) -> double;
 
+    auto static MinDistance(const std::vector<double>& query, const std::vector<std::vector<double>>& set) -> double;
+
+    auto static SampleFromWeights(const std::vector<double>& weights) -> unsigned int;
+
     template <typename T>
     auto static WriteToBuffer(std::vector<char>& buffer, size_t& offset, const T& data) -> void {
         if (offset + sizeof(T) > buffer.size()) {

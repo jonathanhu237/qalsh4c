@@ -22,6 +22,10 @@ auto main(int argc, char** argv) -> int {
     unsigned int num_dimensions{0};
     app.add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
 
+    unsigned int num_samples{0};
+    app.add_option("-s,--num_samples", num_samples,
+                   "Number of samples to use for approximation (default: 0, which means log(N) samples will be used)");
+
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");
 
