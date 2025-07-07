@@ -175,24 +175,30 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
     std::priority_queue<Candidate, std::vector<Candidate>> candidates;
     std::vector<bool> visited(num_points_, false);
     std::unordered_map<unsigned int, unsigned int> collision_count;
-    std::vector<CrudeNnSearchHelper> search_helpers;
-
+    std::vector<BPlusTree> b_plus_trees;
+    std::vector<double> keys(num_hash_tables_);
     double search_radius = 1.0;
 
-    // Initialize search helpers
-    search_helpers.reserve(num_hash_tables_);
+    // Initialize the keys
+    for (unsigned int i = 0; i < num_hash_tables_; i++) {
+        keys[i] = Utils::DotProduct(query, dot_vectors_[i]);
+    }
+
+    // Initialize B+ trees
+    b_plus_trees.reserve(num_hash_tables_);
     for (unsigned int j = 0; j < num_hash_tables_; j++) {
         const fs::path index_file_path =
             parent_directory_ / dataset_name_ / "index" / std::format("{}_idx_{}.bin", set_name, j);
-        search_helpers.push_back(
-            CrudeNnSearchHelper(index_file_path, page_size_, Utils::DotProduct(dot_vectors_[j], query)));
+        Pager pager(index_file_path, page_size_, Pager::PagerMode::kRead);
+        b_plus_trees.emplace_back(std::move(pager));
+        b_plus_trees.back().InitIncrementalSearch(keys[j]);
     }
 
     // c-ANN search
     while (candidates.size() < static_cast<size_t>(std::ceil(beta_ * num_points_))) {
         for (unsigned int j = 0; j < num_hash_tables_; j++) {
-            CrudeNnSearchHelper& search_helper = search_helpers[j];
-            std::vector<unsigned int> point_ids = search_helper.IncrementalSearch(bucket_width_ * search_radius / 2.0);
+            std::vector<unsigned int> point_ids =
+                b_plus_trees[j].IncrementalSearch(keys[j], bucket_width_ * search_radius / 2.0);
 
             for (auto point_id : point_ids) {
                 if (visited.at(point_id)) {
@@ -223,114 +229,6 @@ auto CrudeNn::CAnnSearch(const std::vector<double>& query, const std::vector<std
 
     // Defense programming
     return {std::numeric_limits<double>::max(), std::numeric_limits<unsigned int>::max()};
-}
-
-CrudeNnSearchHelper::CrudeNnSearchHelper(const fs::path& index_file_path, unsigned int page_size, double key)
-    : left_buffer_index_(0),
-      right_buffer_index_(0),
-      left_page_num_(0),
-      right_page_num_(0),
-      b_plus_tree_(Pager(index_file_path, page_size, Pager::PagerMode::kRead)),
-      key_(key) {
-    // Locate the first key k satisfying k >= key in the B+ tree
-    BPlusTree::LocateResult locate_result = b_plus_tree_.Locate(key_);
-    auto it = std::ranges::lower_bound(locate_result.data, key_, {},
-                                       [](const BPlusTree::KeyValuePair& kvp) { return kvp.first; });
-    auto index = static_cast<size_t>(std::distance(locate_result.data.begin(), it));
-
-    // The satisfactory key may exist in the left node (imagine the case where every key is the same)
-    while (locate_result.left_page_num != 0 && index == 0) {
-        BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
-        auto it_left = std::ranges::lower_bound(left_result.data, key_, {},
-                                                [](const BPlusTree::KeyValuePair& kvp) { return kvp.first; });
-        auto left_index = static_cast<size_t>(std::distance(left_result.data.begin(), it_left));
-
-        if (left_index == left_result.data.size()) {
-            break;
-        }
-
-        locate_result = left_result;
-        index = left_index;
-    }
-
-    // The satisfactory key may exist in the right node
-    if (locate_result.right_page_num != 0 && index == locate_result.data.size()) {
-        BPlusTree::LocateResult right_result = b_plus_tree_.Locate(locate_result.right_page_num);
-
-        if (!right_result.data.empty() && right_result.data.front().first >= key_) {
-            locate_result = right_result;
-            index = 0;
-        }
-    }
-
-    // Determine the parameters
-    if (index == locate_result.data.size()) {
-        right_buffer_index_ = 0;
-        right_page_num_ = 0;
-
-        left_buffer_ = locate_result.data;
-        left_buffer_index_ = index - 1;
-        left_page_num_ = locate_result.left_page_num;
-    } else if (index == 0) {
-        BPlusTree::LocateResult left_result = b_plus_tree_.Locate(locate_result.left_page_num);
-        left_buffer_ = left_result.data;
-        left_buffer_index_ = left_result.data.size() - 1;
-        left_page_num_ = left_result.left_page_num;
-
-        right_buffer_ = locate_result.data;
-        right_buffer_index_ = index;
-        right_page_num_ = locate_result.right_page_num;
-    } else {
-        left_buffer_ = locate_result.data;
-        left_buffer_index_ = index - 1;
-        left_page_num_ = locate_result.left_page_num;
-
-        right_buffer_ = locate_result.data;
-        right_buffer_index_ = index;
-        right_page_num_ = locate_result.right_page_num;
-    }
-}
-
-auto CrudeNnSearchHelper::IncrementalSearch(double bound) -> std::vector<unsigned int> {
-    std::vector<unsigned int> result;
-
-    // Search in the left direction
-    while (!left_buffer_.empty()) {
-        if (std::fabs(left_buffer_.at(left_buffer_index_).first - key_) > bound) {
-            break;
-        }
-
-        result.push_back(left_buffer_.at(left_buffer_index_).second);
-
-        if (left_buffer_index_ == 0) {
-            BPlusTree::LocateResult left_result = b_plus_tree_.Locate(left_page_num_);
-            left_buffer_ = left_result.data;
-            left_buffer_index_ = left_result.data.size() - 1;
-            left_page_num_ = left_result.left_page_num;
-        } else {
-            left_buffer_index_--;
-        }
-    }
-
-    // Search in the right direction
-    while (!right_buffer_.empty()) {
-        if (std::fabs(right_buffer_.at(right_buffer_index_).first - key_) > bound) {
-            break;
-        }
-
-        result.push_back(right_buffer_.at(right_buffer_index_).second);
-
-        if (right_buffer_index_ == right_buffer_.size() - 1) {
-            BPlusTree::LocateResult right_result = b_plus_tree_.Locate(right_page_num_);
-            right_buffer_ = right_result.data;
-            right_buffer_index_ = 0;
-            right_page_num_ = right_result.right_page_num;
-        } else {
-            right_buffer_index_++;
-        }
-    }
-
-    return result;
 }
 
 };  // namespace qalsh_chamfer

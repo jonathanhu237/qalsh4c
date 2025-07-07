@@ -1,21 +1,16 @@
 #ifndef CHAMFER_APPROX_H_
 #define CHAMFER_APPROX_H_
 
-#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "b_plus_tree.h"
 
 namespace qalsh_chamfer {
 
 namespace fs = std::filesystem;
 
 class CrudeNn;
-
-class CrudeNnSearchHelper;
 
 class CrudeNnBuilder {
    public:
@@ -82,24 +77,6 @@ class CrudeNn {
     unsigned int page_size_;
     std::vector<std::vector<double>> dot_vectors_;
     bool verbose_;
-};
-
-class CrudeNnSearchHelper {
-   public:
-    friend class CrudeNn;
-
-   private:
-    CrudeNnSearchHelper(const fs::path& index_file_path, unsigned int page_size, double key);
-    auto IncrementalSearch(double bound) -> std::vector<unsigned int>;
-
-    std::vector<BPlusTree::KeyValuePair> left_buffer_;
-    std::vector<BPlusTree::KeyValuePair> right_buffer_;
-    size_t left_buffer_index_;
-    size_t right_buffer_index_;
-    unsigned int left_page_num_;
-    unsigned int right_page_num_;
-    BPlusTree b_plus_tree_;
-    double key_;
 };
 
 }  // namespace qalsh_chamfer

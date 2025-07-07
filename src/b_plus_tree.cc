@@ -14,9 +14,26 @@
 namespace qalsh_chamfer {
 
 // ----- InternalNode Implementation -----
+InternalNode::InternalNode() : num_children_(0) {}
+
 InternalNode::InternalNode(unsigned int order) : num_children_(0) {
     keys_.reserve(order - 1);
     pointers_.reserve(order);
+};
+
+InternalNode::InternalNode(const std::vector<char>& buffer) : num_children_(0) {
+    size_t offset = 0;
+
+    num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    keys_.reserve(num_children_ - 1);
+    pointers_.reserve(num_children_);
+
+    for (unsigned int i = 0; i < num_children_ - 1; ++i) {
+        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
+    }
+    for (unsigned int i = 0; i < num_children_; ++i) {
+        pointers_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
+    }
 };
 
 auto InternalNode::GetHeaderSize() -> size_t { return sizeof(num_children_); }
@@ -33,23 +50,29 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
     }
 }
 
-auto InternalNode::Deserialize(const std::vector<char>& buffer) -> void {
-    size_t offset = 0;
-
-    num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-
-    for (unsigned int i = 0; i < num_children_ - 1; ++i) {
-        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
-    }
-    for (unsigned int i = 0; i < num_children_; ++i) {
-        pointers_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
-    }
-}
-
 // ----- LeafNode Implementation -----
+LeafNode::LeafNode() : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {};
+
 LeafNode::LeafNode(unsigned int order) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
     keys_.reserve(order);
     values_.reserve(order);
+};
+
+LeafNode::LeafNode(const std::vector<char>& buffer) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
+    size_t offset = 0;
+
+    num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    keys_.reserve(num_entries_);
+    values_.reserve(num_entries_);
+    prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    next_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+
+    for (unsigned int i = 0; i < num_entries_; ++i) {
+        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
+    }
+    for (unsigned int i = 0; i < num_entries_; ++i) {
+        values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
+    }
 };
 
 auto LeafNode::GetHeaderSize() -> size_t {
@@ -67,21 +90,6 @@ auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
     }
     for (auto value : values_) {
         Utils::WriteToBuffer(buffer, offset, value);
-    }
-}
-
-auto LeafNode::Deserialize(const std::vector<char>& buffer) -> void {
-    size_t offset = 0;
-
-    num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    next_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-
-    for (unsigned int i = 0; i < num_entries_; ++i) {
-        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
-    }
-    for (unsigned int i = 0; i < num_entries_; ++i) {
-        values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
     }
 }
 
@@ -200,14 +208,88 @@ auto BPlusTree::BulkLoad(std::vector<KeyValuePair>& data) -> void {
     pager_.WritePage(0, buffer);
 };
 
-auto BPlusTree::Locate(double key) -> LocateResult {
+auto BPlusTree::InitIncrementalSearch(double key) -> void {
+    // Locate the first key k satisfying k >= key in the B+ tree
+    LeafNode leaf_node = LocateLeafMayContainKey(key);
+    auto it = std::ranges::lower_bound(leaf_node.keys_, key);
+    auto index = static_cast<size_t>(std::distance(leaf_node.keys_.begin(), it));
+
+    // Determine the left search location
+    if (index == 0) {
+        if (leaf_node.prev_leaf_page_num_ != 0) {
+            LeafNode prev_leaf_node = LocateLeafByPageNum(leaf_node.prev_leaf_page_num_);
+            left_search_location_ = std::make_pair(prev_leaf_node, prev_leaf_node.num_entries_ - 1);
+        }
+    } else {
+        left_search_location_ = std::make_pair(leaf_node, index - 1);
+    }
+
+    // Determine the right search location
+    if (index == leaf_node.keys_.size()) {
+        if (leaf_node.next_leaf_page_num_ != 0) {
+            LeafNode next_leaf_node = LocateLeafByPageNum(leaf_node.next_leaf_page_num_);
+            right_search_location_ = std::make_pair(next_leaf_node, 0);
+        }
+    } else {
+        right_search_location_ = std::make_pair(leaf_node, index);
+    }
+}
+
+auto BPlusTree::IncrementalSearch(double key, double bound) -> std::vector<unsigned int> {
+    std::vector<unsigned int> result;
+
+    // Search to the left
+    while (left_search_location_) {
+        LeafNode& leaf_node = left_search_location_->first;
+        size_t& index = left_search_location_->second;
+
+        while (std::fabs(leaf_node.keys_.at(index) - key) <= bound) {
+            result.push_back(leaf_node.values_.at(index));
+
+            if (index == 0) {
+                if (leaf_node.prev_leaf_page_num_ == 0) {
+                    left_search_location_.reset();
+                } else {
+                    leaf_node = LocateLeafByPageNum(leaf_node.prev_leaf_page_num_);
+                    index = leaf_node.num_entries_ - 1;
+                }
+            } else {
+                index--;
+            }
+        }
+    }
+
+    // Search to the right
+    if (right_search_location_) {
+        LeafNode& leaf_node = right_search_location_->first;
+        size_t& index = right_search_location_->second;
+
+        while (std::fabs(leaf_node.keys_.at(index) - key) <= bound) {
+            result.push_back(leaf_node.values_.at(index));
+
+            if (index == leaf_node.num_entries_ - 1) {
+                if (leaf_node.next_leaf_page_num_ == 0) {
+                    right_search_location_.reset();
+                } else {
+                    leaf_node = LocateLeafByPageNum(leaf_node.next_leaf_page_num_);
+                    index = 0;
+                }
+            } else {
+                index++;
+            }
+        }
+    }
+
+    return result;
+}
+
+auto BPlusTree::LocateLeafMayContainKey(double key) -> LeafNode {
     unsigned int current_level = level_;
     unsigned int next_page_num = root_page_num_;
 
     while (current_level != 0) {
         const std::vector<char> buffer = pager_.ReadPage(next_page_num);
-        InternalNode internal_node(internal_node_order_);
-        internal_node.Deserialize(buffer);
+        InternalNode internal_node(buffer);
 
         auto it = std::ranges::upper_bound(internal_node.keys_, key);
         auto index = static_cast<size_t>(std::distance(internal_node.keys_.begin(), it));
@@ -216,31 +298,13 @@ auto BPlusTree::Locate(double key) -> LocateResult {
         current_level--;
     }
 
-    return Locate(next_page_num);
+    return LocateLeafByPageNum(next_page_num);
 }
 
-auto BPlusTree::Locate(unsigned int page_num) -> LocateResult {
-    LocateResult result;
-
-    if (page_num == 0) {
-        result.left_page_num = 0;
-        result.right_page_num = 0;
-        result.data.clear();
-
-        return result;
-    }
-
-    LeafNode leaf_node(leaf_node_order_);
+auto BPlusTree::LocateLeafByPageNum(unsigned int page_num) -> LeafNode {
     const std::vector<char> buffer = pager_.ReadPage(page_num);
-    leaf_node.Deserialize(buffer);
-
-    result.left_page_num = leaf_node.prev_leaf_page_num_;
-    result.right_page_num = leaf_node.next_leaf_page_num_;
-    result.data.reserve(leaf_node.num_entries_);
-    for (size_t i = 0; i < leaf_node.num_entries_; ++i) {
-        result.data.emplace_back(leaf_node.keys_[i], leaf_node.values_[i]);
-    }
-    return result;
+    LeafNode leaf_node(buffer);
+    return leaf_node;
 }
 
 }  // namespace qalsh_chamfer
