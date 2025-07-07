@@ -1,5 +1,5 @@
-#ifndef CHAMFER_APPROX_H_
-#define CHAMFER_APPROX_H_
+#ifndef CHAMFER_ESTIMATOR_H_
+#define CHAMFER_ESTIMATOR_H_
 
 #include <filesystem>
 #include <string>
@@ -9,20 +9,20 @@ namespace qalsh_chamfer {
 
 namespace fs = std::filesystem;
 
-class ChamferApprox;
+class ChamferEstimator;
 
-class ChamferApproxBuilder {
+class ChamferEstimatorBuilder {
    public:
-    ChamferApproxBuilder();
+    ChamferEstimatorBuilder();
 
-    auto set_dataset_name(const std::string& dataset_name) -> ChamferApproxBuilder&;
-    auto set_parent_directory(const fs::path& parent_directory) -> ChamferApproxBuilder&;
-    auto set_num_points(unsigned int num_points) -> ChamferApproxBuilder&;
-    auto set_num_dimensions(unsigned int num_dimensions) -> ChamferApproxBuilder&;
-    auto set_num_samples(unsigned int num_samples) -> ChamferApproxBuilder&;
-    auto set_verbose(bool verbose) -> ChamferApproxBuilder&;
+    auto set_dataset_name(const std::string& dataset_name) -> ChamferEstimatorBuilder&;
+    auto set_parent_directory(const fs::path& parent_directory) -> ChamferEstimatorBuilder&;
+    auto set_num_points(unsigned int num_points) -> ChamferEstimatorBuilder&;
+    auto set_num_dimensions(unsigned int num_dimensions) -> ChamferEstimatorBuilder&;
+    auto set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder&;
+    auto set_verbose(bool verbose) -> ChamferEstimatorBuilder&;
 
-    [[nodiscard]] auto Build() const -> std::unique_ptr<ChamferApprox>;
+    [[nodiscard]] auto Build() const -> std::unique_ptr<ChamferEstimator>;
 
    private:
     std::string dataset_name_;
@@ -33,16 +33,16 @@ class ChamferApproxBuilder {
     bool verbose_;
 };
 
-class ChamferApprox {
+class ChamferEstimator {
    public:
     auto PrintConfiguration() const -> void;
     auto Execute() const -> void;
 
-    friend class ChamferApproxBuilder;
+    friend class ChamferEstimatorBuilder;
 
    private:
-    ChamferApprox(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
-                  unsigned int num_dimensions, unsigned int num_samples, bool verbose);
+    ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
+                     unsigned int num_dimensions, unsigned int num_samples, bool verbose);
 
     [[nodiscard]] auto ApproximateChamferDistance(const std::vector<std::vector<double>>& from_set,
                                                   const std::vector<std::vector<double>>& to_set,

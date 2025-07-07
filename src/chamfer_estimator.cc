@@ -1,4 +1,4 @@
-#include "chamfer_approx.h"
+#include "chamfer_estimator.h"
 
 #include <cmath>
 #include <filesystem>
@@ -16,31 +16,32 @@
 
 namespace qalsh_chamfer {
 
-// ---------- ChamferApproxBuilder Implementation ----------
+// ---------- ChamferEstimatorBuilder Implementation ----------
 
-ChamferApproxBuilder::ChamferApproxBuilder() : num_points_(0), num_dimensions_(0), num_samples_(0), verbose_(false) {}
+ChamferEstimatorBuilder::ChamferEstimatorBuilder()
+    : num_points_(0), num_dimensions_(0), num_samples_(0), verbose_(false) {}
 
-auto ChamferApproxBuilder::set_dataset_name(const std::string& dataset_name) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_dataset_name(const std::string& dataset_name) -> ChamferEstimatorBuilder& {
     dataset_name_ = dataset_name;
     return *this;
 }
 
-auto ChamferApproxBuilder::set_parent_directory(const fs::path& parent_directory) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_parent_directory(const fs::path& parent_directory) -> ChamferEstimatorBuilder& {
     parent_directory_ = parent_directory;
     return *this;
 }
 
-auto ChamferApproxBuilder::set_num_points(unsigned int num_points) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_num_points(unsigned int num_points) -> ChamferEstimatorBuilder& {
     num_points_ = num_points;
     return *this;
 }
 
-auto ChamferApproxBuilder::set_num_dimensions(unsigned int num_dimensions) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_num_dimensions(unsigned int num_dimensions) -> ChamferEstimatorBuilder& {
     num_dimensions_ = num_dimensions;
     return *this;
 }
 
-auto ChamferApproxBuilder::set_num_samples(unsigned int num_samples) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder& {
     if (num_samples == 0) {
         // Default to log(N) samples if num_samples is not set
         num_samples_ = static_cast<unsigned int>(std::log(num_points_));
@@ -51,20 +52,20 @@ auto ChamferApproxBuilder::set_num_samples(unsigned int num_samples) -> ChamferA
     return *this;
 }
 
-auto ChamferApproxBuilder::set_verbose(bool verbose) -> ChamferApproxBuilder& {
+auto ChamferEstimatorBuilder::set_verbose(bool verbose) -> ChamferEstimatorBuilder& {
     verbose_ = verbose;
     return *this;
 }
 
-auto ChamferApproxBuilder::Build() const -> std::unique_ptr<ChamferApprox> {
-    return std::unique_ptr<ChamferApprox>(
-        new ChamferApprox(dataset_name_, parent_directory_, num_points_, num_dimensions_, num_samples_, verbose_));
+auto ChamferEstimatorBuilder::Build() const -> std::unique_ptr<ChamferEstimator> {
+    return std::unique_ptr<ChamferEstimator>(
+        new ChamferEstimator(dataset_name_, parent_directory_, num_points_, num_dimensions_, num_samples_, verbose_));
 }
 
-// ---------- ChamferApprox Implementation ----------
+// ---------- ChamferEstimator Implementation ----------
 
-ChamferApprox::ChamferApprox(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
-                             unsigned int num_dimensions, unsigned int num_samples, bool verbose)
+ChamferEstimator::ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
+                                   unsigned int num_dimensions, unsigned int num_samples, bool verbose)
     : dataset_name_(std::move(dataset_name)),
       parent_directory_(std::move(parent_directory)),
       num_points_(num_points),
@@ -72,7 +73,7 @@ ChamferApprox::ChamferApprox(std::string dataset_name, fs::path parent_directory
       num_samples_(num_samples),
       verbose_(verbose) {}
 
-auto ChamferApprox::PrintConfiguration() const -> void {
+auto ChamferEstimator::PrintConfiguration() const -> void {
     std::cout << std::format("---------- Chamfer Approximation Configuration ----------\n");
     std::cout << std::format("Dataset Name: {}\n", dataset_name_);
     std::cout << std::format("Parent Directory: {}\n", parent_directory_.string());
@@ -82,7 +83,7 @@ auto ChamferApprox::PrintConfiguration() const -> void {
     std::cout << std::format("-----------------------------------------------------\n");
 }
 
-auto ChamferApprox::Execute() const -> void {
+auto ChamferEstimator::Execute() const -> void {
     // Read the sets and D arrays from the files
     fs::path set_A_file_path = parent_directory_ / dataset_name_ / "A.bin";
     std::vector<std::vector<double>> set_A =
@@ -116,11 +117,11 @@ auto ChamferApprox::Execute() const -> void {
     std::cout << std::format("Relative Error: {:.3f}%\n", relative_error * 100.0);
 }
 
-auto ChamferApprox::ApproximateChamferDistance(const std::vector<std::vector<double>>& from_set,
-                                               const std::vector<std::vector<double>>& to_set,
-                                               const std::vector<double>& from_set_D_array,
-                                               const std::string& from_set_name, const std::string& to_set_name) const
-    -> double {
+auto ChamferEstimator::ApproximateChamferDistance(const std::vector<std::vector<double>>& from_set,
+                                                  const std::vector<std::vector<double>>& to_set,
+                                                  const std::vector<double>& from_set_D_array,
+                                                  const std::string& from_set_name,
+                                                  const std::string& to_set_name) const -> double {
     double approximation = 0.0;
     double sum = std::accumulate(from_set_D_array.begin(), from_set_D_array.end(), 0.0);
 

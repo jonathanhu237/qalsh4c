@@ -1,7 +1,7 @@
 #include <CLI11/CLI11.hpp>
 #include <format>
 
-#include "chamfer_approx.h"
+#include "chamfer_estimator.h"
 
 namespace fs = std::filesystem;
 
@@ -32,19 +32,19 @@ auto main(int argc, char** argv) -> int {
     try {
         CLI11_PARSE(app, argc, argv);
 
-        auto chamfer_approx = qalsh_chamfer::ChamferApproxBuilder()
-                                  .set_dataset_name(dataset_name)
-                                  .set_parent_directory(parent_directory)
-                                  .set_num_points(num_points)
-                                  .set_num_dimensions(num_dimensions)
-                                  .set_num_samples(num_samples)
-                                  .set_verbose(verbose)
-                                  .Build();
+        auto chamfer_estimator = qalsh_chamfer::ChamferEstimatorBuilder()
+                                     .set_dataset_name(dataset_name)
+                                     .set_parent_directory(parent_directory)
+                                     .set_num_points(num_points)
+                                     .set_num_dimensions(num_dimensions)
+                                     .set_num_samples(num_samples)
+                                     .set_verbose(verbose)
+                                     .Build();
 
         if (verbose) {
-            chamfer_approx->PrintConfiguration();
+            chamfer_estimator->PrintConfiguration();
         }
-        chamfer_approx->Execute();
+        chamfer_estimator->Execute();
 
     } catch (const std::exception& e) {
         std::cerr << std::format("Error: {}\n", e.what());
