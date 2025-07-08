@@ -22,6 +22,7 @@ class ChamferEstimatorBuilder {
     auto set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder&;
     auto set_verbose(bool verbose) -> ChamferEstimatorBuilder&;
 
+    auto ReadParamFromBinaryFile() -> ChamferEstimatorBuilder&;
     [[nodiscard]] auto Build() const -> std::unique_ptr<ChamferEstimator>;
 
    private:
@@ -29,12 +30,22 @@ class ChamferEstimatorBuilder {
     fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
+    unsigned int page_size_;
+    std::vector<std::vector<double>> dot_vectors_;
     unsigned int num_samples_;
     bool verbose_;
 };
 
 class ChamferEstimator {
    public:
+    using Candidate = std::pair<double, unsigned int>;
+
     auto PrintConfiguration() const -> void;
     auto Execute() const -> void;
 
@@ -42,8 +53,17 @@ class ChamferEstimator {
 
    private:
     ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
-                     unsigned int num_dimensions, unsigned int num_samples, bool verbose);
+                     unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
+                     double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
+                     unsigned int page_size, std::vector<std::vector<double>> dot_vectors, unsigned int num_samples,
+                     bool verbose);
 
+    [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
+                                            const std::vector<std::vector<double>>& set_to,
+                                            const std::string& set_from_name, const std::string& set_to_name) const
+        -> std::vector<double>;
+    [[nodiscard]] auto CAnnSearch(const std::vector<double>& query, const std::vector<std::vector<double>>& dataset,
+                                  const std::string& set_name) const -> Candidate;
     [[nodiscard]] auto ApproximateChamferDistance(const std::vector<std::vector<double>>& from_set,
                                                   const std::vector<std::vector<double>>& to_set,
                                                   const std::vector<double>& from_set_D_array,
@@ -54,6 +74,14 @@ class ChamferEstimator {
     fs::path parent_directory_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
+    double approximation_ratio_;
+    double bucket_width_;
+    double beta_;
+    double error_probability_;
+    unsigned int num_hash_tables_;
+    unsigned int collision_threshold_;
+    unsigned int page_size_;
+    std::vector<std::vector<double>> dot_vectors_;
     unsigned int num_samples_;
     bool verbose_;
 };

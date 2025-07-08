@@ -37,6 +37,7 @@ auto main(int argc, char** argv) -> int {
                                      .set_parent_directory(parent_directory)
                                      .set_num_points(num_points)
                                      .set_num_dimensions(num_dimensions)
+                                     .ReadParamFromBinaryFile()
                                      .set_num_samples(num_samples)
                                      .set_verbose(verbose)
                                      .Build();
