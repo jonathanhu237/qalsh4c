@@ -27,7 +27,7 @@ auto Utils::WriteSetToFile(const fs::path& file_path, const std::vector<std::vec
 
     for (const auto& point : set) {
         if (verbose) {
-            std::cout << std::format("Writing set {} to file ... ({}/{})\r", set_name, &point - set.data() + 1,
+            std::cout << std::format("Writing set {} to file...({}/{})\r", set_name, &point - set.data() + 1,
                                      set.size())
                       << std::flush;
         }
@@ -55,8 +55,7 @@ auto Utils::ReadSetFromFile(const fs::path& file_path, unsigned int num_points, 
 
     for (unsigned int i = 0; i < num_points; i++) {
         if (verbose) {
-            std::cout << std::format("Reading set {} from file ... ({}/{})\r", set_name, i + 1, num_points)
-                      << std::flush;
+            std::cout << std::format("Reading set {} from file...({}/{})\r", set_name, i + 1, num_points) << std::flush;
         }
 
         ifs.read(reinterpret_cast<char*>(set[i].data()), static_cast<std::streamsize>(sizeof(double) * num_dimensions));
