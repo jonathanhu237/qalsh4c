@@ -1,4 +1,4 @@
-#include <CLI11/CLI11.hpp>
+#include <CLI/CLI.hpp>
 #include <cmath>
 #include <exception>
 #include <filesystem>
