@@ -20,20 +20,7 @@
 
 namespace qalsh_chamfer {
 
-// ------ IndexerBuilder Implementation ------
-
-IndexerBuilder::IndexerBuilder()
-    : num_points_(0),
-      num_dimensions_(0),
-      approximation_ratio_(0.0),
-      bucket_width_(0.0),
-      beta_(0.0),
-      error_probability_(0.0),
-      num_hash_tables_(0),
-      collision_threshold_(0),
-      page_size_(0),
-      verbose_(false) {}
-
+// ------------ IndexerBuilder Implementation ------------
 auto IndexerBuilder::set_dataset_name(const std::string& dataset_name) -> IndexerBuilder& {
     dataset_name_ = dataset_name;
     return *this;
@@ -129,8 +116,7 @@ auto IndexerBuilder::Build() const -> std::unique_ptr<Indexer> {
                                                 num_hash_tables_, collision_threshold_, page_size_, verbose_));
 }
 
-// ------ Indexer Implementation ------
-
+// ------------ Indexer Implementation ------------
 Indexer::Indexer(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
                  unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
                  double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,

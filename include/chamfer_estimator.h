@@ -13,7 +13,7 @@ class ChamferEstimator;
 
 class ChamferEstimatorBuilder {
    public:
-    ChamferEstimatorBuilder();
+    ChamferEstimatorBuilder() = default;
 
     auto set_dataset_name(const std::string& dataset_name) -> ChamferEstimatorBuilder&;
     auto set_parent_directory(const fs::path& parent_directory) -> ChamferEstimatorBuilder&;
@@ -22,24 +22,15 @@ class ChamferEstimatorBuilder {
     auto set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder&;
     auto set_verbose(bool verbose) -> ChamferEstimatorBuilder&;
 
-    auto ReadParamFromBinaryFile() -> ChamferEstimatorBuilder&;
     [[nodiscard]] auto Build() const -> std::unique_ptr<ChamferEstimator>;
 
    private:
     std::string dataset_name_;
     fs::path parent_directory_;
-    unsigned int num_points_;
-    unsigned int num_dimensions_;
-    double approximation_ratio_;
-    double bucket_width_;
-    double beta_;
-    double error_probability_;
-    unsigned int num_hash_tables_;
-    unsigned int collision_threshold_;
-    unsigned int page_size_;
-    std::vector<std::vector<double>> dot_vectors_;
-    unsigned int num_samples_;
-    bool verbose_;
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
+    unsigned int num_samples_{0};
+    bool verbose_{false};
 };
 
 class ChamferEstimator {
@@ -53,10 +44,7 @@ class ChamferEstimator {
 
    private:
     ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
-                     unsigned int num_dimensions, double approximation_ratio, double bucket_width, double beta,
-                     double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
-                     unsigned int page_size, std::vector<std::vector<double>> dot_vectors, unsigned int num_samples,
-                     bool verbose);
+                     unsigned int num_dimensions, unsigned int num_samples, bool verbose);
 
     [[nodiscard]] auto GenerateDArrayForSet(const std::vector<std::vector<double>>& set_from,
                                             const std::vector<std::vector<double>>& set_to,
@@ -72,18 +60,18 @@ class ChamferEstimator {
 
     std::string dataset_name_;
     fs::path parent_directory_;
-    unsigned int num_points_;
-    unsigned int num_dimensions_;
-    double approximation_ratio_;
-    double bucket_width_;
-    double beta_;
-    double error_probability_;
-    unsigned int num_hash_tables_;
-    unsigned int collision_threshold_;
-    unsigned int page_size_;
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
+    unsigned int num_samples_{0};
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
+    double beta_{0.0};
+    double error_probability_{0.0};
+    unsigned int num_hash_tables_{0};
+    unsigned int collision_threshold_{0};
+    unsigned int page_size_{0};
     std::vector<std::vector<double>> dot_vectors_;
-    unsigned int num_samples_;
-    bool verbose_;
+    bool verbose_{false};
 };
 
 };  // namespace qalsh_chamfer

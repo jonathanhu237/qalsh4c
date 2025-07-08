@@ -14,7 +14,7 @@ class Indexer;
 
 class IndexerBuilder {
    public:
-    IndexerBuilder();
+    IndexerBuilder() = default;
 
     auto set_dataset_name(const std::string& dataset_name) -> IndexerBuilder&;
     auto set_parent_directory(const fs::path& parent_directory) -> IndexerBuilder&;
@@ -33,16 +33,16 @@ class IndexerBuilder {
    private:
     std::string dataset_name_;
     fs::path parent_directory_;
-    unsigned int num_points_;
-    unsigned int num_dimensions_;
-    double approximation_ratio_;
-    double bucket_width_;
-    double beta_;
-    double error_probability_;
-    unsigned int num_hash_tables_;
-    unsigned int collision_threshold_;
-    unsigned int page_size_;
-    bool verbose_;
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
+    double beta_{0.0};
+    double error_probability_{0.0};
+    unsigned int num_hash_tables_{0};
+    unsigned int collision_threshold_{0};
+    unsigned int page_size_{0};
+    bool verbose_{false};
 };
 
 class Indexer {
@@ -64,16 +64,16 @@ class Indexer {
 
     std::string dataset_name_;
     fs::path parent_directory_;
-    unsigned int num_points_;
-    unsigned int num_dimensions_;
-    double approximation_ratio_;
-    double bucket_width_;
-    double beta_;
-    double error_probability_;
-    unsigned int num_hash_tables_;
-    unsigned int collision_threshold_;
-    unsigned int page_size_;
-    bool verbose_;
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
+    double beta_{0.0};
+    double error_probability_{0.0};
+    unsigned int num_hash_tables_{0};
+    unsigned int collision_threshold_{0};
+    unsigned int page_size_{0};
+    bool verbose_{false};
 };
 
 }  // namespace qalsh_chamfer

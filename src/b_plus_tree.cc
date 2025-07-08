@@ -15,14 +15,12 @@
 namespace qalsh_chamfer {
 
 // ---------- InternalNode Implementation ----------
-InternalNode::InternalNode() : num_children_(0) {}
-
-InternalNode::InternalNode(unsigned int order) : num_children_(0) {
+InternalNode::InternalNode(unsigned int order) {
     keys_.reserve(order - 1);
     pointers_.reserve(order);
 };
 
-InternalNode::InternalNode(const std::vector<char>& buffer) : num_children_(0) {
+InternalNode::InternalNode(const std::vector<char>& buffer) {
     size_t offset = 0;
 
     num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
@@ -52,14 +50,12 @@ auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
 }
 
 // ---------- LeafNode Implementation ----------
-LeafNode::LeafNode() : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {};
-
-LeafNode::LeafNode(unsigned int order) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
+LeafNode::LeafNode(unsigned int order) {
     keys_.reserve(order);
     values_.reserve(order);
 };
 
-LeafNode::LeafNode(const std::vector<char>& buffer) : num_entries_(0), prev_leaf_page_num_(0), next_leaf_page_num_(0) {
+LeafNode::LeafNode(const std::vector<char>& buffer) {
     size_t offset = 0;
 
     num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
@@ -95,14 +91,7 @@ auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
 }
 
 // ---------- BPlusTreeBulkLoader Implementation ----------
-BPlusTreeBulkLoader::BPlusTreeBulkLoader(const fs::path& file_path, unsigned int page_size)
-    : page_size_(page_size),
-      num_page_(0),
-      next_page_num_(0),
-      root_page_num_(0),
-      level_(0),
-      internal_node_order_(0),
-      leaf_node_order_(0) {
+BPlusTreeBulkLoader::BPlusTreeBulkLoader(const fs::path& file_path, unsigned int page_size) : page_size_(page_size) {
     ofs_.open(file_path, std::ios::binary | std::ios::trunc);
     if (!ofs_) {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
@@ -226,7 +215,7 @@ auto BPlusTreeBulkLoader::WritePage(unsigned int page_num, const std::vector<cha
 
 // ---------- BPlusTreeSearcher Implementation ----------
 BPlusTreeSearcher::BPlusTreeSearcher(const fs::path& file_path, unsigned int page_size, double key)
-    : page_size_(page_size), key_(key), root_page_num_(0), level_(0), internal_node_order_(0), leaf_node_order_(0) {
+    : page_size_(page_size), key_(key) {
     // Open the B+ tree file
     ifs_.open(file_path, std::ios::binary);
     if (!ifs_.is_open()) {

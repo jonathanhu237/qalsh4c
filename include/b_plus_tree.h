@@ -19,7 +19,6 @@ class InternalNode {
     friend class BPlusTreeSearcher;
 
    private:
-    InternalNode();
     InternalNode(unsigned int order);
     InternalNode(const std::vector<char>& buffer);
 
@@ -27,7 +26,7 @@ class InternalNode {
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
-    unsigned int num_children_;
+    unsigned int num_children_{0};
 
     // Data
     std::vector<double> keys_;
@@ -41,7 +40,6 @@ class LeafNode {
     friend class BPlusTreeSearcher;
 
    private:
-    LeafNode();
     LeafNode(unsigned int order);
     LeafNode(const std::vector<char>& buffer);
 
@@ -49,9 +47,9 @@ class LeafNode {
     auto Serialize(std::vector<char>& buffer) const -> void;
 
     // Header
-    unsigned int num_entries_;
-    unsigned int prev_leaf_page_num_;
-    unsigned int next_leaf_page_num_;
+    unsigned int num_entries_{0};
+    unsigned int prev_leaf_page_num_{0};
+    unsigned int next_leaf_page_num_{0};
 
     // Data
     std::vector<double> keys_;
@@ -71,15 +69,15 @@ class BPlusTreeBulkLoader {
     auto WritePage(unsigned int page_num, const std::vector<char>& buffer) -> void;
 
     std::ofstream ofs_;
-    unsigned int page_size_;
-    unsigned int num_page_;
-    unsigned int next_page_num_;
+    unsigned int page_size_{0};
+    unsigned int num_page_{0};
+    unsigned int next_page_num_{0};
 
     // Header
-    unsigned int root_page_num_;
-    unsigned int level_;
-    unsigned int internal_node_order_;
-    unsigned int leaf_node_order_;
+    unsigned int root_page_num_{0};
+    unsigned int level_{0};
+    unsigned int internal_node_order_{0};
+    unsigned int leaf_node_order_{0};
 };
 
 class BPlusTreeSearcher {
@@ -97,16 +95,16 @@ class BPlusTreeSearcher {
     auto ReadPage(unsigned int page_num) -> std::vector<char>;
 
     std::ifstream ifs_;
-    unsigned int page_size_;
-    double key_;
+    unsigned int page_size_{0};
+    double key_{0.0};
     std::optional<SearchLocation> left_search_location_;
     std::optional<SearchLocation> right_search_location_;
 
     // Header
-    unsigned int root_page_num_;
-    unsigned int level_;
-    unsigned int internal_node_order_;
-    unsigned int leaf_node_order_;
+    unsigned int root_page_num_{0};
+    unsigned int level_{0};
+    unsigned int internal_node_order_{0};
+    unsigned int leaf_node_order_{0};
 };
 
 }  // namespace qalsh_chamfer

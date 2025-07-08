@@ -19,19 +19,6 @@
 namespace qalsh_chamfer {
 
 // ---------- ChamferEstimatorBuilder Implementation ----------
-ChamferEstimatorBuilder::ChamferEstimatorBuilder()
-    : num_points_(0),
-      num_dimensions_(0),
-      approximation_ratio_(0.0),
-      bucket_width_(0.0),
-      beta_(0.0),
-      error_probability_(0.0),
-      num_hash_tables_(0),
-      collision_threshold_(0),
-      page_size_(0),
-      num_samples_(0),
-      verbose_(false) {}
-
 auto ChamferEstimatorBuilder::set_dataset_name(const std::string& dataset_name) -> ChamferEstimatorBuilder& {
     dataset_name_ = dataset_name;
     return *this;
@@ -52,8 +39,36 @@ auto ChamferEstimatorBuilder::set_num_dimensions(unsigned int num_dimensions) ->
     return *this;
 }
 
-auto ChamferEstimatorBuilder::ReadParamFromBinaryFile() -> ChamferEstimatorBuilder& {
-    // Read the parameters from the file
+auto ChamferEstimatorBuilder::set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder& {
+    if (num_samples == 0) {
+        // Default to log(N) samples if num_samples is not set
+        num_samples_ = static_cast<unsigned int>(std::log(num_points_));
+    } else {
+        num_samples_ = num_samples;
+    }
+
+    return *this;
+}
+
+auto ChamferEstimatorBuilder::set_verbose(bool verbose) -> ChamferEstimatorBuilder& {
+    verbose_ = verbose;
+    return *this;
+}
+
+auto ChamferEstimatorBuilder::Build() const -> std::unique_ptr<ChamferEstimator> {
+    return std::unique_ptr<ChamferEstimator>(
+        new ChamferEstimator(dataset_name_, parent_directory_, num_points_, num_dimensions_, num_samples_, verbose_));
+}
+
+// ---------- ChamferEstimator Implementation ----------
+ChamferEstimator::ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
+                                   unsigned int num_dimensions, unsigned int num_samples, bool verbose)
+    : dataset_name_(std::move(dataset_name)),
+      parent_directory_(std::move(parent_directory)),
+      num_points_(num_points),
+      num_dimensions_(num_dimensions),
+      num_samples_(num_samples),
+      verbose_(verbose) {
     fs::path param_file_path = parent_directory_ / dataset_name_ / "index" / "index_params.bin";
     std::ifstream ifs(param_file_path, std::ios::binary);
     if (!ifs.is_open()) {
@@ -74,52 +89,7 @@ auto ChamferEstimatorBuilder::ReadParamFromBinaryFile() -> ChamferEstimatorBuild
         ifs.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
                  static_cast<std::streamsize>(sizeof(double) * num_dimensions_));
     }
-
-    return *this;
 }
-
-auto ChamferEstimatorBuilder::set_num_samples(unsigned int num_samples) -> ChamferEstimatorBuilder& {
-    if (num_samples == 0) {
-        // Default to log(N) samples if num_samples is not set
-        num_samples_ = static_cast<unsigned int>(std::log(num_points_));
-    } else {
-        num_samples_ = num_samples;
-    }
-
-    return *this;
-}
-
-auto ChamferEstimatorBuilder::set_verbose(bool verbose) -> ChamferEstimatorBuilder& {
-    verbose_ = verbose;
-    return *this;
-}
-
-auto ChamferEstimatorBuilder::Build() const -> std::unique_ptr<ChamferEstimator> {
-    return std::unique_ptr<ChamferEstimator>(new ChamferEstimator(
-        dataset_name_, parent_directory_, num_points_, num_dimensions_, approximation_ratio_, bucket_width_, beta_,
-        error_probability_, num_hash_tables_, collision_threshold_, page_size_, dot_vectors_, num_samples_, verbose_));
-}
-
-// ---------- ChamferEstimator Implementation ----------
-ChamferEstimator::ChamferEstimator(std::string dataset_name, fs::path parent_directory, unsigned int num_points,
-                                   unsigned int num_dimensions, double approximation_ratio, double bucket_width,
-                                   double beta, double error_probability, unsigned int num_hash_tables,
-                                   unsigned int collision_threshold, unsigned int page_size,
-                                   std::vector<std::vector<double>> dot_vectors, unsigned int num_samples, bool verbose)
-    : dataset_name_(std::move(dataset_name)),
-      parent_directory_(std::move(parent_directory)),
-      num_points_(num_points),
-      num_dimensions_(num_dimensions),
-      approximation_ratio_(approximation_ratio),
-      bucket_width_(bucket_width),
-      beta_(beta),
-      error_probability_(error_probability),
-      num_hash_tables_(num_hash_tables),
-      collision_threshold_(collision_threshold),
-      page_size_(page_size),
-      dot_vectors_(std::move(dot_vectors)),
-      num_samples_(num_samples),
-      verbose_(verbose) {}
 
 auto ChamferEstimator::PrintConfiguration() const -> void {
     std::cout << std::format("---------- Chamfer Approximation Configuration ----------\n");
