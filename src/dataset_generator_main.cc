@@ -32,13 +32,17 @@ auto main(int argc, char** argv) -> int {
     app.add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
         ->default_val(qalsh_chamfer::kDefaultRightBoundary);
 
+    std::string data_type;
+    app.add_option("-t,--data_type", data_type, "Type of the dataset (int8, int16, int32, int64, float, double)")
+        ->required();
+
     bool verbose{false};
     app.add_flag("-v,--verbose", verbose, "Enable verbose output");
 
     try {
         CLI11_PARSE(app, argc, argv);
 
-        auto dataset_generator = qalsh_chamfer::DatasetGeneratorBuilder()
+        auto dataset_generator = qalsh_chamfer::DatasetGeneratorFactory()
                                      .set_dataset_name(dataset_name)
                                      .set_parent_directory(parent_directory)
                                      .set_num_points(num_points)
@@ -46,12 +50,12 @@ auto main(int argc, char** argv) -> int {
                                      .set_left_boundary(left_boundary)
                                      .set_right_boundary(right_boundary)
                                      .set_verbose(verbose)
-                                     .Build();
+                                     .Build(data_type);
 
         if (verbose) {
             dataset_generator->PrintConfiguration();
         }
-        dataset_generator->Execute();
+        dataset_generator->Generate();
 
     } catch (const std::exception& e) {
         std::cerr << std::format("Error: {}\n", e.what());
