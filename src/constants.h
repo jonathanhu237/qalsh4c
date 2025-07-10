@@ -4,11 +4,14 @@
 #include <cmath>
 #include <numbers>
 
-const double kEpsilon = 1e-6;
-const unsigned int kDefaultPageSize = 4096;
+class Constants {
+   public:
+    static constexpr double kEpsilon = 1e-6;
+    static constexpr unsigned int kDefaultPageSize = 4096;
 
-const double kDefaultLeftBoundary = -128.0;                               // For dataset generation
-const double kDefaultRightBoundary = 128.0;                               // For dataset generation
-const double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;  // For QALSH
+    static constexpr double kDefaultLeftBoundary = -128.0;                               // For dataset generation
+    static constexpr double kDefaultRightBoundary = 128.0;                               // For dataset generation
+    static constexpr double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;  // For QALSH
+};
 
 #endif
