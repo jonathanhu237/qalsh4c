@@ -2,7 +2,8 @@
 #define DATA_TYPE_H
 
 #include <cstdint>
-#include <string_view>
+#include <map>
+#include <string>
 #include <type_traits>
 
 namespace qalsh_chamfer {
@@ -28,24 +29,10 @@ constexpr auto GetDataType() -> DataType {
     }
 }
 
-constexpr auto DataTypeToString(DataType data_type) -> std::string_view {
-    switch (data_type) {
-        case DataType::kInt8:
-            return "int8";
-        case DataType::kInt16:
-            return "int16";
-        case DataType::kInt32:
-            return "int32";
-        case DataType::kInt64:
-            return "int64";
-        case DataType::kFloat:
-            return "float";
-        case DataType::kDouble:
-            return "double";
-        default:
-            return "unknown";
-    }
-}
+const std::map<std::string, DataType> DataTypeMap = {
+    {"int8", DataType::kInt8},   {"int16", DataType::kInt16}, {"int32", DataType::kInt32},
+    {"int64", DataType::kInt64}, {"float", DataType::kFloat}, {"double", DataType::kDouble},
+};
 
 }  // namespace qalsh_chamfer
 
