@@ -1,7 +1,5 @@
 {
   "dependencies": [
-    "cli11",
-    "eigen3",
-    "tomlplusplus"
+    "cli11"
   ]
 }
