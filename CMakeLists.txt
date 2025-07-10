@@ -14,27 +14,16 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
 add_library(qalsh_chamfer_lib
-    src/b_plus_tree.cc
-    src/chamfer_estimator.cc
-    src/dataset_generator.cc
-    src/indexer.cc
-    src/utils.cc
+    src/generate_dataset_command.cc
 )
 
 target_link_libraries(qalsh_chamfer_lib PUBLIC
     CLI11::CLI11
-    Eigen3::Eigen
-    tomlplusplus::tomlplusplus
 )
 
 target_include_directories(qalsh_chamfer_lib PUBLIC
     "${CMAKE_SOURCE_DIR}/include"
 )
 
-add_executable(chamfer_estimator src/chamfer_estimator_main.cc)
-add_executable(dataset_generator src/dataset_generator_main.cc)
-add_executable(indexer src/indexer_main.cc)
-
-target_link_libraries(chamfer_estimator PRIVATE qalsh_chamfer_lib)
-target_link_libraries(dataset_generator PRIVATE qalsh_chamfer_lib)
-target_link_libraries(indexer PRIVATE qalsh_chamfer_lib)
+add_executable(qalsh_chamfer src/main.cc)
+target_link_libraries(qalsh_chamfer PRIVATE qalsh_chamfer_lib)
