@@ -29,3 +29,6 @@ CheckOptions:
     value: "1.0; 2.0; 100.0"
   - key: readability-identifier-length.IgnoredVariableNames
     value: "^p[1-2]$|^it$"
+  # For interface definition
+  - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value: "true"
