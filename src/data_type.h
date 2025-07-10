@@ -6,8 +6,6 @@
 #include <string>
 #include <string_view>
 
-namespace qalsh_chamfer {
-
 enum class DataType : uint8_t { kUnknown, kUint8, kInt, kDouble };
 
 constexpr auto to_string(DataType data_type) -> std::string_view {
@@ -29,7 +27,5 @@ const std::map<std::string, DataType> data_type_map = {
     {"int", DataType::kInt},
     {"double", DataType::kDouble},
 };
-
-}  // namespace qalsh_chamfer
 
 #endif
