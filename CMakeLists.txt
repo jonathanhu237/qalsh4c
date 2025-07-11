@@ -15,7 +15,9 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
+    src/index_command.cc
     src/main.cc
+    src/qalsh_indexer.cc
 )
 
 target_link_libraries(qalsh_chamfer PRIVATE 
