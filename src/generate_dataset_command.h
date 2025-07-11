@@ -2,10 +2,12 @@
 #define GENERATE_DATASET_COMMAND_H_
 
 #include <spdlog/spdlog.h>
+#include <toml++/toml.h>
 
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <random>
 #include <ratio>
 #include <string>
@@ -84,6 +86,21 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
     spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", chamfer_distance, elapsed.count());
+
+    // Save the metadata to a TOML file
+    toml::table metadata;
+    metadata.insert("data_type", Utils::to_string<T>());
+    metadata.insert("base_num_points", base_num_points_);
+    metadata.insert("query_num_points", query_num_points_);
+    metadata.insert("num_dimensions", num_dimensions_);
+
+    std::ofstream metadata_ofs;
+    metadata_ofs.open(dataset_directory / "metadata.toml");
+    if (!metadata_ofs.is_open()) {
+        throw std::runtime_error("Failed to open metadata file for writing.");
+    }
+    metadata_ofs << metadata;
+    spdlog::info("Metadata saved to {}", (dataset_directory / "metadata.toml").string());
 }
 
 template <typename T>
