@@ -8,43 +8,14 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug Dataset Generator",
-            "program": "${workspaceRoot}/build/dataset_generator",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
+                "generate",
                 "-n",
                 "toy",
-                "-N",
-                "1000",
-                "-D",
-                "64"
-            ],
-            "env": [],
-            "cwd": "${workspaceRoot}"
-        },
-        {
-            "type": "lldb-dap",
-            "request": "launch",
-            "name": "Debug Indexer",
-            "program": "${workspaceRoot}/build/indexer",
-            "args": [
-                "-n",
-                "toy",
-                "-N",
-                "1000",
-                "-D",
-                "64"
-            ],
-            "env": [],
-            "cwd": "${workspaceRoot}"
-        },
-        {
-            "type": "lldb-dap",
-            "request": "launch",
-            "name": "Debug Crude NN",
-            "program": "${workspaceRoot}/build/crude_nn",
-            "args": [
-                "-n",
-                "toy",
-                "-N",
+                "-B",
+                "2000",
+                "-Q",
                 "1000",
                 "-D",
                 "64"
