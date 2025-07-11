@@ -13,7 +13,7 @@ class Utils {
     static constexpr auto to_string() -> std::string_view;
 
     template <typename T>
-    static auto calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> T;
+    static auto calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double;
 };
 
 template <typename T>
@@ -30,7 +30,7 @@ constexpr auto Utils::to_string() -> std::string_view {
 }
 
 template <typename T>
-auto Utils::calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> T {
+auto Utils::calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double {
     if (vector1.size() != vector2.size()) {
         throw std::invalid_argument("Vectors must be of the same size");
     }
@@ -38,7 +38,7 @@ auto Utils::calculate_l1_distance(const std::vector<T> &vector1, const std::vect
     Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec1(vector1.data(), vector1.size());
     Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec2(vector2.data(), vector2.size());
 
-    return static_cast<T>((eigen_vec1 - eigen_vec2).template lpNorm<1>());
+    return (eigen_vec1 - eigen_vec2).template lpNorm<1>();
 }
 
 #endif
