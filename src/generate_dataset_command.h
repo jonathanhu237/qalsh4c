@@ -118,7 +118,7 @@ auto GenerateDatasetCommand<T>::GeneratePointSet(const std::filesystem::path& da
             point_set_writer.AddPoint(point);
         }
     }
-    spdlog::info("{} point set generated and saved to {}", point_set_name, point_set_file_path.string());
+    spdlog::info("The {} point set has been generated and saved to {}", point_set_name, point_set_file_path.string());
 }
 
 #endif
