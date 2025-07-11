@@ -33,7 +33,8 @@ class PointSetWriter {
 template <typename T>
 class PointSetReader {
    public:
-    explicit PointSetReader(const std::filesystem::path& file_path, unsigned int num_dimensions);
+    explicit PointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
+                            unsigned int num_dimensions);
     ~PointSetReader();
 
     PointSetReader(const PointSetReader&) = delete;
@@ -46,6 +47,7 @@ class PointSetReader {
 
    private:
     std::ifstream ifs_;
+    unsigned int num_points_;
     unsigned int num_dimensions_;
 };
 
@@ -79,8 +81,9 @@ auto PointSetWriter<T>::AddPoint(const std::vector<T>& point) -> void {
 // ---------------------------------------------
 
 template <typename T>
-PointSetReader<T>::PointSetReader(const std::filesystem::path& file_path, unsigned int num_dimensions)
-    : num_dimensions_(num_dimensions) {
+PointSetReader<T>::PointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
+                                  unsigned int num_dimensions)
+    : num_points_(num_points), num_dimensions_(num_dimensions) {
     ifs_.open(file_path, std::ios::binary);
     if (!ifs_.is_open()) {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
@@ -112,7 +115,8 @@ auto PointSetReader<T>::CalculateDistance(std::vector<T> query) -> double {
     std::vector<T> point(num_dimensions_);
 
     ifs_.seekg(0, std::ios::beg);
-    while (ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_)) {
+    for (unsigned int i = 0; i < num_points_; i++) {
+        ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
         double curr_distance = Utils::CalculateL1Distance(point, query);
         distance = std::min(curr_distance, distance);
     }

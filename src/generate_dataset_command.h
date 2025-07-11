@@ -69,12 +69,13 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
 
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
-    PointSetReader<T> base_set_reader(dataset_directory / "base.bin", num_dimensions_);
-    PointSetReader<T> query_set_reader(dataset_directory / "query.bin", num_dimensions_);
+    PointSetReader<T> base_set_reader(dataset_directory / "base.bin", base_num_points_, num_dimensions_);
+    PointSetReader<T> query_set_reader(dataset_directory / "query.bin", query_num_points_, num_dimensions_);
 
     double chamfer_distance = 0;
     for (unsigned int i = 0; i < query_num_points_; i++) {
-        chamfer_distance += base_set_reader.CalculateDistance(query_set_reader.GetPoint(i));
+        std::vector<T> query = query_set_reader.GetPoint(i);
+        chamfer_distance += base_set_reader.CalculateDistance(query);
     }
     spdlog::info("Chamfer distance calculated: {}", chamfer_distance);
 }
