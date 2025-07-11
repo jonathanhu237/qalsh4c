@@ -66,6 +66,17 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     // Generate the base point set and the query point set
     GeneratePointSet(dataset_directory, "base", base_num_points_);
     GeneratePointSet(dataset_directory, "query", query_num_points_);
+
+    // Calculate the Chamfer distance between the base and query sets
+    spdlog::info("Calculating Chamfer distance between base and query sets...");
+    PointSetReader<T> base_set_reader(dataset_directory / "base.bin", num_dimensions_);
+    PointSetReader<T> query_set_reader(dataset_directory / "query.bin", num_dimensions_);
+
+    double chamfer_distance = 0;
+    for (unsigned int i = 0; i < query_num_points_; i++) {
+        chamfer_distance += base_set_reader.CalculateDistance(query_set_reader.GetPoint(i));
+    }
+    spdlog::info("Chamfer distance calculated: {}", chamfer_distance);
 }
 
 template <typename T>
@@ -107,6 +118,7 @@ auto GenerateDatasetCommand<T>::GeneratePointSet(const std::filesystem::path& da
             point_set_writer.AddPoint(point);
         }
     }
+    spdlog::info("{} point set generated and saved to {}", point_set_name, point_set_file_path.string());
 }
 
 #endif
