@@ -22,6 +22,8 @@ class GenerateDatasetCommand : public Command {
 
    private:
     auto PrintConfiguration() -> void;
+    auto GeneratePointSet(const std::filesystem::path& dataset_directory, const std::string& point_set_name,
+                          unsigned int num_points) -> void;
 
     std::filesystem::path parent_directory_;
     std::string dataset_name_;
@@ -30,6 +32,8 @@ class GenerateDatasetCommand : public Command {
     unsigned int num_dimensions_{0};
     double left_boundary_{0.0};
     double right_boundary_{0.0};
+
+    std::mt19937 gen_;
 };
 
 template <typename T>
@@ -43,7 +47,8 @@ GenerateDatasetCommand<T>::GenerateDatasetCommand(std::filesystem::path parent_d
       query_num_points_(query_num_points),
       num_dimensions_(num_dimensions),
       left_boundary_(left_boundary),
-      right_boundary_(right_boundary) {}
+      right_boundary_(right_boundary),
+      gen_(std::random_device{}()) {}
 
 template <typename T>
 auto GenerateDatasetCommand<T>::Execute() -> void {
@@ -58,31 +63,9 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
 
     std::mt19937 gen(std::random_device{}());
 
-    auto generate_point_set = [&](const std::string& point_set_name, unsigned int num_points) {
-        spdlog::info("Generating {} point set...", point_set_name);
-        std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
-        PointSetWriter<T> point_set_writer(point_set_file_path);
-
-        if constexpr (std::is_floating_point_v<T>) {
-            std::uniform_real_distribution<T> dist(static_cast<T>(left_boundary_), static_cast<T>(right_boundary_));
-            for (unsigned int i = 0; i < num_points; i++) {
-                std::vector<T> point(num_dimensions_);
-                std::ranges::generate(point, [&]() { return dist(gen); });
-                point_set_writer.AddPoint(point);
-            }
-        } else if constexpr (std::is_integral_v<T>) {
-            std::uniform_int_distribution<T> dist(static_cast<T>(left_boundary_), static_cast<T>(right_boundary_));
-            for (unsigned int i = 0; i < num_points; i++) {
-                std::vector<T> point(num_dimensions_);
-                std::ranges::generate(point, [&]() { return static_cast<T>(dist(gen)); });
-                point_set_writer.AddPoint(point);
-            }
-        }
-    };
-
     // Generate the base point set and the query point set
-    generate_point_set("base", base_num_points_);
-    generate_point_set("query", query_num_points_);
+    GeneratePointSet(dataset_directory, "base", base_num_points_);
+    GeneratePointSet(dataset_directory, "query", query_num_points_);
 }
 
 template <typename T>
@@ -100,6 +83,30 @@ Right Boundary: {}
 -----------------------------------------------------)",
                   Utils::to_string<T>(), parent_directory_.string(), dataset_name_, base_num_points_, query_num_points_,
                   num_dimensions_, left_boundary_, right_boundary_);
+}
+
+template <typename T>
+auto GenerateDatasetCommand<T>::GeneratePointSet(const std::filesystem::path& dataset_directory,
+                                                 const std::string& point_set_name, unsigned int num_points) -> void {
+    spdlog::info("Generating {} point set...", point_set_name);
+    std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
+    PointSetWriter<T> point_set_writer(point_set_file_path);
+
+    if constexpr (std::is_floating_point_v<T>) {
+        std::uniform_real_distribution<T> dist(static_cast<T>(left_boundary_), static_cast<T>(right_boundary_));
+        for (unsigned int i = 0; i < num_points; i++) {
+            std::vector<T> point(num_dimensions_);
+            std::ranges::generate(point, [&]() { return dist(gen_); });
+            point_set_writer.AddPoint(point);
+        }
+    } else if constexpr (std::is_integral_v<T>) {
+        std::uniform_int_distribution<T> dist(static_cast<T>(left_boundary_), static_cast<T>(right_boundary_));
+        for (unsigned int i = 0; i < num_points; i++) {
+            std::vector<T> point(num_dimensions_);
+            std::ranges::generate(point, [&]() { return static_cast<T>(dist(gen_)); });
+            point_set_writer.AddPoint(point);
+        }
+    }
 }
 
 #endif
