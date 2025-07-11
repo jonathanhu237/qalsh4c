@@ -13,7 +13,7 @@ class Utils {
     static constexpr auto to_string() -> std::string_view;
 
     template <typename T>
-    static auto calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double;
+    static auto CalculateL1Distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double;
 };
 
 template <typename T>
@@ -30,7 +30,7 @@ constexpr auto Utils::to_string() -> std::string_view {
 }
 
 template <typename T>
-auto Utils::calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double {
+auto Utils::CalculateL1Distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double {
     if (vector1.size() != vector2.size()) {
         throw std::invalid_argument("Vectors must be of the same size");
     }

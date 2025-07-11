@@ -113,7 +113,7 @@ auto PointSetReader<T>::CalculateDistance(std::vector<T> query) -> double {
 
     ifs_.seekg(0, std::ios::beg);
     while (ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_)) {
-        double curr_distance = Utils::calculate_l1_distance(point, query);
+        double curr_distance = Utils::CalculateL1Distance(point, query);
         distance = std::min(curr_distance, distance);
     }
 
