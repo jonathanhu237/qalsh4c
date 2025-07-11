@@ -1,7 +1,8 @@
 {
   "dependencies": [
     "cli11",
+    "eigen3",
     "spdlog",
-    "eigen3"
+    "tomlplusplus"
   ]
 }

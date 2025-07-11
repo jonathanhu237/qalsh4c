@@ -12,6 +12,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitiz
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
     src/main.cc
@@ -21,4 +22,5 @@ target_link_libraries(qalsh_chamfer PRIVATE
     CLI11::CLI11
     spdlog::spdlog
     Eigen3::Eigen
+    tomlplusplus::tomlplusplus
 )
