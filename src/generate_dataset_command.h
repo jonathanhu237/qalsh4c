@@ -4,8 +4,10 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <random>
+#include <ratio>
 #include <string>
 
 #include "command.h"
@@ -73,11 +75,15 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     PointSetReader<T> query_set_reader(dataset_directory / "query.bin", query_num_points_, num_dimensions_);
 
     double chamfer_distance = 0;
+
+    auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < query_num_points_; i++) {
         std::vector<T> query = query_set_reader.GetPoint(i);
         chamfer_distance += base_set_reader.CalculateDistance(query);
     }
-    spdlog::info("Chamfer distance calculated: {}", chamfer_distance);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", chamfer_distance, elapsed.count());
 }
 
 template <typename T>
