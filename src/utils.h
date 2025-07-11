@@ -1,13 +1,19 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#include <Eigen/Eigen>
 #include <cstdint>
+#include <stdexcept>
 #include <string_view>
+#include <vector>
 
 class Utils {
    public:
     template <typename T>
     static constexpr auto to_string() -> std::string_view;
+
+    template <typename T>
+    static auto calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> T;
 };
 
 template <typename T>
@@ -21,6 +27,18 @@ constexpr auto Utils::to_string() -> std::string_view {
     } else {
         static_assert(sizeof(T) == 0, "Unsupported type for Utils::to_string");
     }
+}
+
+template <typename T>
+auto Utils::calculate_l1_distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> T {
+    if (vector1.size() != vector2.size()) {
+        throw std::invalid_argument("Vectors must be of the same size");
+    }
+
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec1(vector1.data(), vector1.size());
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec2(vector2.data(), vector2.size());
+
+    return static_cast<T>((eigen_vec1 - eigen_vec2).template lpNorm<1>());
 }
 
 #endif
