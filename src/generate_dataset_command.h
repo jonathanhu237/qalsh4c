@@ -41,11 +41,12 @@ GenerateDatasetCommand<T>::GenerateDatasetCommand(std::filesystem::path parent_d
 template <typename T>
 auto GenerateDatasetCommand<T>::Execute() -> void {
     PrintConfiguration();
+    spdlog::info("Begin to generate dataset...");
 }
 
 template <typename T>
 auto GenerateDatasetCommand<T>::PrintConfiguration() -> void {
-    spdlog::debug(R"(
+    spdlog::debug(R"(The configuration is as follows:
 ---------- Dataset Generator Configuration ----------
 Data Type: {}
 Data Directory: {}
@@ -54,8 +55,7 @@ Number of Points: {}
 Number of Dimensions: {}
 Left Boundary: {}
 Right Boundary: {}
------------------------------------------------------
-    )",
+-----------------------------------------------------)",
                   Utils::to_string<T>(), parent_directory_.string(), dataset_name_, num_points_, num_dimensions_,
                   left_boundary_, right_boundary_);
 }
