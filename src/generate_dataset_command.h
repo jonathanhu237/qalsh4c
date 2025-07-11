@@ -19,9 +19,9 @@
 template <typename T>
 class GenerateDatasetCommand : public Command {
    public:
-    GenerateDatasetCommand(std::filesystem::path parent_directory, std::string dataset_name,
-                           unsigned int base_num_points, unsigned int query_num_points, unsigned int num_dimensions,
-                           double left_boundary, double right_boundary);
+    GenerateDatasetCommand(std::filesystem::path dataset_directory, unsigned int base_num_points,
+                           unsigned int query_num_points, unsigned int num_dimensions, double left_boundary,
+                           double right_boundary);
     auto Execute() -> void override;
 
    private:
@@ -29,8 +29,7 @@ class GenerateDatasetCommand : public Command {
     auto GeneratePointSet(const std::filesystem::path& dataset_directory, const std::string& point_set_name,
                           unsigned int num_points) -> void;
 
-    std::filesystem::path parent_directory_;
-    std::string dataset_name_;
+    std::filesystem::path dataset_directory_;
     unsigned int base_num_points_{0};
     unsigned int query_num_points_{0};
     unsigned int num_dimensions_{0};
@@ -41,12 +40,10 @@ class GenerateDatasetCommand : public Command {
 };
 
 template <typename T>
-GenerateDatasetCommand<T>::GenerateDatasetCommand(std::filesystem::path parent_directory, std::string dataset_name,
-                                                  unsigned int base_num_points, unsigned int query_num_points,
-                                                  unsigned int num_dimensions, double left_boundary,
-                                                  double right_boundary)
-    : parent_directory_(std::move(parent_directory)),
-      dataset_name_(std::move(dataset_name)),
+GenerateDatasetCommand<T>::GenerateDatasetCommand(std::filesystem::path dataset_directory, unsigned int base_num_points,
+                                                  unsigned int query_num_points, unsigned int num_dimensions,
+                                                  double left_boundary, double right_boundary)
+    : dataset_directory_(std::move(dataset_directory)),
       base_num_points_(base_num_points),
       query_num_points_(query_num_points),
       num_dimensions_(num_dimensions),
@@ -59,22 +56,21 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     PrintConfiguration();
 
     // Create the directory if it does not exist
-    std::filesystem::path dataset_directory = parent_directory_ / dataset_name_;
-    if (!std::filesystem::exists(dataset_directory)) {
-        spdlog::info("Creating dataset directory: {}", dataset_directory.string());
-        std::filesystem::create_directory(dataset_directory);
+    if (!std::filesystem::exists(dataset_directory_)) {
+        spdlog::info("Creating dataset directory: {}", dataset_directory_.string());
+        std::filesystem::create_directory(dataset_directory_);
     }
 
     std::mt19937 gen(std::random_device{}());
 
     // Generate the base point set and the query point set
-    GeneratePointSet(dataset_directory, "base", base_num_points_);
-    GeneratePointSet(dataset_directory, "query", query_num_points_);
+    GeneratePointSet(dataset_directory_, "base", base_num_points_);
+    GeneratePointSet(dataset_directory_, "query", query_num_points_);
 
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
-    PointSetReader<T> base_set_reader(dataset_directory / "base.bin", base_num_points_, num_dimensions_);
-    PointSetReader<T> query_set_reader(dataset_directory / "query.bin", query_num_points_, num_dimensions_);
+    PointSetReader<T> base_set_reader(dataset_directory_ / "base.bin", base_num_points_, num_dimensions_);
+    PointSetReader<T> query_set_reader(dataset_directory_ / "query.bin", query_num_points_, num_dimensions_);
 
     double chamfer_distance = 0;
 
@@ -95,28 +91,26 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     metadata.insert("num_dimensions", num_dimensions_);
 
     std::ofstream metadata_ofs;
-    metadata_ofs.open(dataset_directory / "metadata.toml");
+    metadata_ofs.open(dataset_directory_ / "metadata.toml");
     if (!metadata_ofs.is_open()) {
         throw std::runtime_error("Failed to open metadata file for writing.");
     }
     metadata_ofs << metadata;
-    spdlog::info("Metadata saved to {}", (dataset_directory / "metadata.toml").string());
+    spdlog::info("Metadata saved to {}", (dataset_directory_ / "metadata.toml").string());
 }
 
 template <typename T>
 auto GenerateDatasetCommand<T>::PrintConfiguration() -> void {
     spdlog::debug(R"(The configuration is as follows:
 ---------- Dataset Generator Configuration ----------
-Data Type: {}
-Data Directory: {}
-Dataset Name: {}
+Dataset Directory: {}
 Number of Points in Base Set: {}
 Number of Points in Query Set: {}
 Number of Dimensions: {}
 Left Boundary: {}
 Right Boundary: {}
 -----------------------------------------------------)",
-                  Utils::to_string<T>(), parent_directory_.string(), dataset_name_, base_num_points_, query_num_points_,
+                  Utils::to_string<T>(), dataset_directory_.string(), base_num_points_, query_num_points_,
                   num_dimensions_, left_boundary_, right_boundary_);
 }
 

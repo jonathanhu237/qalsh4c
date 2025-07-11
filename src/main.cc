@@ -18,14 +18,17 @@ auto main(int argc, char** argv) -> int {
     app.require_subcommand(1);
 
     std::unique_ptr<Command> command;
-    CLI::App* generate_cmd = app.add_subcommand("generate", "Generate a dataset for Chamfer Distance Approximation");
 
-    std::string parent_directory;
-    generate_cmd->add_option("-p,--parent-directory", parent_directory, "Parent directory for the dataset")
+    // ------------------------------
+    // generate dataset
+    // ------------------------------
+
+    CLI::App* generate_cmd =
+        app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer Distance Approximation");
+
+    std::filesystem::path dataset_directory;
+    generate_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")
         ->default_val("data");
-
-    std::string dataset_name;
-    generate_cmd->add_option("-n,--dataset-name", dataset_name, "Name of the dataset")->required();
 
     std::string data_type;
     generate_cmd->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, double)")
@@ -53,17 +56,14 @@ auto main(int argc, char** argv) -> int {
 
     generate_cmd->callback([&]() {
         if (data_type == "uint8") {
-            command = std::make_unique<GenerateDatasetCommand<uint8_t>>(parent_directory, dataset_name, base_num_points,
-                                                                        query_num_points, num_dimensions, left_boundary,
-                                                                        right_boundary);
+            command = std::make_unique<GenerateDatasetCommand<uint8_t>>(
+                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
         } else if (data_type == "int") {
-            command = std::make_unique<GenerateDatasetCommand<int>>(parent_directory, dataset_name, base_num_points,
-                                                                    query_num_points, num_dimensions, left_boundary,
-                                                                    right_boundary);
+            command = std::make_unique<GenerateDatasetCommand<int>>(
+                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
         } else if (data_type == "double") {
-            command = std::make_unique<GenerateDatasetCommand<double>>(parent_directory, dataset_name, base_num_points,
-                                                                       query_num_points, num_dimensions, left_boundary,
-                                                                       right_boundary);
+            command = std::make_unique<GenerateDatasetCommand<double>>(
+                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
         } else {
             throw std::invalid_argument("Unsupported data type specified.");
         }
