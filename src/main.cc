@@ -79,9 +79,6 @@ auto main(int argc, char** argv) -> int {
     CLI::App* index_cmd = app.add_subcommand("index", "Index a dataset for Chamfer Distance Approximation");
     index_cmd->require_subcommand(1);
 
-    index_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")
-        ->default_val("data");
-
     std::unique_ptr<Indexer> indexer;
 
     // ------------------------------
@@ -89,6 +86,8 @@ auto main(int argc, char** argv) -> int {
     // ------------------------------
 
     CLI::App* index_qalsh_cmd = index_cmd->add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
+
+    index_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
     double approximation_ratio{0.0};
     index_qalsh_cmd->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
@@ -133,15 +132,15 @@ auto main(int argc, char** argv) -> int {
         ->default_val(Constants::kDefaultPageSize);
 
     index_qalsh_cmd->callback([&]() {
-        indexer = std::make_unique<QalshIndexer>(approximation_ratio, bucket_width, beta, error_probability,
-                                                 num_hash_tables, collision_threshold, page_size);
+        indexer = std::make_unique<QalshIndexer>(dataset_directory, approximation_ratio, bucket_width, beta,
+                                                 error_probability, num_hash_tables, collision_threshold, page_size);
     });
 
     index_cmd->callback([&]() {
         if (!indexer) {
             throw std::runtime_error("Indexer is not set. Please specify an indexer.");
         }
-        command = std::make_unique<IndexCommand>(indexer.get(), dataset_directory);
+        command = std::make_unique<IndexCommand>(indexer.get());
     });
 
     try {

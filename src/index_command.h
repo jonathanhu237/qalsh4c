@@ -6,12 +6,11 @@
 
 class IndexCommand : public Command {
    public:
-    explicit IndexCommand(Indexer* indexer, std::filesystem::path dataset_directory);
+    explicit IndexCommand(Indexer* indexer);
     auto Execute() -> void override;
 
    private:
     Indexer* indexer_;
-    std::filesystem::path dataset_directory_;
 };
 
 #endif
