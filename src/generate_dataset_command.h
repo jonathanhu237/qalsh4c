@@ -7,12 +7,12 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <random>
 #include <ratio>
 #include <string>
 
 #include "command.h"
+#include "dataset_metadata.h"
 #include "point_set.h"
 #include "utils.h"
 
@@ -84,19 +84,11 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", chamfer_distance, elapsed.count());
 
     // Save the metadata to a TOML file
-    toml::table metadata;
-    metadata.insert("data_type", Utils::to_string<T>());
-    metadata.insert("base_num_points", base_num_points_);
-    metadata.insert("query_num_points", query_num_points_);
-    metadata.insert("num_dimensions", num_dimensions_);
-
-    std::ofstream metadata_ofs;
-    metadata_ofs.open(dataset_directory_ / "metadata.toml");
-    if (!metadata_ofs.is_open()) {
-        throw std::runtime_error("Failed to open metadata file for writing.");
-    }
-    metadata_ofs << metadata;
-    spdlog::info("Metadata saved to {}", (dataset_directory_ / "metadata.toml").string());
+    DatasetMetadata metadata = {.base_num_points_ = base_num_points_,
+                                .query_num_points_ = query_num_points_,
+                                .num_dimensions_ = num_dimensions_,
+                                .data_type_ = Utils::to_string<T>()};
+    metadata.Save(dataset_directory_ / "metadata.toml");
 }
 
 template <typename T>
