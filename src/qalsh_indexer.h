@@ -3,6 +3,7 @@
 
 #include <filesystem>
 
+#include "dataset_metadata.h"
 #include "indexer.h"
 
 class QalshIndexer : public Indexer {
@@ -17,10 +18,7 @@ class QalshIndexer : public Indexer {
 
     // Dataset specific parameters
     std::filesystem::path dataset_directory_;
-    unsigned int base_num_points_{0};
-    unsigned int query_num_points_{0};
-    unsigned int num_dimensions_{0};
-    std::string data_type;
+    DatasetMetadata dataset_metadata_;
 
     // QALSH specific parameters
     double approximation_ratio_{0.0};
