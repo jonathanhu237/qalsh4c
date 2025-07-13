@@ -84,10 +84,11 @@ auto GenerateDatasetCommand<T>::Execute() -> void {
     spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", chamfer_distance, elapsed.count());
 
     // Save the metadata to a TOML file
-    DatasetMetadata metadata = {.base_num_points_ = base_num_points_,
+    DatasetMetadata metadata = {.data_type_ = Utils::to_string<T>(),
+                                .base_num_points_ = base_num_points_,
                                 .query_num_points_ = query_num_points_,
                                 .num_dimensions_ = num_dimensions_,
-                                .data_type_ = Utils::to_string<T>()};
+                                .chamfer_distance_ = chamfer_distance};
     metadata.Save(dataset_directory_ / "metadata.toml");
 }
 
