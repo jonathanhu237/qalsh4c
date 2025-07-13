@@ -1,8 +1,11 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#include <toml++/toml.h>
+
 #include <Eigen/Eigen>
 #include <cstdint>
+#include <format>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
@@ -14,6 +17,9 @@ class Utils {
 
     template <typename T>
     static auto CalculateL1Distance(const std::vector<T> &vector1, const std::vector<T> &vector2) -> double;
+
+    template <typename T>
+    static auto GetValueFromTomlTable(const toml::table &tbl, std::string_view key) -> T;
 };
 
 template <typename T>
@@ -39,6 +45,15 @@ auto Utils::CalculateL1Distance(const std::vector<T> &vector1, const std::vector
     Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec2(vector2.data(), vector2.size());
 
     return (eigen_vec1 - eigen_vec2).template lpNorm<1>();
+}
+
+template <typename T>
+auto Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) -> T {
+    auto value = tbl.get(key)->value<T>();
+    if (!value) {
+        throw std::runtime_error(std::format("Key '{}' not found in TOML table", key));
+    }
+    return *value;
 }
 
 #endif
