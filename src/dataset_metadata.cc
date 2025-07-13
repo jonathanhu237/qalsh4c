@@ -6,12 +6,15 @@
 #include <fstream>
 #include <string_view>
 
+#include "utils.h"
+
 auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void {
     toml::table metadata;
     metadata.insert("data_type", data_type_);
     metadata.insert("base_num_points", base_num_points_);
     metadata.insert("query_num_points", query_num_points_);
     metadata.insert("num_dimensions", num_dimensions_);
+    metadata.insert("chamfer_distance", chamfer_distance_);
 
     std::ofstream metadata_ofs;
     metadata_ofs.open(file_path);
@@ -25,23 +28,9 @@ auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void
 auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
     toml::table tbl = toml::parse_file(file_path.string());
 
-    base_num_points_ = tbl["base_num_points"].value_or(0U);
-    if (base_num_points_ == 0) {
-        throw std::runtime_error("base_num_points is not specified in metadata.toml");
-    }
-
-    query_num_points_ = tbl["query_num_points"].value_or(0U);
-    if (query_num_points_ == 0) {
-        throw std::runtime_error("query_num_points is not specified in metadata.toml");
-    }
-
-    num_dimensions_ = tbl["num_dimensions"].value_or(0U);
-    if (num_dimensions_ == 0) {
-        throw std::runtime_error("num_dimensions is not specified in metadata.toml");
-    }
-
-    data_type_ = tbl["data_type"].value_or("");
-    if (data_type_.empty()) {
-        throw std::runtime_error("data_type is not specified in metadata.toml");
-    }
+    base_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "base_num_points");
+    query_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "query_num_points");
+    num_dimensions_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_dimensions");
+    data_type_ = Utils::GetValueFromTomlTable<std::string_view>(tbl, "data_type");
+    chamfer_distance_ = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
