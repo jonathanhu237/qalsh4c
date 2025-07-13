@@ -30,8 +30,7 @@ auto main(int argc, char** argv) -> int {
         app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer Distance Approximation");
 
     std::filesystem::path dataset_directory;
-    generate_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")
-        ->default_val("data");
+    generate_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
     std::string data_type;
     generate_cmd->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, double)")
