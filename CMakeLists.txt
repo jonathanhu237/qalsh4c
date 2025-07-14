@@ -15,10 +15,11 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
-    src/dataset_metadata.cc
-    src/index_command.cc
+    src/b_plus_tree.cc
+    src/command.cc
+    src/indexer.cc
     src/main.cc
-    src/qalsh_indexer.cc
+    src/types.cc
 )
 
 target_link_libraries(qalsh_chamfer PRIVATE 
