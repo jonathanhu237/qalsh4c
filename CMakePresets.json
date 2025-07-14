@@ -23,6 +23,14 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "relWithDebInfo",
+            "inherits": "vcpkg",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O3 -g"
+            }
         }
     ],
     "buildPresets": [
@@ -35,6 +43,11 @@
             "name": "release-build",
             "configurePreset": "release",
             "displayName": "Build (Release)"
+        },
+        {
+            "name": "relWithDebInfo-build",
+            "configurePreset": "relWithDebInfo",
+            "displayName": "Build (RelWithDebInfo)"
         }
     ]
 }
