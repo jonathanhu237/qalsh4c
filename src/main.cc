@@ -52,10 +52,14 @@ auto main(int argc, char** argv) -> int {
     generate_cmd->add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
         ->default_val(Constants::kDefaultRightBoundary);
 
+    bool in_memory{false};
+    generate_cmd->add_flag("-i,--in_memory", in_memory, "Generate the dataset in memory (default: false)")
+        ->default_val(false);
+
     generate_cmd->callback([&]() {
         command = std::unique_ptr<ICommand>(new GenerateDatasetCommand(data_type, dataset_directory, base_num_points,
                                                                        query_num_points, num_dimensions, left_boundary,
-                                                                       right_boundary));
+                                                                       right_boundary, in_memory));
     });
 
     // ------------------------------
@@ -117,9 +121,13 @@ auto main(int argc, char** argv) -> int {
                      std::format("Page size for the indexer (default: {} bytes)", Constants::kDefaultPageSize))
         ->default_val(Constants::kDefaultPageSize);
 
+    index_qalsh_cmd->add_flag("-i,--in_memory", in_memory, "Index the dataset in memory (default: false)")
+        ->default_val(false);
+
     index_qalsh_cmd->callback([&]() {
         indexer = std::make_unique<QalshIndexer>(dataset_directory, approximation_ratio, bucket_width, beta,
-                                                 error_probability, num_hash_tables, collision_threshold, page_size);
+                                                 error_probability, num_hash_tables, collision_threshold, page_size,
+                                                 in_memory);
     });
 
     index_cmd->callback([&]() {

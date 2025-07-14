@@ -2,12 +2,16 @@
 
 #include <spdlog/spdlog.h>
 
+#include "point_set.h"
+
 GenerateDatasetCommand::GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                                                unsigned int base_num_points, unsigned int query_num_points,
-                                               unsigned int num_dimensions, double left_boundary, double right_boundary)
+                                               unsigned int num_dimensions, double left_boundary, double right_boundary,
+                                               bool in_memory)
     : dataset_directory_(std::move(dataset_directory)),
       left_boundary_(left_boundary),
       right_boundary_(right_boundary),
+      in_memory_(in_memory),
       gen_(std::random_device{}()) {
     dataset_metadata_ = {
         .data_type = std::move(data_type_),
@@ -36,10 +40,10 @@ auto GenerateDatasetCommand::Execute() -> void {
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
-        PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "base.bin",
+        PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory_ / "base.bin",
                                       dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
     auto query_set_reader =
-        PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "query.bin",
+        PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory_ / "query.bin",
                                       dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -66,17 +70,18 @@ Number of Points in Query Set: {}
 Number of Dimensions: {}
 Left Boundary: {}
 Right Boundary: {}
+In Memory: {}
 -----------------------------------------------------)",
                   dataset_metadata_.data_type, dataset_directory_.string(), dataset_metadata_.base_num_points,
-                  dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, left_boundary_,
-                  right_boundary_);
+                  dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, left_boundary_, right_boundary_,
+                  in_memory_);
 }
 
 auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& dataset_directory,
                                               const std::string& point_set_name, unsigned int num_points) -> void {
     spdlog::info("Generating {} point set...", point_set_name);
     std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
-    auto point_set_writer = PointSetWriterFactory::Create(dataset_metadata_.data_type, point_set_file_path,
+    auto point_set_writer = PointSetWriterFactory::Create(in_memory_, dataset_metadata_.data_type, point_set_file_path,
                                                           dataset_metadata_.num_dimensions);
 
     if (dataset_metadata_.data_type == "double") {

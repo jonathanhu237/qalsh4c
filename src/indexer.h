@@ -17,7 +17,7 @@ class QalshIndexer : public Indexer {
    public:
     QalshIndexer(std::filesystem::path dataset_directory, double approximation_ratio, double bucket_width, double beta,
                  double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
-                 unsigned int page_size);
+                 unsigned int page_size, bool in_memory);
     auto BuildIndex() -> void override;
 
    private:
@@ -31,6 +31,7 @@ class QalshIndexer : public Indexer {
     // QALSH specific parameters
     QalshConfiguration qalsh_config_;
 
+    bool in_memory_;
     std::mt19937 gen_;
 };
 

@@ -9,19 +9,21 @@
 
 #include "b_plus_tree.h"
 #include "constants.h"
+#include "point_set.h"
 #include "types.h"
 #include "utils.h"
 
 QalshIndexer::QalshIndexer(std::filesystem::path dataset_directory, double approximation_ratio, double bucket_width,
                            double beta, double error_probability, unsigned int num_hash_tables,
-                           unsigned int collision_threshold, unsigned int page_size)
-    : dataset_directory_(std::move(dataset_directory)), gen_(std::random_device{}()) {
+                           unsigned int collision_threshold, unsigned int page_size, bool in_memory)
+    : dataset_directory_(std::move(dataset_directory)), in_memory_(in_memory), gen_(std::random_device{}()) {
     // Read dataset metadata
     dataset_metadata_.Load(dataset_directory_ / "metadata.toml");
 
     // Initialize the base reader
-    base_reader_ = PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "base.bin",
-                                                 dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
+    base_reader_ =
+        PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory_ / "base.bin",
+                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
 
     // Calculate QALSH specific parameters
     qalsh_config_ = QalshConfiguration{
@@ -138,9 +140,11 @@ Error Probability: {}
 Number of Hash Tables: {}
 Collision Threshold: {}
 Page Size: {}
+In Memory: {}
 -----------------------------------------------------)",
                   dataset_directory_.string(), dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
                   dataset_metadata_.num_dimensions, dataset_metadata_.data_type, qalsh_config_.approximation_ratio,
                   qalsh_config_.bucket_width, qalsh_config_.beta, qalsh_config_.error_probability,
-                  qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold, qalsh_config_.page_size);
+                  qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold, qalsh_config_.page_size,
+                  in_memory_);
 }

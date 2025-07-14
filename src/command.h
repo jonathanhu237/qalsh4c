@@ -18,7 +18,7 @@ class GenerateDatasetCommand : public ICommand {
    public:
     GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                            unsigned int base_num_points, unsigned int query_num_points, unsigned int num_dimensions,
-                           double left_boundary, double right_boundary);
+                           double left_boundary, double right_boundary, bool in_memory);
     auto Execute() -> void override;
 
    private:
@@ -31,6 +31,7 @@ class GenerateDatasetCommand : public ICommand {
 
     double left_boundary_{0.0};
     double right_boundary_{0.0};
+    bool in_memory_{false};
 
     std::mt19937 gen_;
 };
