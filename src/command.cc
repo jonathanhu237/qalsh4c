@@ -5,14 +5,18 @@
 GenerateDatasetCommand::GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                                                unsigned int base_num_points, unsigned int query_num_points,
                                                unsigned int num_dimensions, double left_boundary, double right_boundary)
-    : data_type_(std::move(data_type_)),
-      dataset_directory_(std::move(dataset_directory)),
-      base_num_points_(base_num_points),
-      query_num_points_(query_num_points),
-      num_dimensions_(num_dimensions),
+    : dataset_directory_(std::move(dataset_directory)),
       left_boundary_(left_boundary),
       right_boundary_(right_boundary),
-      gen_(std::random_device{}()) {}
+      gen_(std::random_device{}()) {
+    dataset_metadata_ = {
+        .data_type = std::move(data_type_),
+        .base_num_points = base_num_points,
+        .query_num_points = query_num_points,
+        .num_dimensions = num_dimensions,
+        .chamfer_distance = 0.0,  // Will be calculated later
+    };
+}
 
 auto GenerateDatasetCommand::Execute() -> void {
     PrintConfiguration();
@@ -26,34 +30,30 @@ auto GenerateDatasetCommand::Execute() -> void {
     std::mt19937 gen(std::random_device{}());
 
     // Generate the base point set and the query point set
-    GeneratePointSet(dataset_directory_, "base", base_num_points_);
-    GeneratePointSet(dataset_directory_, "query", query_num_points_);
+    GeneratePointSet(dataset_directory_, "base", dataset_metadata_.base_num_points);
+    GeneratePointSet(dataset_directory_, "query", dataset_metadata_.query_num_points);
 
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
-        PointSetReaderFactory::Create(data_type_, dataset_directory_ / "base.bin", base_num_points_, num_dimensions_);
+        PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "base.bin",
+                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
     auto query_set_reader =
-        PointSetReaderFactory::Create(data_type_, dataset_directory_ / "query.bin", query_num_points_, num_dimensions_);
-
-    double chamfer_distance = 0;
+        PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "query.bin",
+                                      dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (unsigned int i = 0; i < query_num_points_; i++) {
+    for (unsigned int i = 0; i < dataset_metadata_.query_num_points; i++) {
         PointVariant query = query_set_reader->GetPoint(i);
-        chamfer_distance += base_set_reader->CalculateDistance(query);
+        dataset_metadata_.chamfer_distance += base_set_reader->CalculateDistance(query);
     }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
-    spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", chamfer_distance, elapsed.count());
+    spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", dataset_metadata_.chamfer_distance,
+                 elapsed.count());
 
     // Save the metadata to a TOML file
-    DatasetMetadata metadata = {.data_type_ = data_type_,
-                                .base_num_points_ = base_num_points_,
-                                .query_num_points_ = query_num_points_,
-                                .num_dimensions_ = num_dimensions_,
-                                .chamfer_distance_ = chamfer_distance};
-    metadata.Save(dataset_directory_ / "metadata.toml");
+    dataset_metadata_.Save(dataset_directory_ / "metadata.toml");
 }
 
 auto GenerateDatasetCommand::PrintConfiguration() -> void {
@@ -67,40 +67,42 @@ Number of Dimensions: {}
 Left Boundary: {}
 Right Boundary: {}
 -----------------------------------------------------)",
-                  data_type_, dataset_directory_.string(), base_num_points_, query_num_points_, num_dimensions_,
-                  left_boundary_, right_boundary_);
+                  dataset_metadata_.data_type, dataset_directory_.string(), dataset_metadata_.base_num_points,
+                  dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, left_boundary_,
+                  right_boundary_);
 }
 
 auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& dataset_directory,
                                               const std::string& point_set_name, unsigned int num_points) -> void {
     spdlog::info("Generating {} point set...", point_set_name);
     std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
-    auto point_set_writer = PointSetWriterFactory::Create(data_type_, point_set_file_path, num_dimensions_);
+    auto point_set_writer = PointSetWriterFactory::Create(dataset_metadata_.data_type, point_set_file_path,
+                                                          dataset_metadata_.num_dimensions);
 
-    if (data_type_ == "double") {
+    if (dataset_metadata_.data_type == "double") {
         std::uniform_real_distribution<double> dist(left_boundary_, right_boundary_);
         for (unsigned int i = 0; i < num_points; i++) {
-            Point<double> point(num_dimensions_);
+            Point<double> point(dataset_metadata_.num_dimensions);
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
-    } else if (data_type_ == "int") {
+    } else if (dataset_metadata_.data_type == "int") {
         std::uniform_int_distribution<int> dist(static_cast<int>(left_boundary_), static_cast<int>(right_boundary_));
         for (unsigned int i = 0; i < num_points; i++) {
-            Point<int> point(num_dimensions_);
+            Point<int> point(dataset_metadata_.num_dimensions);
             std::ranges::generate(point, [&]() { return static_cast<int>(dist(gen_)); });
             point_set_writer->AddPoint(point);
         }
-    } else if (data_type_ == "uint8") {
+    } else if (dataset_metadata_.data_type == "uint8") {
         std::uniform_int_distribution<uint8_t> dist(static_cast<uint8_t>(left_boundary_),
                                                     static_cast<uint8_t>(right_boundary_));
         for (unsigned int i = 0; i < num_points; i++) {
-            Point<uint8_t> point(num_dimensions_);
+            Point<uint8_t> point(dataset_metadata_.num_dimensions);
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
     } else {
-        throw std::invalid_argument(std::format("Unsupported data type: {}", data_type_));
+        throw std::invalid_argument(std::format("Unsupported data type: {}", dataset_metadata_.data_type));
     }
     spdlog::info("The {} point set has been generated and saved to {}", point_set_name, point_set_file_path.string());
 }

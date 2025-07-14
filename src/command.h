@@ -6,6 +6,7 @@
 #include <random>
 
 #include "indexer.h"
+#include "types.h"
 
 class ICommand {
    public:
@@ -25,11 +26,9 @@ class GenerateDatasetCommand : public ICommand {
     auto GeneratePointSet(const std::filesystem::path& dataset_directory, const std::string& point_set_name,
                           unsigned int num_points) -> void;
 
-    std::string data_type_;
     std::filesystem::path dataset_directory_;
-    unsigned int base_num_points_{0};
-    unsigned int query_num_points_{0};
-    unsigned int num_dimensions_{0};
+    DatasetMetadata dataset_metadata_;
+
     double left_boundary_{0.0};
     double right_boundary_{0.0};
 
