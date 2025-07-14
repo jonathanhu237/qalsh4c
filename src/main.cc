@@ -7,7 +7,6 @@
 
 #include "command.h"
 #include "constants.h"
-#include "index_command.h"
 #include "indexer.h"
 #include "qalsh_indexer.h"
 
@@ -128,7 +127,7 @@ auto main(int argc, char** argv) -> int {
         if (!indexer) {
             throw std::runtime_error("Indexer is not set. Please specify an indexer.");
         }
-        command = std::make_unique<IndexCommand>(indexer.get());
+        command = std::unique_ptr<ICommand>(new IndexCommand(std::move(indexer)));
     });
 
     try {
