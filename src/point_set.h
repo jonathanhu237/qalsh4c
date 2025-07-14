@@ -9,8 +9,12 @@
 #include <memory>
 #include <stdexcept>
 
-#include "types.h"
 #include "utils.h"
+
+template <typename T>
+using Point = std::vector<T>;
+
+using PointVariant = std::variant<Point<uint8_t>, Point<int>, Point<double>>;
 
 // ---------------------------------------------
 // Definition of PointSet-related classes
