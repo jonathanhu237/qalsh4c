@@ -91,6 +91,7 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
+        point_set_writer->Flush();
     } else if (dataset_metadata_.data_type == "int") {
         std::uniform_int_distribution<int> dist(static_cast<int>(left_boundary_), static_cast<int>(right_boundary_));
         for (unsigned int i = 0; i < num_points; i++) {
@@ -98,6 +99,7 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
             std::ranges::generate(point, [&]() { return static_cast<int>(dist(gen_)); });
             point_set_writer->AddPoint(point);
         }
+        point_set_writer->Flush();
     } else if (dataset_metadata_.data_type == "uint8") {
         std::uniform_int_distribution<uint8_t> dist(static_cast<uint8_t>(left_boundary_),
                                                     static_cast<uint8_t>(right_boundary_));
@@ -106,6 +108,7 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
+        point_set_writer->Flush();
     } else {
         throw std::invalid_argument(std::format("Unsupported data type: {}", dataset_metadata_.data_type));
     }
