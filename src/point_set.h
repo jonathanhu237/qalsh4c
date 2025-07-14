@@ -2,9 +2,13 @@
 #define POINT_SET_H_
 
 #include <algorithm>
+#include <any>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "utils.h"
@@ -13,10 +17,16 @@
 // Definition of PointSet-related classes
 // ---------------------------------------------
 
-template <typename T>
-class PointSetWriter {
+class IPointSetWriter {
    public:
-    explicit PointSetWriter(const std::filesystem::path& file_path);
+    virtual ~IPointSetWriter() = default;
+    virtual auto AddPoint(const std::any& point) -> void = 0;
+};
+
+template <typename T>
+class PointSetWriter : public IPointSetWriter {
+   public:
+    explicit PointSetWriter(const std::filesystem::path& file_path, unsigned int num_dimensions);
     ~PointSetWriter();
 
     PointSetWriter(const PointSetWriter&) = delete;
@@ -24,14 +34,40 @@ class PointSetWriter {
     PointSetWriter(PointSetWriter&&) noexcept = default;
     auto operator=(PointSetWriter&&) noexcept -> PointSetWriter& = default;
 
-    auto AddPoint(const std::vector<T>& point) -> void;
+    auto AddPoint(const std::any& point) -> void override;
 
    private:
     std::ofstream ofs_;
+    unsigned int num_dimensions_;
+};
+
+class PointSetWriterFactory {
+   public:
+    static auto Create(const std::string& data_type, const std::filesystem::path& file_path,
+                       unsigned int num_dimensions) -> std::unique_ptr<IPointSetWriter> {
+        if (data_type == "uint8") {
+            return std::unique_ptr<IPointSetWriter>(new PointSetWriter<uint8_t>(file_path, num_dimensions));
+        }
+        if (data_type == "int") {
+            return std::unique_ptr<IPointSetWriter>(new PointSetWriter<int>(file_path, num_dimensions));
+        }
+        if (data_type == "double") {
+            return std::unique_ptr<IPointSetWriter>(new PointSetWriter<double>(file_path, num_dimensions));
+        }
+
+        throw std::invalid_argument(std::format("Unsupported data type: {}", data_type));
+    }
+};
+
+class IPointSetReader {
+   public:
+    virtual ~IPointSetReader() = default;
+    virtual auto GetPoint(unsigned int index) -> std::any = 0;
+    virtual auto CalculateDistance(const std::any& query) -> double = 0;
 };
 
 template <typename T>
-class PointSetReader {
+class PointSetReader : public IPointSetReader {
    public:
     explicit PointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
                             unsigned int num_dimensions);
@@ -42,8 +78,8 @@ class PointSetReader {
     PointSetReader(PointSetReader&&) noexcept = default;
     auto operator=(PointSetReader&&) noexcept -> PointSetReader& = default;
 
-    auto GetPoint(unsigned int index) -> std::vector<T>;
-    auto CalculateDistance(std::vector<T> query) -> double;
+    auto GetPoint(unsigned int index) -> std::any override;
+    auto CalculateDistance(const std::any& query) -> double override;
 
    private:
     std::ifstream ifs_;
@@ -51,12 +87,31 @@ class PointSetReader {
     unsigned int num_dimensions_;
 };
 
+class PointSetReaderFactory {
+   public:
+    static auto Create(const std::string& data_type, const std::filesystem::path& file_path, unsigned int num_points,
+                       unsigned int num_dimensions) -> std::unique_ptr<IPointSetReader> {
+        if (data_type == "uint8") {
+            return std::unique_ptr<IPointSetReader>(new PointSetReader<uint8_t>(file_path, num_points, num_dimensions));
+        }
+        if (data_type == "int") {
+            return std::unique_ptr<IPointSetReader>(new PointSetReader<int>(file_path, num_points, num_dimensions));
+        }
+        if (data_type == "double") {
+            return std::unique_ptr<IPointSetReader>(new PointSetReader<double>(file_path, num_points, num_dimensions));
+        }
+
+        throw std::invalid_argument(std::format("Unsupported data type: {}", data_type));
+    }
+};
+
 // ---------------------------------------------
 // PointSetWriter Implementation
 // ---------------------------------------------
 
 template <typename T>
-PointSetWriter<T>::PointSetWriter(const std::filesystem::path& file_path) {
+PointSetWriter<T>::PointSetWriter(const std::filesystem::path& file_path, unsigned int num_dimensions)
+    : num_dimensions_(num_dimensions) {
     ofs_.open(file_path, std::ios::binary | std::ios::trunc);
     if (!ofs_.is_open()) {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path.string()));
@@ -71,9 +126,17 @@ PointSetWriter<T>::~PointSetWriter() {
 }
 
 template <typename T>
-auto PointSetWriter<T>::AddPoint(const std::vector<T>& point) -> void {
+auto PointSetWriter<T>::AddPoint(const std::any& point) -> void {
+    const auto& concrete_point = std::any_cast<const std::vector<T>&>(point);
+
+    if (concrete_point.size() != num_dimensions_) {
+        throw std::invalid_argument(std::format("Point dimensions do not match the set dimensions: expected {}, got {}",
+                                                num_dimensions_, concrete_point.size()));
+    }
+
     ofs_.seekp(0, std::ios::end);
-    ofs_.write(reinterpret_cast<const char*>(point.data()), sizeof(T) * point.size());
+    ofs_.write(reinterpret_cast<const char*>(concrete_point.data()),
+               static_cast<std::streamsize>(sizeof(T) * concrete_point.size()));
 }
 
 // ---------------------------------------------
@@ -98,7 +161,7 @@ PointSetReader<T>::~PointSetReader() {
 }
 
 template <typename T>
-auto PointSetReader<T>::GetPoint(unsigned int index) -> std::vector<T> {
+auto PointSetReader<T>::GetPoint(unsigned int index) -> std::any {
     ifs_.seekg(index * sizeof(T) * num_dimensions_, std::ios::beg);
     std::vector<T> point(num_dimensions_);
     ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
@@ -106,8 +169,10 @@ auto PointSetReader<T>::GetPoint(unsigned int index) -> std::vector<T> {
 }
 
 template <typename T>
-auto PointSetReader<T>::CalculateDistance(std::vector<T> query) -> double {
-    if (query.size() != num_dimensions_) {
+auto PointSetReader<T>::CalculateDistance(const std::any& query) -> double {
+    const auto& concrete_query = std::any_cast<const std::vector<T>&>(query);
+
+    if (concrete_query.size() != num_dimensions_) {
         throw std::invalid_argument("Query point dimensions do not match the set dimensions.");
     }
 
@@ -117,7 +182,7 @@ auto PointSetReader<T>::CalculateDistance(std::vector<T> query) -> double {
     ifs_.seekg(0, std::ios::beg);
     for (unsigned int i = 0; i < num_points_; i++) {
         ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
-        double curr_distance = Utils::CalculateL1Distance(point, query);
+        double curr_distance = Utils::CalculateL1Distance(point, concrete_query);
         distance = std::min(curr_distance, distance);
     }
 
