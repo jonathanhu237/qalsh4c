@@ -1,13 +1,6 @@
 #include "command.h"
 
 #include <spdlog/spdlog.h>
-#include <sys/types.h>
-
-#include <any>
-#include <cstdint>
-
-#include "point_set.h"
-#include "types.h"
 
 GenerateDatasetCommand::GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                                                unsigned int base_num_points, unsigned int query_num_points,
@@ -47,7 +40,7 @@ auto GenerateDatasetCommand::Execute() -> void {
 
     auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < query_num_points_; i++) {
-        std::any query = query_set_reader->GetPoint(i);
+        PointVariant query = query_set_reader->GetPoint(i);
         chamfer_distance += base_set_reader->CalculateDistance(query);
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -87,14 +80,14 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
     if (data_type_ == "double") {
         std::uniform_real_distribution<double> dist(left_boundary_, right_boundary_);
         for (unsigned int i = 0; i < num_points; i++) {
-            std::vector<double> point(num_dimensions_);
+            Point<double> point(num_dimensions_);
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
     } else if (data_type_ == "int") {
         std::uniform_int_distribution<int> dist(static_cast<int>(left_boundary_), static_cast<int>(right_boundary_));
         for (unsigned int i = 0; i < num_points; i++) {
-            std::vector<int> point(num_dimensions_);
+            Point<int> point(num_dimensions_);
             std::ranges::generate(point, [&]() { return static_cast<int>(dist(gen_)); });
             point_set_writer->AddPoint(point);
         }
@@ -102,7 +95,7 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
         std::uniform_int_distribution<uint8_t> dist(static_cast<uint8_t>(left_boundary_),
                                                     static_cast<uint8_t>(right_boundary_));
         for (unsigned int i = 0; i < num_points; i++) {
-            std::vector<uint8_t> point(num_dimensions_);
+            Point<uint8_t> point(num_dimensions_);
             std::ranges::generate(point, [&]() { return dist(gen_); });
             point_set_writer->AddPoint(point);
         }
