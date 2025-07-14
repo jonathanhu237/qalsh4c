@@ -21,8 +21,8 @@ class Utils {
     template <typename T>
     static auto GetValueFromTomlTable(const toml::table &tbl, std::string_view key) -> T;
 
-    template <typename T>
-    static auto DotProduct(const std::vector<T> &vec1, const std::vector<T> &vec2) -> double;
+    template <typename T1, typename T2>
+    static auto DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) -> double;
 };
 
 template <typename T>
@@ -58,15 +58,14 @@ auto Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) 
     }
     return *value;
 }
-
-template <typename T>
-auto Utils::DotProduct(const std::vector<T> &vec1, const std::vector<T> &vec2) -> double {
+template <typename T1, typename T2>
+auto Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) -> double {
     if (vec1.size() != vec2.size()) {
         throw std::invalid_argument("Vectors must be of the same size for dot product.");
     }
 
-    Eigen::Map<const Eigen::VectorXd> eigen_vec1(vec1.data(), static_cast<Eigen::Index>(vec1.size()));
-    Eigen::Map<const Eigen::VectorXd> eigen_vec2(vec2.data(), static_cast<Eigen::Index>(vec2.size()));
+    Eigen::Map<const Eigen::Matrix<T1, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
+    Eigen::Map<const Eigen::Matrix<T2, Eigen::Dynamic, 1>> eigen_vec2(vec2.data(), vec2.size());
 
     return eigen_vec1.dot(eigen_vec2);
 }
