@@ -1,0 +1,132 @@
+#include "indexer.h"
+
+#include <spdlog/spdlog.h>
+
+#include <chrono>
+#include <format>
+#include <vector>
+
+#include "b_plus_tree.h"
+#include "constants.h"
+#include "types.h"
+#include "utils.h"
+
+QalshIndexer::QalshIndexer(std::filesystem::path dataset_directory, double approximation_ratio, double bucket_width,
+                           double beta, double error_probability, unsigned int num_hash_tables,
+                           unsigned int collision_threshold, unsigned int page_size)
+    : dataset_directory_(std::move(dataset_directory)), gen_(std::random_device{}()) {
+    // Read dataset metadata
+    dataset_metadata_.Load(dataset_directory_ / "metadata.toml");
+
+    // Initialize the base reader
+    base_reader_ = PointSetReaderFactory::Create(dataset_metadata_.data_type, dataset_directory_ / "base.bin",
+                                                 dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
+
+    // Calculate QALSH specific parameters
+    qalsh_config_ = QalshConfiguration{
+        .approximation_ratio = approximation_ratio,
+        .bucket_width = bucket_width,
+        .beta = beta,
+        .error_probability = error_probability,
+        .num_hash_tables = num_hash_tables,
+        .collision_threshold = collision_threshold,
+        .page_size = page_size,
+    };
+
+    if (qalsh_config_.bucket_width <= Constants::kEpsilon) {
+        qalsh_config_.bucket_width = 2.0 * std::sqrt(qalsh_config_.approximation_ratio);
+    }
+    if (qalsh_config_.beta <= Constants::kEpsilon) {
+        qalsh_config_.beta = 100.0 / static_cast<double>(dataset_metadata_.base_num_points);
+    }
+
+    double term1 = std::sqrt(std::log(2.0 / qalsh_config_.beta));
+    double term2 = std::sqrt(std::log(1.0 / qalsh_config_.error_probability));
+    double p1 = 2.0 / std::numbers::pi_v<double> * atan(qalsh_config_.bucket_width / 2.0);
+    double p2 =
+        2.0 / std::numbers::pi_v<double> * atan(qalsh_config_.bucket_width / (2.0 * qalsh_config_.approximation_ratio));
+
+    if (num_hash_tables == 0) {
+        double numerator = std::pow(term1 + term2, 2.0);
+        double denominator = 2.0 * std::pow(p1 - p2, 2.0);
+        qalsh_config_.num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
+    }
+
+    if (collision_threshold == 0) {
+        double eta = term1 / term2;
+        double alpha = (eta * p1 + p2) / (1 + eta);
+        qalsh_config_.collision_threshold = static_cast<unsigned int>(std::ceil(alpha * qalsh_config_.num_hash_tables));
+    }
+}
+
+auto QalshIndexer::BuildIndex() -> void {
+    PrintConfiguration();
+
+    // Create the index directory if it does not exist
+    std::filesystem::path index_directory = dataset_directory_ / "qalsh_index";
+    if (!std::filesystem::exists(index_directory)) {
+        spdlog::info("Creating index directory: {}", index_directory.string());
+        std::filesystem::create_directories(index_directory);
+    }
+
+    // Generate the dot vectors
+    spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
+    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables,
+                                                 std::vector<double>(dataset_metadata_.num_dimensions));
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        std::ranges::generate(dot_vectors[i], [&]() { return standard_cauchy_dist(gen_); });
+    }
+
+    // Index the base set
+    spdlog::info("Indexing base set...");
+    auto start = std::chrono::high_resolution_clock::now();
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        std::vector<std::pair<double, unsigned int>> dot_products_with_id(dataset_metadata_.base_num_points);
+        for (unsigned int j = 0; j < dataset_metadata_.base_num_points; j++) {
+            // Calculate the dot product for each point in the base set
+            PointVariant base_point = base_reader_->GetPoint(j);
+            double dot_product = 0.0;
+            std::visit(
+                [&](const auto& concrete_point) { dot_product = Utils::DotProduct(concrete_point, dot_vectors[i]); },
+                base_point);
+            dot_products_with_id[j] = {dot_product, j};
+
+            // Sort the dot products
+            std::ranges::sort(dot_products_with_id);
+
+            // Bulk load the B+ tree with sorted dot products
+            BPlusTreeBulkLoader bulk_loader(index_directory / std::format("base_idx_{}.bin", i),
+                                            qalsh_config_.page_size);
+            bulk_loader.Build(dot_products_with_id);
+        }
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    spdlog::info("Indexing completed in {:.2f} ms.", elapsed.count());
+
+    // Save the QALSH configuration
+    qalsh_config_.Save(index_directory / "config.toml");
+}
+
+auto QalshIndexer::PrintConfiguration() const -> void {
+    spdlog::debug(R"(The configuration is as follows:
+---------- QALSH Indexer Configuration ----------
+Dataset Directory: {}
+Number of points in base set: {}
+Number of points in query set: {}
+Number of Dimensions: {}
+Data Type: {}
+Approximation Ratio: {}
+Bucket Width: {}
+Beta: {}
+Error Probability: {}
+Number of Hash Tables: {}
+Collision Threshold: {}
+Page Size: {}
+-----------------------------------------------------)",
+                  dataset_directory_.string(), dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
+                  dataset_metadata_.num_dimensions, dataset_metadata_.data_type, qalsh_config_.approximation_ratio,
+                  qalsh_config_.bucket_width, qalsh_config_.beta, qalsh_config_.error_probability,
+                  qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold, qalsh_config_.page_size);
+}
