@@ -2,15 +2,14 @@
 #define POINT_SET_H_
 
 #include <algorithm>
-#include <any>
 #include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <memory>
 #include <stdexcept>
-#include <vector>
 
+#include "types.h"
 #include "utils.h"
 
 // ---------------------------------------------
@@ -20,7 +19,7 @@
 class IPointSetWriter {
    public:
     virtual ~IPointSetWriter() = default;
-    virtual auto AddPoint(const std::any& point) -> void = 0;
+    virtual auto AddPoint(const PointVariant& point) -> void = 0;
 };
 
 template <typename T>
@@ -34,7 +33,7 @@ class PointSetWriter : public IPointSetWriter {
     PointSetWriter(PointSetWriter&&) noexcept = default;
     auto operator=(PointSetWriter&&) noexcept -> PointSetWriter& = default;
 
-    auto AddPoint(const std::any& point) -> void override;
+    auto AddPoint(const PointVariant& point) -> void override;
 
    private:
     std::ofstream ofs_;
@@ -62,8 +61,8 @@ class PointSetWriterFactory {
 class IPointSetReader {
    public:
     virtual ~IPointSetReader() = default;
-    virtual auto GetPoint(unsigned int index) -> std::any = 0;
-    virtual auto CalculateDistance(const std::any& query) -> double = 0;
+    virtual auto GetPoint(unsigned int index) -> PointVariant = 0;
+    virtual auto CalculateDistance(const PointVariant& query) -> double = 0;
 };
 
 template <typename T>
@@ -78,8 +77,8 @@ class PointSetReader : public IPointSetReader {
     PointSetReader(PointSetReader&&) noexcept = default;
     auto operator=(PointSetReader&&) noexcept -> PointSetReader& = default;
 
-    auto GetPoint(unsigned int index) -> std::any override;
-    auto CalculateDistance(const std::any& query) -> double override;
+    auto GetPoint(unsigned int index) -> PointVariant override;
+    auto CalculateDistance(const PointVariant& query) -> double override;
 
    private:
     std::ifstream ifs_;
@@ -126,8 +125,8 @@ PointSetWriter<T>::~PointSetWriter() {
 }
 
 template <typename T>
-auto PointSetWriter<T>::AddPoint(const std::any& point) -> void {
-    const auto& concrete_point = std::any_cast<const std::vector<T>&>(point);
+auto PointSetWriter<T>::AddPoint(const PointVariant& point) -> void {
+    const auto& concrete_point = std::get<Point<T>>(point);
 
     if (concrete_point.size() != num_dimensions_) {
         throw std::invalid_argument(std::format("Point dimensions do not match the set dimensions: expected {}, got {}",
@@ -161,23 +160,23 @@ PointSetReader<T>::~PointSetReader() {
 }
 
 template <typename T>
-auto PointSetReader<T>::GetPoint(unsigned int index) -> std::any {
+auto PointSetReader<T>::GetPoint(unsigned int index) -> PointVariant {
     ifs_.seekg(index * sizeof(T) * num_dimensions_, std::ios::beg);
-    std::vector<T> point(num_dimensions_);
+    Point<T> point(num_dimensions_);
     ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
     return point;
 }
 
 template <typename T>
-auto PointSetReader<T>::CalculateDistance(const std::any& query) -> double {
-    const auto& concrete_query = std::any_cast<const std::vector<T>&>(query);
+auto PointSetReader<T>::CalculateDistance(const PointVariant& query) -> double {
+    const auto& concrete_query = std::get<Point<T>>(query);
 
     if (concrete_query.size() != num_dimensions_) {
         throw std::invalid_argument("Query point dimensions do not match the set dimensions.");
     }
 
     double distance = std::numeric_limits<double>::max();
-    std::vector<T> point(num_dimensions_);
+    Point<T> point(num_dimensions_);
 
     ifs_.seekg(0, std::ios::beg);
     for (unsigned int i = 0; i < num_points_; i++) {
