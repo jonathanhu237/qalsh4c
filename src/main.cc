@@ -8,7 +8,6 @@
 #include "command.h"
 #include "constants.h"
 #include "indexer.h"
-#include "qalsh_indexer.h"
 
 auto main(int argc, char** argv) -> int {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};

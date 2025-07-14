@@ -6,8 +6,8 @@
 #include <any>
 #include <cstdint>
 
-#include "dataset_metadata.h"
 #include "point_set.h"
+#include "types.h"
 
 GenerateDatasetCommand::GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                                                unsigned int base_num_points, unsigned int query_num_points,

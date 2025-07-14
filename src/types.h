@@ -1,5 +1,5 @@
-#ifndef DATASET_METADATA_H_
-#define DATASET_METADATA_H_
+#ifndef TYPES_H_
+#define TYPES_H_
 
 #include <filesystem>
 #include <string>
