@@ -15,4 +15,17 @@ struct DatasetMetadata {
     auto Load(const std::filesystem::path& file_path) -> void;
 };
 
+struct QalshConfiguration {
+    double approximation_ratio_{0.0};
+    double bucket_width_{0.0};
+    double beta_{0.0};
+    double error_probability_{0.0};
+    unsigned int num_hash_tables_{0};
+    unsigned int collision_threshold_{0};
+    unsigned int page_size_{0};
+
+    auto Save(const std::filesystem::path& file_path) const -> void;
+    auto Load(const std::filesystem::path& file_path) -> void;
+};
+
 #endif
