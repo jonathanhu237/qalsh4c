@@ -9,11 +9,11 @@
 
 auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void {
     toml::table metadata;
-    metadata.insert("data_type", data_type_);
-    metadata.insert("base_num_points", base_num_points_);
-    metadata.insert("query_num_points", query_num_points_);
-    metadata.insert("num_dimensions", num_dimensions_);
-    metadata.insert("chamfer_distance", chamfer_distance_);
+    metadata.insert("data_type", data_type);
+    metadata.insert("base_num_points", base_num_points);
+    metadata.insert("query_num_points", query_num_points);
+    metadata.insert("num_dimensions", num_dimensions);
+    metadata.insert("chamfer_distance", chamfer_distance);
 
     std::ofstream metadata_ofs(file_path);
     if (!metadata_ofs.is_open()) {
@@ -25,22 +25,22 @@ auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void
 auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
     toml::table tbl = toml::parse_file(file_path.string());
 
-    base_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "base_num_points");
-    query_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "query_num_points");
-    num_dimensions_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_dimensions");
-    data_type_ = Utils::GetValueFromTomlTable<std::string>(tbl, "data_type");
-    chamfer_distance_ = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
+    base_num_points = Utils::GetValueFromTomlTable<unsigned int>(tbl, "base_num_points");
+    query_num_points = Utils::GetValueFromTomlTable<unsigned int>(tbl, "query_num_points");
+    num_dimensions = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_dimensions");
+    data_type = Utils::GetValueFromTomlTable<std::string>(tbl, "data_type");
+    chamfer_distance = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
 
 auto QalshConfiguration::Save(const std::filesystem::path& file_path) const -> void {
     toml::table config;
-    config.insert("approximation_ratio", approximation_ratio_);
-    config.insert("bucket_width", bucket_width_);
-    config.insert("beta", beta_);
-    config.insert("error_probability", error_probability_);
-    config.insert("num_hash_tables", num_hash_tables_);
-    config.insert("collision_threshold", collision_threshold_);
-    config.insert("page_size", page_size_);
+    config.insert("approximation_ratio", approximation_ratio);
+    config.insert("bucket_width", bucket_width);
+    config.insert("beta", beta);
+    config.insert("error_probability", error_probability);
+    config.insert("num_hash_tables", num_hash_tables);
+    config.insert("collision_threshold", collision_threshold);
+    config.insert("page_size", page_size);
 
     std::ofstream ofs(file_path);
     if (!ofs.is_open()) {
@@ -52,11 +52,11 @@ auto QalshConfiguration::Save(const std::filesystem::path& file_path) const -> v
 auto QalshConfiguration::Load(const std::filesystem::path& file_path) -> void {
     toml::table tbl = toml::parse_file(file_path.string());
 
-    approximation_ratio_ = Utils::GetValueFromTomlTable<double>(tbl, "approximation_ratio");
-    bucket_width_ = Utils::GetValueFromTomlTable<double>(tbl, "bucket_width");
-    beta_ = Utils::GetValueFromTomlTable<double>(tbl, "beta");
-    error_probability_ = Utils::GetValueFromTomlTable<double>(tbl, "error_probability");
-    num_hash_tables_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_hash_tables");
-    collision_threshold_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "collision_threshold");
-    page_size_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "page_size");
+    approximation_ratio = Utils::GetValueFromTomlTable<double>(tbl, "approximation_ratio");
+    bucket_width = Utils::GetValueFromTomlTable<double>(tbl, "bucket_width");
+    beta = Utils::GetValueFromTomlTable<double>(tbl, "beta");
+    error_probability = Utils::GetValueFromTomlTable<double>(tbl, "error_probability");
+    num_hash_tables = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_hash_tables");
+    collision_threshold = Utils::GetValueFromTomlTable<unsigned int>(tbl, "collision_threshold");
+    page_size = Utils::GetValueFromTomlTable<unsigned int>(tbl, "page_size");
 }
