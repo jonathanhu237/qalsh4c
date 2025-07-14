@@ -2,7 +2,10 @@
 #define COMMAND_H_
 
 #include <filesystem>
+#include <memory>
 #include <random>
+
+#include "indexer.h"
 
 class ICommand {
    public:
@@ -31,6 +34,15 @@ class GenerateDatasetCommand : public ICommand {
     double right_boundary_{0.0};
 
     std::mt19937 gen_;
+};
+
+class IndexCommand : public ICommand {
+   public:
+    explicit IndexCommand(std::unique_ptr<Indexer> indexer);
+    auto Execute() -> void override;
+
+   private:
+    std::unique_ptr<Indexer> indexer_;
 };
 
 #endif

@@ -111,3 +111,13 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
     }
     spdlog::info("The {} point set has been generated and saved to {}", point_set_name, point_set_file_path.string());
 }
+
+IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer) : indexer_(std::move(indexer)) {}
+
+auto IndexCommand::Execute() -> void {
+    if (indexer_ == nullptr) {
+        throw std::runtime_error("Indexer is not set.");
+    }
+
+    indexer_->BuildIndex();
+};
