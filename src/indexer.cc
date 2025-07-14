@@ -83,6 +83,7 @@ auto QalshIndexer::BuildIndex() -> void {
     spdlog::info("Indexing base set...");
     auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
         std::vector<std::pair<double, unsigned int>> dot_products_with_id(dataset_metadata_.base_num_points);
         for (unsigned int j = 0; j < dataset_metadata_.base_num_points; j++) {
             // Calculate the dot product for each point in the base set
