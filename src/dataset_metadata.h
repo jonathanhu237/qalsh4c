@@ -2,10 +2,10 @@
 #define DATASET_METADATA_H_
 
 #include <filesystem>
-#include <string_view>
+#include <string>
 
 struct DatasetMetadata {
-    std::string_view data_type_;
+    std::string data_type_;
     unsigned int base_num_points_{0};
     unsigned int query_num_points_{0};
     unsigned int num_dimensions_{0};

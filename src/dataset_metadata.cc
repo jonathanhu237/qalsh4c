@@ -4,7 +4,6 @@
 #include <toml++/toml.h>
 
 #include <fstream>
-#include <string_view>
 
 #include "utils.h"
 
@@ -31,6 +30,6 @@ auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
     base_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "base_num_points");
     query_num_points_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "query_num_points");
     num_dimensions_ = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_dimensions");
-    data_type_ = Utils::GetValueFromTomlTable<std::string_view>(tbl, "data_type");
+    data_type_ = Utils::GetValueFromTomlTable<std::string>(tbl, "data_type");
     chamfer_distance_ = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
