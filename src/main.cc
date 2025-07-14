@@ -1,14 +1,12 @@
 #include <spdlog/spdlog.h>
 
 #include <CLI/CLI.hpp>
-#include <cstdint>
 #include <exception>
 #include <format>
 #include <memory>
 
 #include "command.h"
 #include "constants.h"
-#include "generate_dataset_command.h"
 #include "index_command.h"
 #include "indexer.h"
 #include "qalsh_indexer.h"
@@ -20,7 +18,7 @@ auto main(int argc, char** argv) -> int {
         "-v,--verbose", []() { spdlog::set_level(spdlog::level::debug); }, "Enable verbose (debug) logging");
     app.require_subcommand(1);
 
-    std::unique_ptr<Command> command;
+    std::unique_ptr<ICommand> command;
 
     // ------------------------------
     // generate dataset
@@ -57,18 +55,9 @@ auto main(int argc, char** argv) -> int {
         ->default_val(Constants::kDefaultRightBoundary);
 
     generate_cmd->callback([&]() {
-        if (data_type == "uint8") {
-            command = std::make_unique<GenerateDatasetCommand<uint8_t>>(
-                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
-        } else if (data_type == "int") {
-            command = std::make_unique<GenerateDatasetCommand<int>>(
-                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
-        } else if (data_type == "double") {
-            command = std::make_unique<GenerateDatasetCommand<double>>(
-                dataset_directory, base_num_points, query_num_points, num_dimensions, left_boundary, right_boundary);
-        } else {
-            throw std::invalid_argument("Unsupported data type specified.");
-        }
+        command = std::unique_ptr<ICommand>(new GenerateDatasetCommand(data_type, dataset_directory, base_num_points,
+                                                                       query_num_points, num_dimensions, left_boundary,
+                                                                       right_boundary));
     });
 
     // ------------------------------
