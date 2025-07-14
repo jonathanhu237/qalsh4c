@@ -64,6 +64,7 @@ auto Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) 
     }
     return *value;
 }
+
 template <typename T1, typename T2>
 auto Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) -> double {
     if (vec1.size() != vec2.size()) {
@@ -73,7 +74,7 @@ auto Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2)
     Eigen::Map<const Eigen::Matrix<T1, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
     Eigen::Map<const Eigen::Matrix<T2, Eigen::Dynamic, 1>> eigen_vec2(vec2.data(), vec2.size());
 
-    return eigen_vec1.dot(eigen_vec2);
+    return eigen_vec1.template cast<double>().dot(eigen_vec2.template cast<double>());
 }
 
 template <typename T>
