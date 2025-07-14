@@ -95,15 +95,13 @@ auto QalshIndexer::BuildIndex() -> void {
                 [&](const auto& concrete_point) { dot_product = Utils::DotProduct(concrete_point, dot_vectors[i]); },
                 base_point);
             dot_products_with_id[j] = {dot_product, j};
-
-            // Sort the dot products
-            std::ranges::sort(dot_products_with_id);
-
-            // Bulk load the B+ tree with sorted dot products
-            BPlusTreeBulkLoader bulk_loader(index_directory / std::format("base_idx_{}.bin", i),
-                                            qalsh_config_.page_size);
-            bulk_loader.Build(dot_products_with_id);
         }
+        // Sort the dot products
+        std::ranges::sort(dot_products_with_id);
+
+        // Bulk load the B+ tree with sorted dot products
+        BPlusTreeBulkLoader bulk_loader(index_directory / std::format("base_idx_{}.bin", i), qalsh_config_.page_size);
+        bulk_loader.Build(dot_products_with_id);
     }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
