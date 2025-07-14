@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <format>
+#include <ios>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -105,7 +106,19 @@ auto QalshIndexer::BuildIndex() -> void {
     std::chrono::duration<double, std::milli> elapsed = end - start;
     spdlog::info("Indexing completed in {:.2f} ms.", elapsed.count());
 
+    // Save the dot product vectors
+    spdlog::info("Saving dot product vectors...");
+    std::ofstream ofs(index_directory / "dot_vectors.bin", std::ios::binary);
+    if (!ofs.is_open()) {
+        throw std::runtime_error(
+            std::format("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string()));
+    }
+    for (const auto& vec : dot_vectors) {
+        ofs.write(reinterpret_cast<const char*>(vec.data()), static_cast<std::streamsize>(vec.size() * sizeof(double)));
+    }
+
     // Save the QALSH configuration
+    spdlog::info("Saving QALSH configuration...");
     qalsh_config_.Save(index_directory / "config.toml");
 }
 
