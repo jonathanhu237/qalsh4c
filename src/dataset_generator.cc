@@ -21,8 +21,8 @@ DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double 
     spdlog::debug(
         "The configuration is as follows:\n"
         "{}\n"
-        "Left Boundary: {}"
-        "Right Boundary: {}"
+        "Left Boundary: {}\n"
+        "Right Boundary: {}\n"
         "In Memory: {}",
         dataset_metadata_.Details(), left_boundary_, right_boundary_, in_memory_);
 }
