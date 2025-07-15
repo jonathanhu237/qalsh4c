@@ -3,10 +3,15 @@
 #include <spdlog/spdlog.h>
 #include <toml++/toml.h>
 
+#include <format>
 #include <fstream>
 
 #include "constants.h"
 #include "utils.h"
+
+// ---------------------------------------------
+// DatasetMetadata Implementation
+// ---------------------------------------------
 
 auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void {
     toml::table metadata;
@@ -32,6 +37,20 @@ auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
     data_type = Utils::GetValueFromTomlTable<std::string>(tbl, "data_type");
     chamfer_distance = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
+
+auto DatasetMetadata::Details() const -> std::string {
+    return std::format(
+        "Data Type: {}\n"
+        "Number of Points in the Base Set: {}\n"
+        "Number of Points in the Query Set: {}\n"
+        "Number of Dimensions: {}\n"
+        "Chamfer Distance: {}",
+        data_type, base_num_points, query_num_points, num_dimensions, chamfer_distance);
+}
+
+// ---------------------------------------------
+// DatasetMetadata Implementation
+// ---------------------------------------------
 
 auto QalshConfiguration::Save(const std::filesystem::path& file_path) const -> void {
     toml::table config;
@@ -86,4 +105,16 @@ auto QalshConfiguration::Regularize(unsigned int num_points) -> void {
         double alpha = (eta * p1 + p2) / (1 + eta);
         collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
     }
+}
+
+auto QalshConfiguration::Details() const -> std::string {
+    return std::format(
+        "Approximation Ratio: {}\n"
+        "Bucket Width: {}\n"
+        "Beta: {}\n"
+        "Error Probability: {}\n"
+        "Number of Hash Tables: {}\n"
+        "Collision Threshold: {}\n"
+        "Page Size: {}",
+        approximation_ratio, bucket_width, beta, error_probability, num_hash_tables, collision_threshold, page_size);
 }
