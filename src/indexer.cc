@@ -48,8 +48,7 @@ QalshIndexer::QalshIndexer(std::filesystem::path dataset_directory, QalshConfigu
         "    Number of Hash Tables: {}\n"
         "    Collision Threshold: {}\n"
         "    Page Size: {}\n"
-        "    In Memory: {}\n"
-        "-----------------------------------------------------",
+        "    In Memory: {}\n",
         dataset_directory_.string(), dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
         dataset_metadata_.num_dimensions, dataset_metadata_.data_type, qalsh_config_.approximation_ratio,
         qalsh_config_.bucket_width, qalsh_config_.beta, qalsh_config_.error_probability, qalsh_config_.num_hash_tables,
