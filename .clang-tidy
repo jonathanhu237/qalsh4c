@@ -28,7 +28,7 @@ CheckOptions:
   - key: readability-magic-numbers.IgnoredFloatingPointValues
     value: "1.0; 2.0; 100.0"
   - key: readability-identifier-length.IgnoredVariableNames
-    value: "^p[1-2]$|^it$"
+    value: "^p[1-2]$|^it$|^ss$"
   # For interface definition
   - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
     value: "true"
