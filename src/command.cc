@@ -4,6 +4,10 @@
 
 #include "point_set.h"
 
+// ---------------------------------------------
+// GenerateDatasetCommand Implementation
+// ---------------------------------------------
+
 GenerateDatasetCommand::GenerateDatasetCommand(std::string data_type_, std::filesystem::path dataset_directory,
                                                unsigned int base_num_points, unsigned int query_num_points,
                                                unsigned int num_dimensions, double left_boundary, double right_boundary,
@@ -113,6 +117,10 @@ auto GenerateDatasetCommand::GeneratePointSet(const std::filesystem::path& datas
     spdlog::info("The {} point set has been generated and saved to {}", point_set_name, point_set_file_path.string());
 }
 
+// ---------------------------------------------
+// IndexCommand Implementation
+// ---------------------------------------------
+
 IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer) : indexer_(std::move(indexer)) {}
 
 auto IndexCommand::Execute() -> void {
@@ -122,3 +130,18 @@ auto IndexCommand::Execute() -> void {
 
     indexer_->BuildIndex();
 };
+
+// ---------------------------------------------
+// EstimateCommand Implementation
+// ---------------------------------------------
+
+EstimateCommand::EstimateCommand(std::unique_ptr<IEstimator> estimator) : estimator_(std::move(estimator)) {}
+
+auto EstimateCommand::Execute() -> void {
+    if (estimator_ == nullptr) {
+        throw std::runtime_error("Estimator is not set.");
+    }
+
+    double estimate = estimator_->Estimate();
+    spdlog::info("Estimated Chamfer distance: {}", estimate);
+}

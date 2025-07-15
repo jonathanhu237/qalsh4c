@@ -5,6 +5,7 @@
 #include <memory>
 #include <random>
 
+#include "estimator.h"
 #include "indexer.h"
 #include "types.h"
 
@@ -43,6 +44,15 @@ class IndexCommand : public ICommand {
 
    private:
     std::unique_ptr<Indexer> indexer_;
+};
+
+class EstimateCommand : public ICommand {
+   public:
+    explicit EstimateCommand(std::unique_ptr<IEstimator> estimator);
+    auto Execute() -> void override;
+
+   private:
+    std::unique_ptr<IEstimator> estimator_;
 };
 
 #endif
