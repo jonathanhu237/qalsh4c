@@ -16,10 +16,10 @@ int main(int argc, char** argv) {
     std::string log_level;
     app.add_option("-l,--log_level", log_level, "Set the logging level (default: info)")
         ->default_val("info")
-        ->check(CLI::IsMember({"debug", "info"}));
+        ->check(CLI::IsMember({"debug", "info"}))
+        ->each([&](const std::string& level) { spdlog::set_level(spdlog::level::from_str(level)); });
 
     app.require_subcommand(1);
-
     std::unique_ptr<Command> command;
 
     // ------------------------------
@@ -177,7 +177,6 @@ int main(int argc, char** argv) {
     });
 
     CLI11_PARSE(app, argc, argv);
-    spdlog::set_level(spdlog::level::from_str(log_level));
 
     if (!command) {
         spdlog::critical("Command is not set. Please specify a command.");
