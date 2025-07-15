@@ -79,7 +79,8 @@ auto main(int argc, char** argv) -> int {
         bool in_memory{false};
         synthesize_dataset_command
             ->add_flag("-i,--in_memory", in_memory, "Generate the dataset in memory (default: false)")
-            ->default_val(false);
+            ->default_val(false)
+            ->default_str("false");
 
         synthesize_dataset_command->callback([&]() {
             DatasetMetadata dataset_metadata = DatasetMetadata{
@@ -165,7 +166,8 @@ auto main(int argc, char** argv) -> int {
 
         bool in_memory{false};
         qalsh_index_command->add_flag("-i,--in_memory", in_memory, "Index the dataset in memory (default: false)")
-            ->default_val(false);
+            ->default_val(false)
+            ->default_str("false");
 
         qalsh_index_command->callback([&]() {
             QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
