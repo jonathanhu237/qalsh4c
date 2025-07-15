@@ -38,16 +38,6 @@ void DatasetMetadata::Load(const std::filesystem::path& file_path) {
     chamfer_distance = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
 
-std::string DatasetMetadata::Details() const {
-    return std::format(
-        "Data Type: {}\n"
-        "Number of Points in the Base Set: {}\n"
-        "Number of Points in the Query Set: {}\n"
-        "Number of Dimensions: {}\n"
-        "Chamfer Distance: {}",
-        data_type, base_num_points, query_num_points, num_dimensions, chamfer_distance);
-}
-
 // ---------------------------------------------
 // DatasetMetadata Implementation
 // ---------------------------------------------
@@ -105,16 +95,4 @@ void QalshConfiguration::Regularize(unsigned int num_points) {
         double alpha = (eta * p1 + p2) / (1 + eta);
         collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
     }
-}
-
-std::string QalshConfiguration::Details() const {
-    return std::format(
-        "Approximation Ratio: {}\n"
-        "Bucket Width: {}\n"
-        "Beta: {}\n"
-        "Error Probability: {}\n"
-        "Number of Hash Tables: {}\n"
-        "Collision Threshold: {}\n"
-        "Page Size: {}",
-        approximation_ratio, bucket_width, beta, error_probability, num_hash_tables, collision_threshold, page_size);
 }

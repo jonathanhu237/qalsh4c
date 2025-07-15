@@ -20,11 +20,15 @@ DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double 
       gen_(std::random_device{}()) {
     spdlog::debug(
         "The configuration is as follows:\n"
-        "{}\n"
-        "Left Boundary: {}\n"
-        "Right Boundary: {}\n"
-        "In Memory: {}",
-        dataset_metadata_.Details(), left_boundary_, right_boundary_, in_memory_);
+        "    Data Type: {}\n"
+        "    Num Points (Base Set): {}\n"
+        "    Num Points (Query Set): {}\n"
+        "    Number of Dimensions: {}\n"
+        "    Left Boundary: {}\n"
+        "    Right Boundary: {}\n"
+        "    In Memory: {}",
+        dataset_metadata_.data_type, dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
+        dataset_metadata_.num_dimensions, left_boundary_, right_boundary_, in_memory_);
 }
 
 void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) {

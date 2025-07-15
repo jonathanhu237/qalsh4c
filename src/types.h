@@ -13,7 +13,6 @@ struct DatasetMetadata {
 
     void Save(const std::filesystem::path& file_path) const;
     void Load(const std::filesystem::path& file_path);
-    [[nodiscard]] std::string Details() const;
 };
 
 struct QalshConfiguration {
@@ -28,7 +27,6 @@ struct QalshConfiguration {
     void Save(const std::filesystem::path& file_path) const;
     void Load(const std::filesystem::path& file_path);
     void Regularize(unsigned int num_points);
-    [[nodiscard]] std::string Details() const;
 };
 
 #endif
