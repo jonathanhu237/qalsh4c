@@ -26,6 +26,7 @@ struct QalshConfiguration {
 
     auto Save(const std::filesystem::path& file_path) const -> void;
     auto Load(const std::filesystem::path& file_path) -> void;
+    auto Regularize(unsigned int num_points) -> void;
 };
 
 #endif

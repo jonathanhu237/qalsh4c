@@ -8,6 +8,7 @@
 #include "command.h"
 #include "constants.h"
 #include "indexer.h"
+#include "types.h"
 
 auto main(int argc, char** argv) -> int {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
@@ -125,9 +126,14 @@ auto main(int argc, char** argv) -> int {
         ->default_val(false);
 
     index_qalsh_cmd->callback([&]() {
-        indexer = std::make_unique<QalshIndexer>(dataset_directory, approximation_ratio, bucket_width, beta,
-                                                 error_probability, num_hash_tables, collision_threshold, page_size,
-                                                 in_memory);
+        QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
+                                           .bucket_width = bucket_width,
+                                           .beta = beta,
+                                           .error_probability = error_probability,
+                                           .num_hash_tables = num_hash_tables,
+                                           .collision_threshold = collision_threshold,
+                                           .page_size = page_size};
+        indexer = std::make_unique<QalshIndexer>(dataset_directory, qalsh_config, in_memory);
     });
 
     index_cmd->callback([&]() {

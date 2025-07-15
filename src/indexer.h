@@ -1,6 +1,7 @@
 #ifndef INDEXER_H_
 #define INDEXER_H_
 
+#include <memory>
 #include <random>
 
 #include "filesystem"
@@ -15,9 +16,7 @@ class Indexer {
 
 class QalshIndexer : public Indexer {
    public:
-    QalshIndexer(std::filesystem::path dataset_directory, double approximation_ratio, double bucket_width, double beta,
-                 double error_probability, unsigned int num_hash_tables, unsigned int collision_threshold,
-                 unsigned int page_size, bool in_memory);
+    QalshIndexer(std::filesystem::path dataset_directory, QalshConfiguration qalsh_config, bool in_memory);
     auto BuildIndex() -> void override;
 
    private:

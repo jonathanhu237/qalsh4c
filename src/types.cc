@@ -5,6 +5,7 @@
 
 #include <fstream>
 
+#include "constants.h"
 #include "utils.h"
 
 auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void {
@@ -59,4 +60,30 @@ auto QalshConfiguration::Load(const std::filesystem::path& file_path) -> void {
     num_hash_tables = Utils::GetValueFromTomlTable<unsigned int>(tbl, "num_hash_tables");
     collision_threshold = Utils::GetValueFromTomlTable<unsigned int>(tbl, "collision_threshold");
     page_size = Utils::GetValueFromTomlTable<unsigned int>(tbl, "page_size");
+}
+
+auto QalshConfiguration::Regularize(unsigned int num_points) -> void {
+    if (bucket_width <= Constants::kEpsilon) {
+        bucket_width = 2.0 * std::sqrt(approximation_ratio);
+    }
+    if (beta <= Constants::kEpsilon) {
+        beta = 100.0 / static_cast<double>(num_points);
+    }
+
+    double term1 = std::sqrt(std::log(2.0 / beta));
+    double term2 = std::sqrt(std::log(1.0 / error_probability));
+    double p1 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width / 2.0);
+    double p2 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width / (2.0 * approximation_ratio));
+
+    if (num_hash_tables == 0) {
+        double numerator = std::pow(term1 + term2, 2.0);
+        double denominator = 2.0 * std::pow(p1 - p2, 2.0);
+        num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
+    }
+
+    if (collision_threshold == 0) {
+        double eta = term1 / term2;
+        double alpha = (eta * p1 + p2) / (1 + eta);
+        collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
+    }
 }

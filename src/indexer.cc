@@ -5,61 +5,33 @@
 #include <chrono>
 #include <format>
 #include <ios>
+#include <memory>
 #include <vector>
 
 #include "b_plus_tree.h"
-#include "constants.h"
 #include "point_set.h"
 #include "types.h"
 #include "utils.h"
 
-QalshIndexer::QalshIndexer(std::filesystem::path dataset_directory, double approximation_ratio, double bucket_width,
-                           double beta, double error_probability, unsigned int num_hash_tables,
-                           unsigned int collision_threshold, unsigned int page_size, bool in_memory)
-    : dataset_directory_(std::move(dataset_directory)), in_memory_(in_memory), gen_(std::random_device{}()) {
+// ---------------------------------------------
+// QalshIndexer Implementation
+// ---------------------------------------------
+
+QalshIndexer::QalshIndexer(std::filesystem::path dataset_directory, QalshConfiguration qalsh_config, bool in_memory)
+    : dataset_directory_(std::move(dataset_directory)),
+      qalsh_config_(qalsh_config),
+      in_memory_(in_memory),
+      gen_(std::random_device{}()) {
     // Read dataset metadata
     dataset_metadata_.Load(dataset_directory_ / "metadata.toml");
+
+    // Regularize the QALSH configuration
+    qalsh_config_.Regularize(dataset_metadata_.base_num_points);
 
     // Initialize the base reader
     base_reader_ =
         PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory_ / "base.bin",
                                       dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
-
-    // Calculate QALSH specific parameters
-    qalsh_config_ = QalshConfiguration{
-        .approximation_ratio = approximation_ratio,
-        .bucket_width = bucket_width,
-        .beta = beta,
-        .error_probability = error_probability,
-        .num_hash_tables = num_hash_tables,
-        .collision_threshold = collision_threshold,
-        .page_size = page_size,
-    };
-
-    if (qalsh_config_.bucket_width <= Constants::kEpsilon) {
-        qalsh_config_.bucket_width = 2.0 * std::sqrt(qalsh_config_.approximation_ratio);
-    }
-    if (qalsh_config_.beta <= Constants::kEpsilon) {
-        qalsh_config_.beta = 100.0 / static_cast<double>(dataset_metadata_.base_num_points);
-    }
-
-    double term1 = std::sqrt(std::log(2.0 / qalsh_config_.beta));
-    double term2 = std::sqrt(std::log(1.0 / qalsh_config_.error_probability));
-    double p1 = 2.0 / std::numbers::pi_v<double> * atan(qalsh_config_.bucket_width / 2.0);
-    double p2 =
-        2.0 / std::numbers::pi_v<double> * atan(qalsh_config_.bucket_width / (2.0 * qalsh_config_.approximation_ratio));
-
-    if (num_hash_tables == 0) {
-        double numerator = std::pow(term1 + term2, 2.0);
-        double denominator = 2.0 * std::pow(p1 - p2, 2.0);
-        qalsh_config_.num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
-    }
-
-    if (collision_threshold == 0) {
-        double eta = term1 / term2;
-        double alpha = (eta * p1 + p2) / (1 + eta);
-        qalsh_config_.collision_threshold = static_cast<unsigned int>(std::ceil(alpha * qalsh_config_.num_hash_tables));
-    }
 }
 
 auto QalshIndexer::BuildIndex() -> void {
