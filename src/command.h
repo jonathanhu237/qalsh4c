@@ -1,6 +1,7 @@
 #ifndef COMMAND_H_
 #define COMMAND_H_
 
+#include <filesystem>
 #include <memory>
 
 #include "dataset_generator.h"
@@ -15,11 +16,13 @@ class Command {
 
 class GenerateDatasetCommand : public Command {
    public:
-    GenerateDatasetCommand(std::unique_ptr<DatasetGenerator> dataset_generator);
+    GenerateDatasetCommand(std::unique_ptr<DatasetGenerator> dataset_generator,
+                           std::filesystem::path dataset_directory);
     auto Execute() -> void override;
 
    private:
     std::unique_ptr<DatasetGenerator> dataset_generator_;
+    std::filesystem::path dataset_directory_;
 };
 
 class IndexCommand : public Command {

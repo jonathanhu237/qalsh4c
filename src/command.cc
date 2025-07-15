@@ -6,13 +6,15 @@
 // GenerateDatasetCommand Implementation
 // ---------------------------------------------
 
-GenerateDatasetCommand::GenerateDatasetCommand(std::unique_ptr<DatasetGenerator> dataset_generator)
-    : dataset_generator_(std::move(dataset_generator)) {}
+GenerateDatasetCommand::GenerateDatasetCommand(std::unique_ptr<DatasetGenerator> dataset_generator,
+                                               std::filesystem::path dataset_directory)
+    : dataset_generator_(std::move(dataset_generator)), dataset_directory_(std::move(dataset_directory)) {}
 
 auto GenerateDatasetCommand::Execute() -> void {
     if (dataset_generator_ == nullptr) {
         throw std::runtime_error("Dataset generator is not set.");
     }
+    dataset_generator_->Generate(dataset_directory_);
 }
 
 // ---------------------------------------------

@@ -94,7 +94,7 @@ auto main(int argc, char** argv) -> int {
         if (!dataset_generator) {
             throw std::runtime_error("Dataset generator is not set. Please specify a dataset generator.");
         }
-        command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator)));
+        command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator), dataset_directory));
     });
 
     // ------------------------------
