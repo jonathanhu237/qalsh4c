@@ -25,7 +25,7 @@ class QalshIndexer : public Indexer {
     // Dataset specific parameters
     std::filesystem::path dataset_directory_;
     DatasetMetadata dataset_metadata_;
-    std::unique_ptr<IPointSetReader> base_reader_;
+    std::unique_ptr<PointSetReader> base_reader_;
 
     // QALSH specific parameters
     QalshConfiguration qalsh_config_;

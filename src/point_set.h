@@ -23,9 +23,9 @@ using PointVariant = std::variant<Point<uint8_t>, Point<int>, Point<double>>;
 // PointSetWriter Definition
 // ---------------------------------------------
 
-class IPointSetWriter {
+class PointSetWriter {
    public:
-    virtual ~IPointSetWriter() = default;
+    virtual ~PointSetWriter() = default;
     virtual auto AddPoint(const PointVariant& point) -> void = 0;
     virtual auto Flush() -> void = 0;
 };
@@ -35,7 +35,7 @@ class IPointSetWriter {
 // ---------------------------------------------
 
 template <typename T>
-class InMemoryPointSetWriter : public IPointSetWriter {
+class InMemoryPointSetWriter : public PointSetWriter {
    public:
     InMemoryPointSetWriter(std::filesystem::path file_path, unsigned int num_dimensions);
 
@@ -53,7 +53,7 @@ class InMemoryPointSetWriter : public IPointSetWriter {
 // ---------------------------------------------
 
 template <typename T>
-class DiskPointSetWriter : public IPointSetWriter {
+class DiskPointSetWriter : public PointSetWriter {
    public:
     DiskPointSetWriter(const std::filesystem::path& file_path, unsigned int num_dimensions);
     ~DiskPointSetWriter();
@@ -77,16 +77,16 @@ class DiskPointSetWriter : public IPointSetWriter {
 class PointSetWriterFactory {
    public:
     static auto Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                       unsigned int num_dimensions) -> std::unique_ptr<IPointSetWriter>;
+                       unsigned int num_dimensions) -> std::unique_ptr<PointSetWriter>;
 };
 
 // ---------------------------------------------
 // PointSetReader Definition
 // ---------------------------------------------
 
-class IPointSetReader {
+class PointSetReader {
    public:
-    virtual ~IPointSetReader() = default;
+    virtual ~PointSetReader() = default;
     virtual auto GetPoint(unsigned int index) -> PointVariant = 0;
     virtual auto CalculateDistance(const PointVariant& query) -> double = 0;
 };
@@ -96,7 +96,7 @@ class IPointSetReader {
 // ---------------------------------------------
 
 template <typename T>
-class InMemoryPointSetReader : public IPointSetReader {
+class InMemoryPointSetReader : public PointSetReader {
    public:
     InMemoryPointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
                            unsigned int num_dimensions);
@@ -115,7 +115,7 @@ class InMemoryPointSetReader : public IPointSetReader {
 // ---------------------------------------------
 
 template <typename T>
-class DiskPointSetReader : public IPointSetReader {
+class DiskPointSetReader : public PointSetReader {
    public:
     DiskPointSetReader(const std::filesystem::path& file_path, unsigned int num_points, unsigned int num_dimensions);
     ~DiskPointSetReader();
@@ -140,7 +140,7 @@ class DiskPointSetReader : public IPointSetReader {
 class PointSetReaderFactory {
    public:
     static auto Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                       unsigned int num_points, unsigned int num_dimensions) -> std::unique_ptr<IPointSetReader>;
+                       unsigned int num_points, unsigned int num_dimensions) -> std::unique_ptr<PointSetReader>;
 };
 
 // ---------------------------------------------

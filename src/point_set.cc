@@ -1,7 +1,7 @@
 #include "point_set.h"
 
 auto PointSetWriterFactory::Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                                   unsigned int num_dimensions) -> std::unique_ptr<IPointSetWriter> {
+                                   unsigned int num_dimensions) -> std::unique_ptr<PointSetWriter> {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetWriter<uint8_t>>(file_path, num_dimensions);
@@ -28,7 +28,7 @@ auto PointSetWriterFactory::Create(bool in_memory, const std::string& data_type,
 
 auto PointSetReaderFactory::Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
                                    unsigned int num_points, unsigned int num_dimensions)
-    -> std::unique_ptr<IPointSetReader> {
+    -> std::unique_ptr<PointSetReader> {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetReader<uint8_t>>(file_path, num_points, num_dimensions);
