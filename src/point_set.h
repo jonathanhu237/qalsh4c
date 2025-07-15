@@ -26,8 +26,8 @@ using PointVariant = std::variant<Point<uint8_t>, Point<int>, Point<double>>;
 class PointSetWriter {
    public:
     virtual ~PointSetWriter() = default;
-    virtual auto AddPoint(const PointVariant& point) -> void = 0;
-    virtual auto Flush() -> void = 0;
+    virtual void AddPoint(const PointVariant& point) = 0;
+    virtual void Flush() = 0;
 };
 
 // ---------------------------------------------
@@ -39,8 +39,8 @@ class InMemoryPointSetWriter : public PointSetWriter {
    public:
     InMemoryPointSetWriter(std::filesystem::path file_path, unsigned int num_dimensions);
 
-    auto AddPoint(const PointVariant& point) -> void override;
-    auto Flush() -> void override;
+    void AddPoint(const PointVariant& point) override;
+    void Flush() override;
 
    private:
     std::filesystem::path file_path_;
@@ -59,12 +59,12 @@ class DiskPointSetWriter : public PointSetWriter {
     ~DiskPointSetWriter();
 
     DiskPointSetWriter(const DiskPointSetWriter&) = delete;
-    auto operator=(const DiskPointSetWriter&) -> DiskPointSetWriter& = delete;
+    DiskPointSetWriter& operator=(const DiskPointSetWriter&) = delete;
     DiskPointSetWriter(DiskPointSetWriter&&) noexcept = default;
-    auto operator=(DiskPointSetWriter&&) noexcept -> DiskPointSetWriter& = default;
+    DiskPointSetWriter& operator=(DiskPointSetWriter&&) noexcept = default;
 
-    auto AddPoint(const PointVariant& point) -> void override;
-    auto Flush() -> void override;
+    void AddPoint(const PointVariant& point) override;
+    void Flush() override;
 
    private:
     std::ofstream ofs_;
@@ -76,8 +76,8 @@ class DiskPointSetWriter : public PointSetWriter {
 // ---------------------------------------------
 class PointSetWriterFactory {
    public:
-    static auto Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                       unsigned int num_dimensions) -> std::unique_ptr<PointSetWriter>;
+    static std::unique_ptr<PointSetWriter> Create(bool in_memory, const std::string& data_type,
+                                                  const std::filesystem::path& file_path, unsigned int num_dimensions);
 };
 
 // ---------------------------------------------
@@ -87,8 +87,8 @@ class PointSetWriterFactory {
 class PointSetReader {
    public:
     virtual ~PointSetReader() = default;
-    virtual auto GetPoint(unsigned int index) -> PointVariant = 0;
-    virtual auto CalculateDistance(const PointVariant& query) -> double = 0;
+    virtual PointVariant GetPoint(unsigned int index) = 0;
+    virtual double CalculateDistance(const PointVariant& query) = 0;
 };
 
 // ---------------------------------------------
@@ -101,8 +101,8 @@ class InMemoryPointSetReader : public PointSetReader {
     InMemoryPointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
                            unsigned int num_dimensions);
 
-    auto GetPoint(unsigned int index) -> PointVariant override;
-    auto CalculateDistance(const PointVariant& query) -> double override;
+    PointVariant GetPoint(unsigned int index) override;
+    double CalculateDistance(const PointVariant& query) override;
 
    private:
     unsigned int num_points_;
@@ -121,12 +121,12 @@ class DiskPointSetReader : public PointSetReader {
     ~DiskPointSetReader();
 
     DiskPointSetReader(const DiskPointSetReader&) = delete;
-    auto operator=(const DiskPointSetReader&) -> DiskPointSetReader& = delete;
+    DiskPointSetReader& operator=(const DiskPointSetReader&) = delete;
     DiskPointSetReader(DiskPointSetReader&&) noexcept = default;
-    auto operator=(DiskPointSetReader&&) noexcept -> DiskPointSetReader& = default;
+    DiskPointSetReader& operator=(DiskPointSetReader&&) noexcept = default;
 
-    auto GetPoint(unsigned int index) -> PointVariant override;
-    auto CalculateDistance(const PointVariant& query) -> double override;
+    PointVariant GetPoint(unsigned int index) override;
+    double CalculateDistance(const PointVariant& query) override;
 
    private:
     std::ifstream ifs_;
@@ -139,8 +139,9 @@ class DiskPointSetReader : public PointSetReader {
 // ---------------------------------------------
 class PointSetReaderFactory {
    public:
-    static auto Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                       unsigned int num_points, unsigned int num_dimensions) -> std::unique_ptr<PointSetReader>;
+    static std::unique_ptr<PointSetReader> Create(bool in_memory, const std::string& data_type,
+                                                  const std::filesystem::path& file_path, unsigned int num_points,
+                                                  unsigned int num_dimensions);
 };
 
 // ---------------------------------------------
@@ -152,13 +153,13 @@ InMemoryPointSetWriter<T>::InMemoryPointSetWriter(std::filesystem::path file_pat
     : file_path_(std::move(file_path)), num_dimensions_(num_dimensions) {}
 
 template <typename T>
-auto InMemoryPointSetWriter<T>::AddPoint(const PointVariant& point) -> void {
+void InMemoryPointSetWriter<T>::AddPoint(const PointVariant& point) {
     const auto& concrete_point = std::get<Point<T>>(point);
     points_.emplace_back(concrete_point);
 }
 
 template <typename T>
-auto InMemoryPointSetWriter<T>::Flush() -> void {
+void InMemoryPointSetWriter<T>::Flush() {
     std::ofstream ofs(file_path_, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
         throw std::runtime_error(std::format("Failed to open file: {}", file_path_.string()));
@@ -189,7 +190,7 @@ DiskPointSetWriter<T>::~DiskPointSetWriter() {
 }
 
 template <typename T>
-auto DiskPointSetWriter<T>::AddPoint(const PointVariant& point) -> void {
+void DiskPointSetWriter<T>::AddPoint(const PointVariant& point) {
     const auto& concrete_point = std::get<Point<T>>(point);
 
     if (concrete_point.size() != num_dimensions_) {
@@ -203,7 +204,7 @@ auto DiskPointSetWriter<T>::AddPoint(const PointVariant& point) -> void {
 }
 
 template <typename T>
-auto DiskPointSetWriter<T>::Flush() -> void {
+void DiskPointSetWriter<T>::Flush() {
     // Do nothing here, as we write directly to the file on each AddPoint call.
 }
 
@@ -228,12 +229,12 @@ InMemoryPointSetReader<T>::InMemoryPointSetReader(const std::filesystem::path& f
 }
 
 template <typename T>
-auto InMemoryPointSetReader<T>::GetPoint(unsigned int index) -> PointVariant {
+PointVariant InMemoryPointSetReader<T>::GetPoint(unsigned int index) {
     return points_.at(index);
 }
 
 template <typename T>
-auto InMemoryPointSetReader<T>::CalculateDistance(const PointVariant& query) -> double {
+double InMemoryPointSetReader<T>::CalculateDistance(const PointVariant& query) {
     double distance = std::numeric_limits<double>::max();
     const auto& concrete_query = std::get<Point<T>>(query);
     for (const auto& point : points_) {
@@ -265,7 +266,7 @@ DiskPointSetReader<T>::~DiskPointSetReader() {
 }
 
 template <typename T>
-auto DiskPointSetReader<T>::GetPoint(unsigned int index) -> PointVariant {
+PointVariant DiskPointSetReader<T>::GetPoint(unsigned int index) {
     ifs_.seekg(index * sizeof(T) * num_dimensions_, std::ios::beg);
     Point<T> point(num_dimensions_);
     ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
@@ -273,7 +274,7 @@ auto DiskPointSetReader<T>::GetPoint(unsigned int index) -> PointVariant {
 }
 
 template <typename T>
-auto DiskPointSetReader<T>::CalculateDistance(const PointVariant& query) -> double {
+double DiskPointSetReader<T>::CalculateDistance(const PointVariant& query) {
     const auto& concrete_query = std::get<Point<T>>(query);
 
     if (concrete_query.size() != num_dimensions_) {

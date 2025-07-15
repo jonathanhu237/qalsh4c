@@ -1,7 +1,8 @@
 #include "point_set.h"
 
-auto PointSetWriterFactory::Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                                   unsigned int num_dimensions) -> std::unique_ptr<PointSetWriter> {
+std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(bool in_memory, const std::string& data_type,
+                                                              const std::filesystem::path& file_path,
+                                                              unsigned int num_dimensions) {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetWriter<uint8_t>>(file_path, num_dimensions);
@@ -26,9 +27,9 @@ auto PointSetWriterFactory::Create(bool in_memory, const std::string& data_type,
     throw std::invalid_argument("Unsupported data type or configuration");
 }
 
-auto PointSetReaderFactory::Create(bool in_memory, const std::string& data_type, const std::filesystem::path& file_path,
-                                   unsigned int num_points, unsigned int num_dimensions)
-    -> std::unique_ptr<PointSetReader> {
+std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(bool in_memory, const std::string& data_type,
+                                                              const std::filesystem::path& file_path,
+                                                              unsigned int num_points, unsigned int num_dimensions) {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetReader<uint8_t>>(file_path, num_points, num_dimensions);

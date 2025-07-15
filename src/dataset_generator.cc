@@ -27,7 +27,7 @@ DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double 
         dataset_metadata_.Details(), left_boundary_, right_boundary_, in_memory_);
 }
 
-auto DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) -> void {
+void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) {
     // Create the directory if it does not exist
     if (!std::filesystem::exists(dataset_directory)) {
         spdlog::info("Creating dataset directory: {}", dataset_directory.string());
@@ -66,8 +66,8 @@ auto DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     dataset_metadata_.Save(dataset_directory / "metadata.toml");
 }
 
-auto DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_directory,
-                                          const std::string &point_set_name, unsigned int num_points) -> void {
+void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_directory,
+                                          const std::string &point_set_name, unsigned int num_points) {
     std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
     auto point_set_writer = PointSetWriterFactory::Create(in_memory_, dataset_metadata_.data_type, point_set_file_path,
                                                           dataset_metadata_.num_dimensions);

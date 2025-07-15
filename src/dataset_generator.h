@@ -9,17 +9,17 @@
 class DatasetGenerator {
    public:
     virtual ~DatasetGenerator() = default;
-    virtual auto Generate(const std::filesystem::path &dataset_directory) -> void = 0;
+    virtual void Generate(const std::filesystem::path &dataset_directory) = 0;
 };
 
 class DatasetSynthesizer : public DatasetGenerator {
    public:
     DatasetSynthesizer(DatasetMetadata dataset_metadata, double left_boundary, double right_boundary, bool in_memory);
-    auto Generate(const std::filesystem::path &dataset_directory) -> void override;
+    void Generate(const std::filesystem::path &dataset_directory) override;
 
    private:
-    auto GeneratePointSet(const std::filesystem::path &dataset_directory, const std::string &point_set_name,
-                          unsigned int num_points) -> void;
+    void GeneratePointSet(const std::filesystem::path &dataset_directory, const std::string &point_set_name,
+                          unsigned int num_points);
 
     DatasetMetadata dataset_metadata_;
 

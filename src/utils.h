@@ -4,7 +4,6 @@
 #include <toml++/toml.h>
 
 #include <Eigen/Eigen>
-#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <string_view>
@@ -13,39 +12,23 @@
 class Utils {
    public:
     template <typename T>
-    static constexpr auto to_string() -> std::string_view;
+    static double CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T> &vec2);
 
     template <typename T>
-    static auto CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T> &vec2) -> double;
-
-    template <typename T>
-    static auto GetValueFromTomlTable(const toml::table &tbl, std::string_view key) -> T;
+    static T GetValueFromTomlTable(const toml::table &tbl, std::string_view key);
 
     template <typename T1, typename T2>
-    static auto DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) -> double;
+    static double DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2);
 
     template <typename T>
-    auto static WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data) -> void;
+    void static WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
 
     template <typename T>
-    auto static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) -> T;
+    T static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
 };
 
 template <typename T>
-constexpr auto Utils::to_string() -> std::string_view {
-    if constexpr (std::is_same_v<T, uint8_t>) {
-        return "uint8";
-    } else if constexpr (std::is_same_v<T, int>) {
-        return "int";
-    } else if constexpr (std::is_same_v<T, double>) {
-        return "double";
-    } else {
-        static_assert(sizeof(T) == 0, "Unsupported type for Utils::to_string");
-    }
-}
-
-template <typename T>
-auto Utils::CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T> &vec2) -> double {
+double Utils::CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T> &vec2) {
     if (vec1.size() != vec2.size()) {
         throw std::invalid_argument("Vectors must be of the same size");
     }
@@ -57,7 +40,7 @@ auto Utils::CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T>
 }
 
 template <typename T>
-auto Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) -> T {
+T Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) {
     auto value = tbl.get(key)->value<T>();
     if (!value) {
         throw std::runtime_error(std::format("Key '{}' not found in TOML table", key));
@@ -66,7 +49,7 @@ auto Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) 
 }
 
 template <typename T1, typename T2>
-auto Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) -> double {
+double Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) {
     if (vec1.size() != vec2.size()) {
         throw std::invalid_argument("Vectors must be of the same size for dot product.");
     }
@@ -78,7 +61,7 @@ auto Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2)
 }
 
 template <typename T>
-auto Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data) -> void {
+void Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data) {
     if (offset + sizeof(T) > buffer.size()) {
         throw std::out_of_range("Not enough space in buffer to write.");
     }
@@ -87,7 +70,7 @@ auto Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &da
 }
 
 template <typename T>
-auto Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) -> T {
+T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
     if (offset + sizeof(T) > buffer.size()) {
         throw std::out_of_range("Not enough data in buffer to read.");
     }

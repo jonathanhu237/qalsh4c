@@ -23,8 +23,8 @@ class InternalNode {
     InternalNode(unsigned int order);
     InternalNode(const std::vector<char>& buffer);
 
-    auto static GetHeaderSize() -> size_t;
-    auto Serialize(std::vector<char>& buffer) const -> void;
+    static size_t GetHeaderSize();
+    void Serialize(std::vector<char>& buffer) const;
 
     // Header
     unsigned int num_children_{0};
@@ -44,8 +44,8 @@ class LeafNode {
     LeafNode(unsigned int order);
     LeafNode(const std::vector<char>& buffer);
 
-    auto static GetHeaderSize() -> size_t;
-    auto Serialize(std::vector<char>& buffer) const -> void;
+    static size_t GetHeaderSize();
+    void Serialize(std::vector<char>& buffer) const;
 
     // Header
     unsigned int num_entries_{0};
@@ -61,11 +61,11 @@ class BPlusTreeBulkLoader {
    public:
     BPlusTreeBulkLoader(const std::filesystem::path& file_path, unsigned int page_size);
 
-    auto Build(const std::vector<KeyValuePair>& data) -> void;
+    void Build(const std::vector<KeyValuePair>& data);
 
    private:
-    auto AllocatePage() -> unsigned int;
-    auto WritePage(unsigned int page_num, const std::vector<char>& buffer) -> void;
+    unsigned int AllocatePage();
+    void WritePage(unsigned int page_num, const std::vector<char>& buffer);
 
     std::ofstream ofs_;
     unsigned int page_size_{0};
@@ -83,13 +83,13 @@ class BPlusTreeSearcher {
    public:
     BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size, double key);
 
-    auto IncrementalSearch(double bound) -> std::vector<unsigned int>;
+    std::vector<unsigned int> IncrementalSearch(double bound);
 
    private:
-    auto LocateLeafMayContainKey() -> LeafNode;
-    auto LocateLeafByPageNum(unsigned int page_num) -> LeafNode;
+    LeafNode LocateLeafMayContainKey();
+    LeafNode LocateLeafByPageNum(unsigned int page_num);
 
-    auto ReadPage(unsigned int page_num) -> std::vector<char>;
+    std::vector<char> ReadPage(unsigned int page_num);
 
     std::ifstream ifs_;
     unsigned int page_size_{0};

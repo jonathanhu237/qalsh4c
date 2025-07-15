@@ -11,9 +11,9 @@ struct DatasetMetadata {
     unsigned int num_dimensions{0};
     double chamfer_distance{0.0};
 
-    auto Save(const std::filesystem::path& file_path) const -> void;
-    auto Load(const std::filesystem::path& file_path) -> void;
-    [[nodiscard]] auto Details() const -> std::string;
+    void Save(const std::filesystem::path& file_path) const;
+    void Load(const std::filesystem::path& file_path);
+    [[nodiscard]] std::string Details() const;
 };
 
 struct QalshConfiguration {
@@ -25,10 +25,10 @@ struct QalshConfiguration {
     unsigned int collision_threshold{0};
     unsigned int page_size{0};
 
-    auto Save(const std::filesystem::path& file_path) const -> void;
-    auto Load(const std::filesystem::path& file_path) -> void;
-    auto Regularize(unsigned int num_points) -> void;
-    [[nodiscard]] auto Details() const -> std::string;
+    void Save(const std::filesystem::path& file_path) const;
+    void Load(const std::filesystem::path& file_path);
+    void Regularize(unsigned int num_points);
+    [[nodiscard]] std::string Details() const;
 };
 
 #endif

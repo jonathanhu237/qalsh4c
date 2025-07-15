@@ -11,14 +11,14 @@
 class Command {
    public:
     virtual ~Command() = default;
-    virtual auto Execute() -> void = 0;
+    virtual void Execute() = 0;
 };
 
 class GenerateDatasetCommand : public Command {
    public:
     GenerateDatasetCommand(std::unique_ptr<DatasetGenerator> dataset_generator,
                            std::filesystem::path dataset_directory);
-    auto Execute() -> void override;
+    void Execute() override;
 
    private:
     std::unique_ptr<DatasetGenerator> dataset_generator_;
@@ -28,7 +28,7 @@ class GenerateDatasetCommand : public Command {
 class IndexCommand : public Command {
    public:
     explicit IndexCommand(std::unique_ptr<Indexer> indexer);
-    auto Execute() -> void override;
+    void Execute() override;
 
    private:
     std::unique_ptr<Indexer> indexer_;
@@ -37,7 +37,7 @@ class IndexCommand : public Command {
 class EstimateCommand : public Command {
    public:
     explicit EstimateCommand(std::unique_ptr<Estimator> estimator);
-    auto Execute() -> void override;
+    void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;

@@ -4,7 +4,7 @@
 class Estimator {
    public:
     virtual ~Estimator() = default;
-    virtual auto Estimate() -> double = 0;
+    virtual double Estimate() = 0;
 };
 
 #endif

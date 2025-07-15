@@ -13,7 +13,7 @@
 // DatasetMetadata Implementation
 // ---------------------------------------------
 
-auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void {
+void DatasetMetadata::Save(const std::filesystem::path& file_path) const {
     toml::table metadata;
     metadata.insert("data_type", data_type);
     metadata.insert("base_num_points", base_num_points);
@@ -28,7 +28,7 @@ auto DatasetMetadata::Save(const std::filesystem::path& file_path) const -> void
     metadata_ofs << metadata;
 }
 
-auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
+void DatasetMetadata::Load(const std::filesystem::path& file_path) {
     toml::table tbl = toml::parse_file(file_path.string());
 
     base_num_points = Utils::GetValueFromTomlTable<unsigned int>(tbl, "base_num_points");
@@ -38,7 +38,7 @@ auto DatasetMetadata::Load(const std::filesystem::path& file_path) -> void {
     chamfer_distance = Utils::GetValueFromTomlTable<double>(tbl, "chamfer_distance");
 }
 
-auto DatasetMetadata::Details() const -> std::string {
+std::string DatasetMetadata::Details() const {
     return std::format(
         "Data Type: {}\n"
         "Number of Points in the Base Set: {}\n"
@@ -52,7 +52,7 @@ auto DatasetMetadata::Details() const -> std::string {
 // DatasetMetadata Implementation
 // ---------------------------------------------
 
-auto QalshConfiguration::Save(const std::filesystem::path& file_path) const -> void {
+void QalshConfiguration::Save(const std::filesystem::path& file_path) const {
     toml::table config;
     config.insert("approximation_ratio", approximation_ratio);
     config.insert("bucket_width", bucket_width);
@@ -69,7 +69,7 @@ auto QalshConfiguration::Save(const std::filesystem::path& file_path) const -> v
     ofs << config;
 }
 
-auto QalshConfiguration::Load(const std::filesystem::path& file_path) -> void {
+void QalshConfiguration::Load(const std::filesystem::path& file_path) {
     toml::table tbl = toml::parse_file(file_path.string());
 
     approximation_ratio = Utils::GetValueFromTomlTable<double>(tbl, "approximation_ratio");
@@ -81,7 +81,7 @@ auto QalshConfiguration::Load(const std::filesystem::path& file_path) -> void {
     page_size = Utils::GetValueFromTomlTable<unsigned int>(tbl, "page_size");
 }
 
-auto QalshConfiguration::Regularize(unsigned int num_points) -> void {
+void QalshConfiguration::Regularize(unsigned int num_points) {
     if (bucket_width <= Constants::kEpsilon) {
         bucket_width = 2.0 * std::sqrt(approximation_ratio);
     }
@@ -107,7 +107,7 @@ auto QalshConfiguration::Regularize(unsigned int num_points) -> void {
     }
 }
 
-auto QalshConfiguration::Details() const -> std::string {
+std::string QalshConfiguration::Details() const {
     return std::format(
         "Approximation Ratio: {}\n"
         "Bucket Width: {}\n"

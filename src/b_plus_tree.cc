@@ -33,9 +33,9 @@ InternalNode::InternalNode(const std::vector<char>& buffer) {
     }
 };
 
-auto InternalNode::GetHeaderSize() -> size_t { return sizeof(num_children_); }
+size_t InternalNode::GetHeaderSize() { return sizeof(num_children_); }
 
-auto InternalNode::Serialize(std::vector<char>& buffer) const -> void {
+void InternalNode::Serialize(std::vector<char>& buffer) const {
     size_t offset = 0;
     Utils::WriteToBuffer(buffer, offset, num_children_);
 
@@ -70,11 +70,11 @@ LeafNode::LeafNode(const std::vector<char>& buffer) {
     }
 };
 
-auto LeafNode::GetHeaderSize() -> size_t {
+size_t LeafNode::GetHeaderSize() {
     return sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
 }
 
-auto LeafNode::Serialize(std::vector<char>& buffer) const -> void {
+void LeafNode::Serialize(std::vector<char>& buffer) const {
     size_t offset = 0;
     Utils::WriteToBuffer(buffer, offset, num_entries_);
     Utils::WriteToBuffer(buffer, offset, prev_leaf_page_num_);
@@ -102,7 +102,7 @@ BPlusTreeBulkLoader::BPlusTreeBulkLoader(const std::filesystem::path& file_path,
         static_cast<unsigned int>((page_size - LeafNode::GetHeaderSize()) / (sizeof(double) + sizeof(unsigned int)));
 }
 
-auto BPlusTreeBulkLoader::Build(const std::vector<KeyValuePair>& data) -> void {
+void BPlusTreeBulkLoader::Build(const std::vector<KeyValuePair>& data) {
     std::vector<KeyValuePair> parent_level_entries;
 
     // Reserve page 0 for the file header
@@ -196,7 +196,7 @@ auto BPlusTreeBulkLoader::Build(const std::vector<KeyValuePair>& data) -> void {
     WritePage(0, buffer);
 }
 
-auto BPlusTreeBulkLoader::AllocatePage() -> unsigned int {
+unsigned int BPlusTreeBulkLoader::AllocatePage() {
     unsigned int new_page_num = next_page_num_++;
 
     ofs_.seekp(static_cast<std::streamoff>(new_page_num * page_size_));
@@ -207,7 +207,7 @@ auto BPlusTreeBulkLoader::AllocatePage() -> unsigned int {
     return new_page_num;
 }
 
-auto BPlusTreeBulkLoader::WritePage(unsigned int page_num, const std::vector<char>& buffer) -> void {
+void BPlusTreeBulkLoader::WritePage(unsigned int page_num, const std::vector<char>& buffer) {
     ofs_.seekp(static_cast<std::streamoff>(page_num * page_size_));
     ofs_.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 }
@@ -255,7 +255,7 @@ BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, uns
     }
 }
 
-auto BPlusTreeSearcher::IncrementalSearch(double bound) -> std::vector<unsigned int> {
+std::vector<unsigned int> BPlusTreeSearcher::IncrementalSearch(double bound) {
     std::vector<unsigned int> result;
 
     // Search to the left
@@ -305,7 +305,7 @@ auto BPlusTreeSearcher::IncrementalSearch(double bound) -> std::vector<unsigned 
     return result;
 }
 
-auto BPlusTreeSearcher::LocateLeafMayContainKey() -> LeafNode {
+LeafNode BPlusTreeSearcher::LocateLeafMayContainKey() {
     unsigned int current_level = level_;
     unsigned int next_page_num = root_page_num_;
 
@@ -323,13 +323,13 @@ auto BPlusTreeSearcher::LocateLeafMayContainKey() -> LeafNode {
     return LocateLeafByPageNum(next_page_num);
 }
 
-auto BPlusTreeSearcher::LocateLeafByPageNum(unsigned int page_num) -> LeafNode {
+LeafNode BPlusTreeSearcher::LocateLeafByPageNum(unsigned int page_num) {
     const std::vector<char> buffer = ReadPage(page_num);
     LeafNode leaf_node(buffer);
     return leaf_node;
 }
 
-auto BPlusTreeSearcher::ReadPage(unsigned int page_num) -> std::vector<char> {
+std::vector<char> BPlusTreeSearcher::ReadPage(unsigned int page_num) {
     std::vector<char> buffer(page_size_, 0);
     ifs_.seekg(static_cast<std::streamoff>(page_num * page_size_));
     ifs_.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));

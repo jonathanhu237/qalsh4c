@@ -11,16 +11,16 @@
 class Indexer {
    public:
     virtual ~Indexer() = default;
-    virtual auto BuildIndex() -> void = 0;
+    virtual void BuildIndex() = 0;
 };
 
 class QalshIndexer : public Indexer {
    public:
     QalshIndexer(std::filesystem::path dataset_directory, QalshConfiguration qalsh_config, bool in_memory);
-    auto BuildIndex() -> void override;
+    void BuildIndex() override;
 
    private:
-    auto PrintConfiguration() const -> void;
+    void PrintConfiguration() const;
 
     // Dataset specific parameters
     std::filesystem::path dataset_directory_;

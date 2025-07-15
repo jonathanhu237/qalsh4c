@@ -10,7 +10,7 @@ GenerateDatasetCommand::GenerateDatasetCommand(std::unique_ptr<DatasetGenerator>
                                                std::filesystem::path dataset_directory)
     : dataset_generator_(std::move(dataset_generator)), dataset_directory_(std::move(dataset_directory)) {}
 
-auto GenerateDatasetCommand::Execute() -> void {
+void GenerateDatasetCommand::Execute() {
     if (dataset_generator_ == nullptr) {
         throw std::runtime_error("Dataset generator is not set.");
     }
@@ -23,7 +23,7 @@ auto GenerateDatasetCommand::Execute() -> void {
 
 IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer) : indexer_(std::move(indexer)) {}
 
-auto IndexCommand::Execute() -> void {
+void IndexCommand::Execute() {
     if (indexer_ == nullptr) {
         throw std::runtime_error("Indexer is not set.");
     }
@@ -37,7 +37,7 @@ auto IndexCommand::Execute() -> void {
 
 EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator) : estimator_(std::move(estimator)) {}
 
-auto EstimateCommand::Execute() -> void {
+void EstimateCommand::Execute() {
     if (estimator_ == nullptr) {
         throw std::runtime_error("Estimator is not set.");
     }

@@ -11,7 +11,7 @@
 #include "indexer.h"
 #include "types.h"
 
-auto main(int argc, char** argv) -> int {
+int main(int argc, char** argv) {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
     std::string log_level;
