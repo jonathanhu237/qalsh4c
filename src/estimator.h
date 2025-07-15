@@ -1,9 +1,9 @@
 #ifndef ESTIMATOR_H_
 #define ESTIMATOR_H_
 
-class IEstimator {
+class Estimator {
    public:
-    virtual ~IEstimator() = default;
+    virtual ~Estimator() = default;
     virtual auto Estimate() -> double = 0;
 };
 
