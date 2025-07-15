@@ -7,144 +7,187 @@
 
 #include "command.h"
 #include "constants.h"
+#include "dataset_generator.h"
 #include "indexer.h"
 #include "types.h"
 
 auto main(int argc, char** argv) -> int {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
-    app.add_flag_callback(
-        "-v,--verbose", []() { spdlog::set_level(spdlog::level::debug); }, "Enable verbose (debug) logging");
+    std::string log_level;
+    app.add_option("-l,--log_level", log_level, "Set the logging level (default: info)")
+        ->default_val("info")
+        ->check(CLI::IsMember({"debug", "info", "error"}));
+
     app.require_subcommand(1);
 
-    std::unique_ptr<ICommand> command;
+    std::unique_ptr<Command> command;
 
     // ------------------------------
-    // generate dataset
+    // generate dataset command
     // ------------------------------
 
-    CLI::App* generate_cmd =
+    CLI::App* generate_dataset_command =
         app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer Distance Approximation");
 
     std::filesystem::path dataset_directory;
-    generate_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
-
-    std::string data_type;
-    generate_cmd->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, double)")
-        ->default_val("double");
-
-    unsigned int base_num_points{0};
-    generate_cmd->add_option("-B,--base_num_points", base_num_points, "Number of points within base set in the dataset")
+    generate_dataset_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")
         ->required();
 
-    unsigned int query_num_points{0};
-    generate_cmd
-        ->add_option("-Q,--query_num_points", query_num_points, "Number of points within query set in the dataset")
-        ->required();
+    std::unique_ptr<DatasetGenerator> dataset_generator;
+    generate_dataset_command->require_subcommand(1);
 
-    unsigned int num_dimensions{0};
-    generate_cmd->add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")->required();
+    {
+        // ------------------------------
+        // synthesize dataset command
+        // ------------------------------
 
-    double left_boundary{0.0};
-    generate_cmd->add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
-        ->default_val(Constants::kDefaultLeftBoundary);
+        CLI::App* synthesize_dataset_command = generate_dataset_command->add_subcommand(
+            "synthesize", "Generate a dataset by synthesizing points within a specified range");
 
-    double right_boundary{0.0};
-    generate_cmd->add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
-        ->default_val(Constants::kDefaultRightBoundary);
+        std::string data_type;
+        synthesize_dataset_command
+            ->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, double)")
+            ->default_val("double");
 
-    bool in_memory{false};
-    generate_cmd->add_flag("-i,--in_memory", in_memory, "Generate the dataset in memory (default: false)")
-        ->default_val(false);
+        unsigned int base_num_points{0};
+        synthesize_dataset_command
+            ->add_option("-B,--base_num_points", base_num_points, "Number of points within base set in the dataset")
+            ->required();
 
-    generate_cmd->callback([&]() {
-        command = std::unique_ptr<ICommand>(new GenerateDatasetCommand(data_type, dataset_directory, base_num_points,
-                                                                       query_num_points, num_dimensions, left_boundary,
-                                                                       right_boundary, in_memory));
+        unsigned int query_num_points{0};
+        synthesize_dataset_command
+            ->add_option("-Q,--query_num_points", query_num_points, "Number of points within query set in the dataset")
+            ->required();
+
+        unsigned int num_dimensions{0};
+        synthesize_dataset_command
+            ->add_option("-D,--num_dimensions", num_dimensions, "Number of dimensions for the dataset")
+            ->required();
+
+        double left_boundary{0.0};
+        synthesize_dataset_command
+            ->add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
+            ->default_val(Constants::kDefaultLeftBoundary);
+
+        double right_boundary{0.0};
+        synthesize_dataset_command
+            ->add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
+            ->default_val(Constants::kDefaultRightBoundary);
+
+        bool in_memory{false};
+        synthesize_dataset_command
+            ->add_flag("-i,--in_memory", in_memory, "Generate the dataset in memory (default: false)")
+            ->default_val(false);
+
+        synthesize_dataset_command->callback([&]() {
+            DatasetMetadata dataset_metadata = DatasetMetadata{
+                .data_type = data_type,
+                .base_num_points = base_num_points,
+                .query_num_points = query_num_points,
+                .num_dimensions = num_dimensions,
+                .chamfer_distance = 0.0  // Will be calculated later
+            };
+            dataset_generator =
+                std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary, in_memory);
+        });
+    }
+
+    generate_dataset_command->callback([&]() {
+        if (!dataset_generator) {
+            throw std::runtime_error("Dataset generator is not set. Please specify a dataset generator.");
+        }
+        command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator)));
     });
 
     // ------------------------------
-    // index
+    // index command
     // ------------------------------
 
-    CLI::App* index_cmd = app.add_subcommand("index", "Index a dataset for Chamfer Distance Approximation");
-    index_cmd->require_subcommand(1);
+    CLI::App* index_command = app.add_subcommand("index", "Index a dataset for Chamfer Distance Approximation");
+    index_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
     std::unique_ptr<Indexer> indexer;
+    index_command->require_subcommand(1);
 
-    // ------------------------------
-    // index qalsh
-    // ------------------------------
+    {
+        // ------------------------------
+        // index qalsh
+        // ------------------------------
 
-    CLI::App* index_qalsh_cmd = index_cmd->add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
+        CLI::App* qalsh_index_command = index_command->add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
 
-    index_cmd->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+        double approximation_ratio{0.0};
+        qalsh_index_command
+            ->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+            ->default_val(2.0);
 
-    double approximation_ratio{0.0};
-    index_qalsh_cmd->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
-        ->default_val(2.0);
+        double bucket_width{0.0};
+        qalsh_index_command
+            ->add_option("-w, --bucket_width", bucket_width,
+                         "Bucket width for the indexer (default: 0, which means the bucket width will be 2\\sqrt(c))")
+            ->default_val(0.0);
 
-    double bucket_width{0.0};
-    index_qalsh_cmd
-        ->add_option("-w, --bucket_width", bucket_width,
-                     "Bucket width for the indexer (default: 0, which means the bucket width will be 2\\sqrt(c))")
-        ->default_val(0.0);
+        double beta{0.0};
+        qalsh_index_command
+            ->add_option("-b, --beta", beta,
+                         "Beta parameter for the indexer (default: 0, which means the beta will be 100/num_points)")
+            ->default_val(0.0);
 
-    double beta{0.0};
-    index_qalsh_cmd
-        ->add_option("-b, --beta", beta,
-                     "Beta parameter for the indexer (default: 0, which means the beta will be 100/num_points)")
-        ->default_val(0.0);
+        double error_probability{0.0};
+        qalsh_index_command
+            ->add_option("-e, --error_probability", error_probability,
+                         "Error probability for the indexer (default: 1/e)")
+            ->default_val(Constants::kDefaultErrorProbability)
+            ->default_str("1/e");
 
-    double error_probability{0.0};
-    index_qalsh_cmd
-        ->add_option("-e, --error_probability", error_probability, "Error probability for the indexer (default: 1/e)")
-        ->default_val(Constants::kDefaultErrorProbability)
-        ->default_str("1/e");
+        unsigned int num_hash_tables{0};
+        qalsh_index_command
+            ->add_option(
+                "-m,--num_hash_tables", num_hash_tables,
+                "Number of hash tables to use for indexing (default: 0, which means the number will be determined "
+                "automatically)")
+            ->default_val(0);
 
-    unsigned int num_hash_tables{0};
-    index_qalsh_cmd
-        ->add_option("-m,--num_hash_tables", num_hash_tables,
-                     "Number of hash tables to use for indexing (default: 0, which means the number will be determined "
-                     "automatically)")
-        ->default_val(0);
+        unsigned int collision_threshold{0};
+        qalsh_index_command
+            ->add_option("-l,--collision_threshold", collision_threshold,
+                         "Collision threshold for the indexer (default: 0, which means the collision threshold will be "
+                         "determined automatically)")
+            ->default_val(0);
 
-    unsigned int collision_threshold{0};
-    index_qalsh_cmd
-        ->add_option("-l,--collision_threshold", collision_threshold,
-                     "Collision threshold for the indexer (default: 0, which means the collision threshold will be "
-                     "determined automatically)")
-        ->default_val(0);
+        unsigned int page_size{0};
+        qalsh_index_command
+            ->add_option("-B,--page_size", page_size,
+                         std::format("Page size for the indexer (default: {} bytes)", Constants::kDefaultPageSize))
+            ->default_val(Constants::kDefaultPageSize);
 
-    unsigned int page_size{0};
-    index_qalsh_cmd
-        ->add_option("-B,--page_size", page_size,
-                     std::format("Page size for the indexer (default: {} bytes)", Constants::kDefaultPageSize))
-        ->default_val(Constants::kDefaultPageSize);
+        bool in_memory{false};
+        qalsh_index_command->add_flag("-i,--in_memory", in_memory, "Index the dataset in memory (default: false)")
+            ->default_val(false);
 
-    index_qalsh_cmd->add_flag("-i,--in_memory", in_memory, "Index the dataset in memory (default: false)")
-        ->default_val(false);
+        qalsh_index_command->callback([&]() {
+            QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
+                                               .bucket_width = bucket_width,
+                                               .beta = beta,
+                                               .error_probability = error_probability,
+                                               .num_hash_tables = num_hash_tables,
+                                               .collision_threshold = collision_threshold,
+                                               .page_size = page_size};
+            indexer = std::make_unique<QalshIndexer>(dataset_directory, qalsh_config, in_memory);
+        });
+    }
 
-    index_qalsh_cmd->callback([&]() {
-        QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
-                                           .bucket_width = bucket_width,
-                                           .beta = beta,
-                                           .error_probability = error_probability,
-                                           .num_hash_tables = num_hash_tables,
-                                           .collision_threshold = collision_threshold,
-                                           .page_size = page_size};
-        indexer = std::make_unique<QalshIndexer>(dataset_directory, qalsh_config, in_memory);
-    });
-
-    index_cmd->callback([&]() {
+    index_command->callback([&]() {
         if (!indexer) {
             throw std::runtime_error("Indexer is not set. Please specify an indexer.");
         }
-        command = std::unique_ptr<ICommand>(new IndexCommand(std::move(indexer)));
+        command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer)));
     });
 
     try {
         CLI11_PARSE(app, argc, argv);
+        spdlog::set_level(spdlog::level::from_str(log_level));
 
         if (command) {
             command->Execute();

@@ -14,6 +14,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
     src/b_plus_tree.cc
+    src/dataset_generator.cc
     src/command.cc
     src/indexer.cc
     src/main.cc
