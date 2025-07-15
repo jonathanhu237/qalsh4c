@@ -36,11 +36,12 @@ class IndexCommand : public Command {
 
 class EstimateCommand : public Command {
    public:
-    explicit EstimateCommand(std::unique_ptr<Estimator> estimator);
+    explicit EstimateCommand(std::unique_ptr<Estimator> estimator, std::filesystem::path dataset_directory);
     void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;
+    std::filesystem::path dataset_directory_;
 };
 
 #endif

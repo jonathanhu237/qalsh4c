@@ -2,6 +2,12 @@
 
 #include <spdlog/spdlog.h>
 
+#include <chrono>
+#include <format>
+#include <ratio>
+
+#include "types.h"
+
 // ---------------------------------------------
 // GenerateDatasetCommand Implementation
 // ---------------------------------------------
@@ -35,13 +41,32 @@ void IndexCommand::Execute() {
 // EstimateCommand Implementation
 // ---------------------------------------------
 
-EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator) : estimator_(std::move(estimator)) {}
+EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, std::filesystem::path dataset_directory)
+    : estimator_(std::move(estimator)), dataset_directory_(std::move(dataset_directory)) {}
 
 void EstimateCommand::Execute() {
     if (estimator_ == nullptr) {
         spdlog::critical("Estimator is not set.");
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
     double estimate = estimator_->Estimate();
-    spdlog::info("Estimated Chamfer distance: {}", estimate);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    double estimated_time = elapsed.count();
+
+    // Read the ground truth value from the metadata file
+    DatasetMetadata metadata;
+    metadata.Load(dataset_directory_ / "metadata.toml");
+
+    // Calculate the relative error
+    double relative_error = std::abs((estimate - metadata.chamfer_distance) / metadata.chamfer_distance);
+
+    // Log the results
+    spdlog::info(
+        std::format("The result is as follows:\n"
+                    "    Time Consumed: {:.2f} ms\n"
+                    "    Estimated Chamfer distance: {}\n"
+                    "    Relative error: {:.2f}%",
+                    estimated_time, estimate, relative_error * 100.0));
 }
