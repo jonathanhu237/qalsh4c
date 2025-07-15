@@ -1,5 +1,7 @@
 #include "point_set.h"
 
+#include <spdlog/spdlog.h>
+
 std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(bool in_memory, const std::string& data_type,
                                                               const std::filesystem::path& file_path,
                                                               unsigned int num_dimensions) {
@@ -24,7 +26,8 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(bool in_memory, co
             return std::make_unique<DiskPointSetWriter<double>>(file_path, num_dimensions);
         }
     }
-    throw std::invalid_argument("Unsupported data type or configuration");
+    spdlog::critical("Unsupported data type or configuration");
+    return nullptr;
 }
 
 std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(bool in_memory, const std::string& data_type,
@@ -51,5 +54,6 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(bool in_memory, co
             return std::make_unique<DiskPointSetReader<double>>(file_path, num_points, num_dimensions);
         }
     }
-    throw std::invalid_argument("Unsupported data type or configuration");
+    spdlog::critical("Unsupported data type or configuration");
+    return nullptr;
 }

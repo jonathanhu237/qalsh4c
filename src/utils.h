@@ -1,11 +1,11 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#include <spdlog/spdlog.h>
 #include <toml++/toml.h>
 
 #include <Eigen/Eigen>
 #include <format>
-#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -30,7 +30,7 @@ class Utils {
 template <typename T>
 double Utils::CalculateL1Distance(const std::vector<T> &vec1, const std::vector<T> &vec2) {
     if (vec1.size() != vec2.size()) {
-        throw std::invalid_argument("Vectors must be of the same size");
+        spdlog::critical("Vectors must be of the same size");
     }
 
     Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
@@ -43,7 +43,7 @@ template <typename T>
 T Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) {
     auto value = tbl.get(key)->value<T>();
     if (!value) {
-        throw std::runtime_error(std::format("Key '{}' not found in TOML table", key));
+        spdlog::critical(std::format("Key '{}' not found in TOML table", key));
     }
     return *value;
 }
@@ -51,7 +51,7 @@ T Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) {
 template <typename T1, typename T2>
 double Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) {
     if (vec1.size() != vec2.size()) {
-        throw std::invalid_argument("Vectors must be of the same size for dot product.");
+        spdlog::critical("Vectors must be of the same size for dot product.");
     }
 
     Eigen::Map<const Eigen::Matrix<T1, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
@@ -63,7 +63,7 @@ double Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec
 template <typename T>
 void Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data) {
     if (offset + sizeof(T) > buffer.size()) {
-        throw std::out_of_range("Not enough space in buffer to write.");
+        spdlog::critical("Not enough space in buffer to write.");
     }
     std::memcpy(&buffer[offset], &data, sizeof(T));
     offset += sizeof(T);
@@ -72,7 +72,7 @@ void Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &da
 template <typename T>
 T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
     if (offset + sizeof(T) > buffer.size()) {
-        throw std::out_of_range("Not enough data in buffer to read.");
+        spdlog::critical("Not enough data in buffer to read.");
     }
 
     T data;

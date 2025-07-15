@@ -83,7 +83,7 @@ void QalshIndexer::BuildIndex() {
     spdlog::info("Saving dot product vectors...");
     std::ofstream ofs(index_directory / "dot_vectors.bin", std::ios::binary);
     if (!ofs.is_open()) {
-        throw std::runtime_error(
+        spdlog::critical(
             std::format("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string()));
     }
     for (const auto& vec : dot_vectors) {

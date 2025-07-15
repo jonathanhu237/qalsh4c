@@ -95,7 +95,7 @@ void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_d
             point_set_writer->AddPoint(point);
         }
     } else {
-        throw std::invalid_argument(std::format("Unsupported data type: {}", dataset_metadata_.data_type));
+        spdlog::critical(std::format("Unsupported data type: {}", dataset_metadata_.data_type));
     }
 
     point_set_writer->Flush();

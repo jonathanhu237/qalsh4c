@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
 
     generate_dataset_command->callback([&]() {
         if (!dataset_generator) {
-            throw std::runtime_error("Dataset generator is not set. Please specify a dataset generator.");
+            spdlog::critical("Dataset generator is not set. Please specify a dataset generator.");
         }
         command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator), dataset_directory));
     });
@@ -172,21 +172,18 @@ int main(int argc, char** argv) {
 
     index_command->callback([&]() {
         if (!indexer) {
-            throw std::runtime_error("Indexer is not set. Please specify an indexer.");
+            spdlog::critical("Indexer is not set. Please specify an indexer.");
         }
         command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer)));
     });
 
-    try {
-        CLI11_PARSE(app, argc, argv);
-        spdlog::set_level(spdlog::level::from_str(log_level));
+    CLI11_PARSE(app, argc, argv);
+    spdlog::set_level(spdlog::level::from_str(log_level));
 
-        if (command) {
-            command->Execute();
-        }
-    } catch (std::exception& e) {
-        std::cerr << std::format("Error: {}\n", e.what());
-        return 1;
+    if (!command) {
+        spdlog::critical("Command is not set. Please specify a command.");
+    } else {
+        command->Execute();
     }
 
     return 0;

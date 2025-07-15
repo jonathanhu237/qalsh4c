@@ -12,7 +12,7 @@ GenerateDatasetCommand::GenerateDatasetCommand(std::unique_ptr<DatasetGenerator>
 
 void GenerateDatasetCommand::Execute() {
     if (dataset_generator_ == nullptr) {
-        throw std::runtime_error("Dataset generator is not set.");
+        spdlog::critical("Dataset generator is not set.");
     }
     dataset_generator_->Generate(dataset_directory_);
 }
@@ -25,7 +25,7 @@ IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer) : indexer_(std::mov
 
 void IndexCommand::Execute() {
     if (indexer_ == nullptr) {
-        throw std::runtime_error("Indexer is not set.");
+        spdlog::critical("Indexer is not set.");
     }
 
     indexer_->BuildIndex();
@@ -39,7 +39,7 @@ EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator) : estimat
 
 void EstimateCommand::Execute() {
     if (estimator_ == nullptr) {
-        throw std::runtime_error("Estimator is not set.");
+        spdlog::critical("Estimator is not set.");
     }
 
     double estimate = estimator_->Estimate();

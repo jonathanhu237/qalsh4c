@@ -23,7 +23,7 @@ void DatasetMetadata::Save(const std::filesystem::path& file_path) const {
 
     std::ofstream metadata_ofs(file_path);
     if (!metadata_ofs.is_open()) {
-        throw std::runtime_error("Failed to open metadata file for writing.");
+        spdlog::critical("Failed to open metadata file for writing.");
     }
     metadata_ofs << metadata;
 }
@@ -64,7 +64,7 @@ void QalshConfiguration::Save(const std::filesystem::path& file_path) const {
 
     std::ofstream ofs(file_path);
     if (!ofs.is_open()) {
-        throw std::runtime_error(std::format("Failed to open configuration file: {}", file_path.string()));
+        spdlog::critical(std::format("Failed to open configuration file: {}", file_path.string()));
     }
     ofs << config;
 }
