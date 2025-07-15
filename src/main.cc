@@ -1,7 +1,6 @@
 #include <spdlog/spdlog.h>
 
 #include <CLI/CLI.hpp>
-#include <exception>
 #include <format>
 #include <memory>
 
