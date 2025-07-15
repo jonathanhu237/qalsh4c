@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     std::string log_level;
     app.add_option("-l,--log_level", log_level, "Set the logging level (default: info)")
         ->default_val("info")
-        ->check(CLI::IsMember({"debug", "info", "error"}));
+        ->check(CLI::IsMember({"debug", "info"}));
 
     app.require_subcommand(1);
 
