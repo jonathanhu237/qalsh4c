@@ -7,6 +7,7 @@
 #include "command.h"
 #include "constants.h"
 #include "dataset_generator.h"
+#include "estimator.h"
 #include "indexer.h"
 #include "types.h"
 
@@ -35,6 +36,13 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<DatasetGenerator> dataset_generator;
     generate_dataset_command->require_subcommand(1);
+
+    generate_dataset_command->callback([&]() {
+        if (!dataset_generator) {
+            spdlog::critical("Dataset generator is not set. Please specify a dataset generator.");
+        }
+        command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator), dataset_directory));
+    });
 
     // ------------------------------
     // synthesize dataset command
@@ -89,13 +97,6 @@ int main(int argc, char** argv) {
             std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary, in_memory);
     });
 
-    generate_dataset_command->callback([&]() {
-        if (!dataset_generator) {
-            spdlog::critical("Dataset generator is not set. Please specify a dataset generator.");
-        }
-        command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator), dataset_directory));
-    });
-
     // ------------------------------
     // index command
     // ------------------------------
@@ -105,6 +106,13 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<Indexer> indexer;
     index_command->require_subcommand(1);
+
+    index_command->callback([&]() {
+        if (!indexer) {
+            spdlog::critical("Indexer is not set. Please specify an indexer.");
+        }
+        command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer), dataset_directory));
+    });
 
     // ------------------------------
     // qalsh index command
@@ -169,12 +177,37 @@ int main(int argc, char** argv) {
         indexer = std::make_unique<QalshIndexer>(qalsh_config, in_memory);
     });
 
-    index_command->callback([&]() {
+    // ------------------------------
+    // estimate command
+    // ------------------------------
+
+    CLI::App* estimate_command = app.add_subcommand("estimate", "Estimate Chamfer distance");
+
+    estimate_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+
+    std::unique_ptr<Estimator> estimator;
+    estimate_command->require_subcommand(1);
+
+    estimate_command->callback([&]() {
         if (!indexer) {
             spdlog::critical("Indexer is not set. Please specify an indexer.");
         }
-        command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer), dataset_directory));
+        command = std::unique_ptr<Command>(new EstimateCommand(std::move(estimator), dataset_directory));
     });
+
+    // ------------------------------
+    // linear scan estimate command
+    // ------------------------------
+
+    CLI::App* linear_scan_estimate_command =
+        estimate_command->add_subcommand("linear_scan", "Estimate Chamfer distance using linear scan");
+
+    linear_scan_estimate_command
+        ->add_flag("-i,--in_memory", in_memory, "Estimate Chamfer distance in memory (default: false)")
+        ->default_val(false)
+        ->default_str("false");
+
+    linear_scan_estimate_command->callback([&]() { estimator = std::make_unique<LinearScanEstimator>(in_memory); });
 
     CLI11_PARSE(app, argc, argv);
 
