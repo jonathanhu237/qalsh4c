@@ -189,8 +189,8 @@ int main(int argc, char** argv) {
     estimate_command->require_subcommand(1);
 
     estimate_command->callback([&]() {
-        if (!indexer) {
-            spdlog::critical("Indexer is not set. Please specify an indexer.");
+        if (!estimator) {
+            spdlog::critical("Estimator is not set. Please specify an estimator.");
         }
         command = std::unique_ptr<Command>(new EstimateCommand(std::move(estimator), dataset_directory));
     });
