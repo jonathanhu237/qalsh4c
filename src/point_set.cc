@@ -2,9 +2,9 @@
 
 #include <spdlog/spdlog.h>
 
-std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(bool in_memory, const std::string& data_type,
-                                                              const std::filesystem::path& file_path,
-                                                              unsigned int num_dimensions) {
+std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesystem::path& file_path,
+                                                              const std::string& data_type, unsigned int num_dimensions,
+                                                              bool in_memory) {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetWriter<uint8_t>>(file_path, num_dimensions);
@@ -30,9 +30,9 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(bool in_memory, co
     return nullptr;
 }
 
-std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(bool in_memory, const std::string& data_type,
-                                                              const std::filesystem::path& file_path,
-                                                              unsigned int num_points, unsigned int num_dimensions) {
+std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesystem::path& file_path,
+                                                              const std::string& data_type, unsigned int num_points,
+                                                              unsigned int num_dimensions, bool in_memory) {
     if (in_memory) {
         if (data_type == "uint8_t") {
             return std::make_unique<InMemoryPointSetReader<uint8_t>>(file_path, num_points, num_dimensions);

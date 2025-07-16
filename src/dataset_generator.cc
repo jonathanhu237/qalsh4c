@@ -50,11 +50,11 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
-        PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory / "base.bin",
-                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
+        PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata_.data_type,
+                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions, in_memory_);
     auto query_set_reader =
-        PointSetReaderFactory::Create(in_memory_, dataset_metadata_.data_type, dataset_directory / "query.bin",
-                                      dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
+        PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata_.data_type,
+                                      dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, in_memory_);
 
     auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < dataset_metadata_.query_num_points; i++) {
@@ -73,8 +73,8 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
 void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_directory,
                                           const std::string &point_set_name, unsigned int num_points) {
     std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
-    auto point_set_writer = PointSetWriterFactory::Create(in_memory_, dataset_metadata_.data_type, point_set_file_path,
-                                                          dataset_metadata_.num_dimensions);
+    auto point_set_writer = PointSetWriterFactory::Create(point_set_file_path, dataset_metadata_.data_type,
+                                                          dataset_metadata_.num_dimensions, in_memory_);
 
     if (dataset_metadata_.data_type == "double") {
         std::uniform_real_distribution<double> dist(left_boundary_, right_boundary_);
