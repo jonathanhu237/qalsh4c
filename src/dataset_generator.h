@@ -14,7 +14,7 @@ class DatasetGenerator {
 
 class DatasetSynthesizer : public DatasetGenerator {
    public:
-    DatasetSynthesizer(DatasetMetadata dataset_metadata, double left_boundary, double right_boundary, bool in_memory);
+    DatasetSynthesizer(DatasetMetadata dataset_metadata, double left_boundary, double right_boundary);
     void Generate(const std::filesystem::path &dataset_directory) override;
 
    private:
@@ -26,7 +26,6 @@ class DatasetSynthesizer : public DatasetGenerator {
 
     double left_boundary_{0.0};
     double right_boundary_{0.0};
-    bool in_memory_{false};
 
     std::mt19937 gen_;
 };

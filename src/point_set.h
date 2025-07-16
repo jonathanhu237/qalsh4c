@@ -78,7 +78,7 @@ class DiskPointSetWriter : public PointSetWriter {
 class PointSetWriterFactory {
    public:
     static std::unique_ptr<PointSetWriter> Create(const std::filesystem::path& file_path, const std::string& data_type,
-                                                  unsigned int num_dimensions, bool in_memory);
+                                                  unsigned int num_dimensions);
 };
 
 // ---------------------------------------------
@@ -141,7 +141,7 @@ class DiskPointSetReader : public PointSetReader {
 class PointSetReaderFactory {
    public:
     static std::unique_ptr<PointSetReader> Create(const std::filesystem::path& file_path, const std::string& data_type,
-                                                  unsigned int num_points, unsigned int num_dimensions, bool in_memory);
+                                                  unsigned int num_points, unsigned int num_dimensions);
 };
 
 // ---------------------------------------------

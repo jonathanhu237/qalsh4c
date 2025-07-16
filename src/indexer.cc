@@ -17,8 +17,8 @@
 // QalshIndexer Implementation
 // ---------------------------------------------
 
-QalshIndexer::QalshIndexer(QalshConfiguration qalsh_config, bool in_memory)
-    : qalsh_config_(qalsh_config), in_memory_(in_memory), gen_(std::random_device{}()) {}
+QalshIndexer::QalshIndexer(QalshConfiguration qalsh_config)
+    : qalsh_config_(qalsh_config), gen_(std::random_device{}()) {}
 
 void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     // Read dataset metadata
@@ -29,9 +29,8 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     qalsh_config_.Regularize(dataset_metadata_.base_num_points);
 
     // Initialize the base reader
-    base_reader_ =
-        PointSetReaderFactory::Create(dataset_directory_ / "base.bin", dataset_metadata_.data_type,
-                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions, in_memory_);
+    base_reader_ = PointSetReaderFactory::Create(dataset_directory_ / "base.bin", dataset_metadata_.data_type,
+                                                 dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
 
     // Print the configuration
     PrintConfiguration();
@@ -108,10 +107,9 @@ void QalshIndexer::PrintConfiguration() const {
         "    Error Probability: {}\n"
         "    Number of Hash Tables: {}\n"
         "    Collision Threshold: {}\n"
-        "    Page Size: {}\n"
-        "    In Memory: {}",
+        "    Page Size: {}",
         dataset_directory_.string(), dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
         dataset_metadata_.num_dimensions, dataset_metadata_.data_type, qalsh_config_.approximation_ratio,
         qalsh_config_.bucket_width, qalsh_config_.beta, qalsh_config_.error_probability, qalsh_config_.num_hash_tables,
-        qalsh_config_.collision_threshold, qalsh_config_.page_size, in_memory_);
+        qalsh_config_.collision_threshold, qalsh_config_.page_size);
 }

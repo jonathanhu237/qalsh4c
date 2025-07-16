@@ -12,6 +12,7 @@
 #include "constants.h"
 #include "dataset_generator.h"
 #include "estimator.h"
+#include "global.h"
 #include "indexer.h"
 #include "sink.h"
 #include "types.h"
@@ -22,7 +23,7 @@ int main(int argc, char** argv) {
     std::string log_level;
     app.add_option("-l,--log_level", log_level, "Set the logging level (default: info)")
         ->default_val("info")
-        ->check(CLI::IsMember({"debug", "info", "error"}))
+        ->check(CLI::IsMember({"debug", "info", "warn", "error"}))
         ->each([&](const std::string& level) {
             auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
             auto terminating_sink = std::make_shared<TerminatingSink<std::mutex>>(console_sink);
@@ -31,8 +32,23 @@ int main(int argc, char** argv) {
             spdlog::set_default_logger(logger);
         });
 
+    app.add_flag("-m,--high_memory", Global::high_memory_mode, "Enable high memory mode")
+        ->default_str(Global::high_memory_mode ? "true" : "false");
+
     app.require_subcommand(1);
     std::unique_ptr<Command> command;
+
+    app.callback([&]() {
+        if (Global::high_memory_mode) {
+            spdlog::warn("High memory mode is enabled.");
+        }
+
+        if (!command) {
+            spdlog::error("Command is not set. Please specify a command.");
+            std::exit(EXIT_FAILURE);
+        }
+        command->Execute();
+    });
 
     // ------------------------------
     // generate dataset command
@@ -91,11 +107,6 @@ int main(int argc, char** argv) {
     synthesize_dataset_command->add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
         ->default_val(Constants::kDefaultRightBoundary);
 
-    bool in_memory{false};
-    synthesize_dataset_command->add_flag("-i,--in_memory", in_memory, "Generate the dataset in memory (default: false)")
-        ->default_val(false)
-        ->default_str("false");
-
     synthesize_dataset_command->callback([&]() {
         DatasetMetadata dataset_metadata = DatasetMetadata{
             .data_type = data_type,
@@ -104,8 +115,7 @@ int main(int argc, char** argv) {
             .num_dimensions = num_dimensions,
             .chamfer_distance = 0.0  // Will be calculated later
         };
-        dataset_generator =
-            std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary, in_memory);
+        dataset_generator = std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary);
     });
 
     // ------------------------------
@@ -173,10 +183,6 @@ int main(int argc, char** argv) {
                      std::format("Page size for the indexer (default: {} bytes)", Constants::kDefaultPageSize))
         ->default_val(Constants::kDefaultPageSize);
 
-    qalsh_index_command->add_flag("-i,--in_memory", in_memory, "Index the dataset in memory (default: false)")
-        ->default_val(false)
-        ->default_str("false");
-
     qalsh_index_command->callback([&]() {
         QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
                                            .bucket_width = bucket_width,
@@ -185,7 +191,7 @@ int main(int argc, char** argv) {
                                            .num_hash_tables = num_hash_tables,
                                            .collision_threshold = collision_threshold,
                                            .page_size = page_size};
-        indexer = std::make_unique<QalshIndexer>(qalsh_config, in_memory);
+        indexer = std::make_unique<QalshIndexer>(qalsh_config);
     });
 
     // ------------------------------
@@ -213,20 +219,9 @@ int main(int argc, char** argv) {
     CLI::App* linear_scan_estimate_command =
         estimate_command->add_subcommand("linear_scan", "Estimate Chamfer distance using linear scan");
 
-    linear_scan_estimate_command
-        ->add_flag("-i,--in_memory", in_memory, "Estimate Chamfer distance in memory (default: false)")
-        ->default_val(false)
-        ->default_str("false");
-
-    linear_scan_estimate_command->callback([&]() { estimator = std::make_unique<LinearScanEstimator>(in_memory); });
+    linear_scan_estimate_command->callback([&]() { estimator = std::make_unique<LinearScanEstimator>(); });
 
     CLI11_PARSE(app, argc, argv);
-
-    if (!command) {
-        spdlog::error("Command is not set. Please specify a command.");
-    } else {
-        command->Execute();
-    }
 
     return 0;
 }

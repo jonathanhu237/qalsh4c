@@ -11,12 +11,10 @@
 // DatasetSynthesizer Implementation
 // ---------------------------------------------
 
-DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double left_boundary, double right_boundary,
-                                       bool in_memory)
+DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double left_boundary, double right_boundary)
     : dataset_metadata_(std::move(dataset_metadata)),
       left_boundary_(left_boundary),
       right_boundary_(right_boundary),
-      in_memory_(in_memory),
       gen_(std::random_device{}()) {}
 
 void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) {
@@ -42,10 +40,10 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
         PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata_.data_type,
-                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions, in_memory_);
+                                      dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
     auto query_set_reader =
         PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata_.data_type,
-                                      dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, in_memory_);
+                                      dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 
     auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < dataset_metadata_.query_num_points; i++) {
@@ -65,7 +63,7 @@ void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_d
                                           const std::string &point_set_name, unsigned int num_points) {
     std::filesystem::path point_set_file_path = dataset_directory / std::format("{}.bin", point_set_name);
     auto point_set_writer = PointSetWriterFactory::Create(point_set_file_path, dataset_metadata_.data_type,
-                                                          dataset_metadata_.num_dimensions, in_memory_);
+                                                          dataset_metadata_.num_dimensions);
 
     if (dataset_metadata_.data_type == "double") {
         std::uniform_real_distribution<double> dist(left_boundary_, right_boundary_);
@@ -104,8 +102,7 @@ void DatasetSynthesizer::PrintConfiguration() const {
         "    Num of Points in Query Set): {}\n"
         "    Number of Dimensions: {}\n"
         "    Left Boundary: {}\n"
-        "    Right Boundary: {}\n"
-        "    In Memory: {}",
+        "    Right Boundary: {}",
         dataset_metadata_.data_type, dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
-        dataset_metadata_.num_dimensions, left_boundary_, right_boundary_, in_memory_);
+        dataset_metadata_.num_dimensions, left_boundary_, right_boundary_);
 }

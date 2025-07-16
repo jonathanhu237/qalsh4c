@@ -6,8 +6,6 @@
 
 #include "point_set.h"
 
-LinearScanEstimator::LinearScanEstimator(bool in_memory) : in_memory_(in_memory) {}
-
 double LinearScanEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     // Load dataset metadata
     dataset_directory_ = dataset_directory;
@@ -16,10 +14,10 @@ double LinearScanEstimator::Estimate(const std::filesystem::path& dataset_direct
     // Initialize the base and query set readers
     auto base_set_reader{PointSetReaderFactory::Create(dataset_directory_ / "base.bin", dataset_metadata_.data_type,
                                                        dataset_metadata_.base_num_points,
-                                                       dataset_metadata_.num_dimensions, in_memory_)};
+                                                       dataset_metadata_.num_dimensions)};
     auto query_set_reader{PointSetReaderFactory::Create(dataset_directory_ / "query.bin", dataset_metadata_.data_type,
                                                         dataset_metadata_.query_num_points,
-                                                        dataset_metadata_.num_dimensions, in_memory_)};
+                                                        dataset_metadata_.num_dimensions)};
 
     // Print the configuration
     PrintConfiguration();
@@ -42,8 +40,7 @@ void LinearScanEstimator::PrintConfiguration() const {
         "    Data Type: {}\n"
         "    Number of Points in Base Set: {}\n"
         "    Number of Points in Query Set: {}\n"
-        "    Number of Dimensions: {}\n"
-        "    In Memory: {}",
+        "    Number of Dimensions: {}",
         dataset_directory_.string(), dataset_metadata_.data_type, dataset_metadata_.base_num_points,
-        dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions, in_memory_);
+        dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 }

@@ -13,7 +13,7 @@ class Estimator {
 
 class LinearScanEstimator : public Estimator {
    public:
-    LinearScanEstimator(bool in_memory);
+    LinearScanEstimator() = default;
     double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
@@ -21,7 +21,6 @@ class LinearScanEstimator : public Estimator {
 
     std::filesystem::path dataset_directory_;
     DatasetMetadata dataset_metadata_;
-    bool in_memory_{false};
 };
 
 #endif

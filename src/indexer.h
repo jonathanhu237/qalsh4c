@@ -16,7 +16,7 @@ class Indexer {
 
 class QalshIndexer : public Indexer {
    public:
-    QalshIndexer(QalshConfiguration qalsh_config, bool in_memory);
+    QalshIndexer(QalshConfiguration qalsh_config);
     void BuildIndex(const std::filesystem::path& dataset_directory) override;
 
    private:
@@ -29,7 +29,6 @@ class QalshIndexer : public Indexer {
 
     // QALSH specific parameters
     QalshConfiguration qalsh_config_;
-    bool in_memory_;
 
     std::mt19937 gen_;
 };
