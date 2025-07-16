@@ -18,6 +18,7 @@ class DatasetSynthesizer : public DatasetGenerator {
     void Generate(const std::filesystem::path &dataset_directory) override;
 
    private:
+    void PrintConfiguration() const;
     void GeneratePointSet(const std::filesystem::path &dataset_directory, const std::string &point_set_name,
                           unsigned int num_points);
 

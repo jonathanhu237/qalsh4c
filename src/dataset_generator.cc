@@ -17,21 +17,12 @@ DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double 
       left_boundary_(left_boundary),
       right_boundary_(right_boundary),
       in_memory_(in_memory),
-      gen_(std::random_device{}()) {
-    spdlog::debug(
-        "The configuration is as follows:\n"
-        "    Data Type: {}\n"
-        "    Num Points (Base Set): {}\n"
-        "    Num Points (Query Set): {}\n"
-        "    Number of Dimensions: {}\n"
-        "    Left Boundary: {}\n"
-        "    Right Boundary: {}\n"
-        "    In Memory: {}",
-        dataset_metadata_.data_type, dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
-        dataset_metadata_.num_dimensions, left_boundary_, right_boundary_, in_memory_);
-}
+      gen_(std::random_device{}()) {}
 
 void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) {
+    // Print the configuration
+    PrintConfiguration();
+
     // Create the directory if it does not exist
     if (!std::filesystem::exists(dataset_directory)) {
         spdlog::info("Creating dataset directory: {}", dataset_directory.string());
@@ -103,4 +94,18 @@ void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_d
     }
 
     point_set_writer->Flush();
+}
+
+void DatasetSynthesizer::PrintConfiguration() const {
+    spdlog::debug(
+        "The configuration is as follows:\n"
+        "    Data Type: {}\n"
+        "    Num of Points in Base Set): {}\n"
+        "    Num of Points in Query Set): {}\n"
+        "    Number of Dimensions: {}\n"
+        "    Left Boundary: {}\n"
+        "    Right Boundary: {}\n"
+        "    In Memory: {}",
+        dataset_metadata_.data_type, dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
+        dataset_metadata_.num_dimensions, left_boundary_, right_boundary_, in_memory_);
 }
