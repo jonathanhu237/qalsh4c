@@ -26,7 +26,7 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesys
             return std::make_unique<DiskPointSetWriter<double>>(file_path, num_dimensions);
         }
     }
-    spdlog::critical("Unsupported data type or configuration");
+    spdlog::error("Unsupported data type or configuration");
     return nullptr;
 }
 
@@ -54,6 +54,6 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
             return std::make_unique<DiskPointSetReader<double>>(file_path, num_points, num_dimensions);
         }
     }
-    spdlog::critical("Unsupported data type or configuration");
+    spdlog::error("Unsupported data type or configuration");
     return nullptr;
 }

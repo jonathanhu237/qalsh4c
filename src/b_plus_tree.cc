@@ -93,7 +93,7 @@ BPlusTreeBulkLoader::BPlusTreeBulkLoader(const std::filesystem::path& file_path,
     : page_size_(page_size) {
     ofs_.open(file_path, std::ios::binary | std::ios::trunc);
     if (!ofs_) {
-        spdlog::critical("Failed to open file: {}", file_path.string());
+        spdlog::error("Failed to open file: {}", file_path.string());
     }
 
     internal_node_order_ = static_cast<unsigned int>((page_size - InternalNode::GetHeaderSize() + sizeof(double)) /
@@ -218,7 +218,7 @@ BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, uns
     // Open the B+ tree file
     ifs_.open(file_path, std::ios::binary);
     if (!ifs_.is_open()) {
-        spdlog::critical("Failed to open file: {}", file_path.string());
+        spdlog::error("Failed to open file: {}", file_path.string());
     }
 
     // Read the header from page 0

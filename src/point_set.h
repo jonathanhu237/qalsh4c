@@ -162,7 +162,7 @@ template <typename T>
 void InMemoryPointSetWriter<T>::Flush() {
     std::ofstream ofs(file_path_, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
-        spdlog::critical(std::format("Failed to open file: {}", file_path_.string()));
+        spdlog::error(std::format("Failed to open file: {}", file_path_.string()));
     }
     for (const auto& point : points_) {
         ofs.write(reinterpret_cast<const char*>(point.data()), static_cast<std::streamsize>(sizeof(T) * point.size()));
@@ -178,7 +178,7 @@ DiskPointSetWriter<T>::DiskPointSetWriter(const std::filesystem::path& file_path
     : num_dimensions_(num_dimensions) {
     ofs_.open(file_path, std::ios::binary | std::ios::trunc);
     if (!ofs_.is_open()) {
-        spdlog::critical(std::format("Failed to open file: {}", file_path.string()));
+        spdlog::error(std::format("Failed to open file: {}", file_path.string()));
     }
 }
 
@@ -194,8 +194,8 @@ void DiskPointSetWriter<T>::AddPoint(const PointVariant& point) {
     const auto& concrete_point = std::get<Point<T>>(point);
 
     if (concrete_point.size() != num_dimensions_) {
-        spdlog::critical(std::format("Point dimensions do not match the set dimensions: expected {}, got {}",
-                                     num_dimensions_, concrete_point.size()));
+        spdlog::error(std::format("Point dimensions do not match the set dimensions: expected {}, got {}",
+                                  num_dimensions_, concrete_point.size()));
     }
 
     ofs_.seekp(0, std::ios::end);
@@ -218,7 +218,7 @@ InMemoryPointSetReader<T>::InMemoryPointSetReader(const std::filesystem::path& f
     : num_points_(num_points), num_dimensions_(num_dimensions) {
     std::ifstream ifs(file_path, std::ios::binary);
     if (!ifs.is_open()) {
-        spdlog::critical(std::format("Failed to open file: {}", file_path.string()));
+        spdlog::error(std::format("Failed to open file: {}", file_path.string()));
     }
 
     points_.resize(num_points_);
@@ -254,7 +254,7 @@ DiskPointSetReader<T>::DiskPointSetReader(const std::filesystem::path& file_path
     : num_points_(num_points), num_dimensions_(num_dimensions) {
     ifs_.open(file_path, std::ios::binary);
     if (!ifs_.is_open()) {
-        spdlog::critical(std::format("Failed to open file: {}", file_path.string()));
+        spdlog::error(std::format("Failed to open file: {}", file_path.string()));
     }
 }
 
@@ -278,7 +278,7 @@ double DiskPointSetReader<T>::CalculateDistance(const PointVariant& query) {
     const auto& concrete_query = std::get<Point<T>>(query);
 
     if (concrete_query.size() != num_dimensions_) {
-        spdlog::critical("Query point dimensions do not match the set dimensions.");
+        spdlog::error("Query point dimensions do not match the set dimensions.");
     }
 
     double distance = std::numeric_limits<double>::max();
