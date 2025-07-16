@@ -34,7 +34,7 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
                                       dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions, in_memory_);
 
     // Print the configuration
-    spdlog::debug(Details());
+    PrintConfiguration();
 
     // Create the index directory if it does not exist
     std::filesystem::path index_directory = dataset_directory_ / "qalsh_index";
@@ -94,8 +94,8 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     qalsh_config_.Save(index_directory / "config.toml");
 }
 
-std::string QalshIndexer::Details() const {
-    return std::format(
+void QalshIndexer::PrintConfiguration() const {
+    spdlog::debug(
         "The configuration is as follows:\n"
         "    Dataset Directory: {}\n"
         "    Number of points in base set: {}\n"
