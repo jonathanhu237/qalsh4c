@@ -50,7 +50,7 @@ void EstimateCommand::Execute() {
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-    double estimate = estimator_->Estimate();
+    double estimate = estimator_->Estimate(dataset_directory_);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
     double estimated_time = elapsed.count();
