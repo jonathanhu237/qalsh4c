@@ -20,8 +20,6 @@ class QalshIndexer : public Indexer {
     void BuildIndex(const std::filesystem::path& dataset_directory) override;
 
    private:
-    void PrintConfiguration() const;
-
     // Dataset specific parameters
     std::filesystem::path dataset_directory_;
     DatasetMetadata dataset_metadata_;

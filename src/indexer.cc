@@ -32,9 +32,6 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     base_reader_ = PointSetReaderFactory::Create(dataset_directory_ / "base.bin", dataset_metadata_.data_type,
                                                  dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
 
-    // Print the configuration
-    PrintConfiguration();
-
     // Create the index directory if it does not exist
     std::filesystem::path index_directory = dataset_directory_ / "qalsh_index";
     if (!std::filesystem::exists(index_directory)) {
@@ -91,25 +88,4 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     // Save the QALSH configuration
     spdlog::info("Saving QALSH configuration...");
     qalsh_config_.Save(index_directory / "config.toml");
-}
-
-void QalshIndexer::PrintConfiguration() const {
-    spdlog::debug(
-        "The configuration is as follows:\n"
-        "    Dataset Directory: {}\n"
-        "    Number of Points in Base Set: {}\n"
-        "    Number of Points in Query Set: {}\n"
-        "    Number of Dimensions: {}\n"
-        "    Data Type: {}\n"
-        "    Approximation Ratio: {}\n"
-        "    Bucket Width: {}\n"
-        "    Beta: {}\n"
-        "    Error Probability: {}\n"
-        "    Number of Hash Tables: {}\n"
-        "    Collision Threshold: {}\n"
-        "    Page Size: {}",
-        dataset_directory_.string(), dataset_metadata_.base_num_points, dataset_metadata_.query_num_points,
-        dataset_metadata_.num_dimensions, dataset_metadata_.data_type, qalsh_config_.approximation_ratio,
-        qalsh_config_.bucket_width, qalsh_config_.beta, qalsh_config_.error_probability, qalsh_config_.num_hash_tables,
-        qalsh_config_.collision_threshold, qalsh_config_.page_size);
 }
