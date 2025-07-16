@@ -166,14 +166,14 @@ int main(int argc, char** argv) {
                                            .num_hash_tables = num_hash_tables,
                                            .collision_threshold = collision_threshold,
                                            .page_size = page_size};
-        indexer = std::make_unique<QalshIndexer>(dataset_directory, qalsh_config, in_memory);
+        indexer = std::make_unique<QalshIndexer>(qalsh_config, in_memory);
     });
 
     index_command->callback([&]() {
         if (!indexer) {
             spdlog::critical("Indexer is not set. Please specify an indexer.");
         }
-        command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer)));
+        command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer), dataset_directory));
     });
 
     CLI11_PARSE(app, argc, argv);

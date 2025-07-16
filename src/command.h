@@ -27,11 +27,12 @@ class GenerateDatasetCommand : public Command {
 
 class IndexCommand : public Command {
    public:
-    explicit IndexCommand(std::unique_ptr<Indexer> indexer);
+    explicit IndexCommand(std::unique_ptr<Indexer> indexer, std::filesystem::path dataset_directory);
     void Execute() override;
 
    private:
     std::unique_ptr<Indexer> indexer_;
+    std::filesystem::path dataset_directory_;
 };
 
 class EstimateCommand : public Command {

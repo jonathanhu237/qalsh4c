@@ -27,14 +27,15 @@ void GenerateDatasetCommand::Execute() {
 // IndexCommand Implementation
 // ---------------------------------------------
 
-IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer) : indexer_(std::move(indexer)) {}
+IndexCommand::IndexCommand(std::unique_ptr<Indexer> indexer, std::filesystem::path dataset_directory)
+    : indexer_(std::move(indexer)), dataset_directory_(std::move(dataset_directory)) {}
 
 void IndexCommand::Execute() {
     if (indexer_ == nullptr) {
         spdlog::critical("Indexer is not set.");
     }
 
-    indexer_->BuildIndex();
+    indexer_->BuildIndex(dataset_directory_);
 };
 
 // ---------------------------------------------
