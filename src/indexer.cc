@@ -98,8 +98,8 @@ void QalshIndexer::PrintConfiguration() const {
     spdlog::debug(
         "The configuration is as follows:\n"
         "    Dataset Directory: {}\n"
-        "    Number of points in base set: {}\n"
-        "    Number of points in query set: {}\n"
+        "    Number of Points in Base Set: {}\n"
+        "    Number of Points in Query Set: {}\n"
         "    Number of Dimensions: {}\n"
         "    Data Type: {}\n"
         "    Approximation Ratio: {}\n"
