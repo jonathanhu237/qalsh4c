@@ -1,5 +1,5 @@
 base_num_points = 1000
-chamfer_distance = 2004006.5460144626
+chamfer_distance = 8867268.7881650086
 data_type = 'double'
-num_dimensions = 64
-query_num_points = 500
+num_dimensions = 128
+query_num_points = 1000
