@@ -1,6 +1,9 @@
 #ifndef ANN_SEARCHER_H_
 #define ANN_SEARCHER_H_
 
+#include <filesystem>
+#include <vector>
+
 #include "point_set.h"
 #include "types.h"
 
@@ -20,15 +23,17 @@ class LinearScanAnnSearcher : public AnnSearcher {
     PointSetReader* base_reader_;
 };
 
-class AnnSearcherFactory {
+class QalshAnnSearcher : public AnnSearcher {
    public:
-    static std::unique_ptr<AnnSearcher> Create(PointSetReader* base_reader, const std::string& searcher_type) {
-        if (searcher_type == "linear_scan") {
-            return std::make_unique<LinearScanAnnSearcher>(base_reader);
-        }
-        spdlog::error("Unknown ANN searcher type: {}", searcher_type);
-        return nullptr;
-    }
+    QalshAnnSearcher(PointSetReader* base_reader, std::filesystem::path index_directory);
+
+    AnnResult Search(const PointVariant& query_point) override;
+
+   private:
+    PointSetReader* base_reader_;
+    std::filesystem::path index_directory_;
+    QalshConfiguration qalsh_config_;
+    std::vector<std::vector<double>> dot_vectors_;
 };
 
 #endif

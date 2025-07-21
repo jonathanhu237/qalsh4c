@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
     std::string ann_searcher_type;
     ann_estimate_command->add_option("-s,--searcher_type", ann_searcher_type, "Type of ANN searcher (linear_scan)")
         ->required()
-        ->check(CLI::IsMember({"linear_scan"}));
+        ->check(CLI::IsMember({"linear_scan", "qalsh"}));
 
     ann_estimate_command->callback([&]() { estimator = std::make_unique<AnnEstimator>(ann_searcher_type); });
 

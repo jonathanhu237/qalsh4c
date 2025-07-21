@@ -32,6 +32,8 @@ struct QalshConfiguration {
 struct AnnResult {
     unsigned int point_id{0};
     double distance{0.0};
+
+    bool operator<(const AnnResult& rhs) const { return distance < rhs.distance; }
 };
 
 #endif

@@ -51,7 +51,8 @@ T Utils::GetValueFromTomlTable(const toml::table &tbl, std::string_view key) {
 template <typename T1, typename T2>
 double Utils::DotProduct(const std::vector<T1> &vec1, const std::vector<T2> &vec2) {
     if (vec1.size() != vec2.size()) {
-        spdlog::error("Vectors must be of the same size for dot product.");
+        spdlog::error("Vectors must be of the same size for dot product. vec1.size(): {}, vec2.size(): {}", vec1.size(),
+                      vec2.size());
     }
 
     Eigen::Map<const Eigen::Matrix<T1, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
