@@ -29,4 +29,9 @@ struct QalshConfiguration {
     void Regularize(unsigned int num_points);
 };
 
+struct AnnResult {
+    unsigned int point_id{0};
+    double distance{0.0};
+};
+
 #endif
