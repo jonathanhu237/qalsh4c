@@ -28,7 +28,7 @@ class Utils {
 };
 
 template <typename T1, typename T2>
-static double CalculateL1Distance(const std::vector<T1> &vec1, const std::vector<T2> &vec2) {
+double Utils::CalculateL1Distance(const std::vector<T1> &vec1, const std::vector<T2> &vec2) {
     if (vec1.size() != vec2.size()) {
         spdlog::error("Vectors must be of the same size");
     }
@@ -36,7 +36,7 @@ static double CalculateL1Distance(const std::vector<T1> &vec1, const std::vector
     Eigen::Map<const Eigen::Matrix<T1, Eigen::Dynamic, 1>> eigen_vec1(vec1.data(), vec1.size());
     Eigen::Map<const Eigen::Matrix<T2, Eigen::Dynamic, 1>> eigen_vec2(vec2.data(), vec2.size());
 
-    return (eigen_vec1 - eigen_vec2).template lpNorm<1>();
+    return (eigen_vec1.template cast<double>() - eigen_vec2.template cast<double>()).template lpNorm<1>();
 }
 
 template <typename T>
