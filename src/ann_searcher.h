@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <vector>
 
+#include "b_plus_tree.h"
 #include "point_set.h"
 #include "types.h"
 
@@ -34,6 +35,7 @@ class QalshAnnSearcher : public AnnSearcher {
     std::filesystem::path index_directory_;
     QalshConfiguration qalsh_config_;
     std::vector<std::vector<double>> dot_vectors_;
+    std::vector<BPlusTreeSearcher> b_plus_tree_searchers_;
 };
 
 #endif

@@ -6,7 +6,6 @@
 #include <queue>
 #include <variant>
 
-#include "b_plus_tree.h"
 #include "point_set.h"
 #include "types.h"
 #include "utils.h"
@@ -65,13 +64,19 @@ QalshAnnSearcher::QalshAnnSearcher(PointSetReader* base_reader, std::filesystem:
         ifs.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
                  static_cast<std::streamoff>(num_dimensions * sizeof(double)));
     }
+
+    // Initialize B+ trees
+    b_plus_tree_searchers_.reserve(qalsh_config_.num_hash_tables);
+    for (unsigned int j = 0; j < qalsh_config_.num_hash_tables; j++) {
+        const std::filesystem::path index_file_path = index_directory_ / std::format("base_idx_{}.bin", j);
+        b_plus_tree_searchers_.emplace_back(index_file_path, qalsh_config_.page_size);
+    }
 }
 
 AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
     std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
     std::vector<bool> visited(base_reader_->get_num_points(), false);
     std::unordered_map<unsigned int, unsigned int> collision_count;
-    std::vector<BPlusTreeSearcher> b_plus_tree_searchers;
     std::vector<double> keys(qalsh_config_.num_hash_tables);
     double search_radius = 1.0;
 
@@ -84,20 +89,15 @@ AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
                 keys[i] = Utils::DotProduct(concrete_query_point, dot_vectors_[i]);
             },
             query_point);
-    }
 
-    // Initialize B+ trees
-    b_plus_tree_searchers.reserve(qalsh_config_.num_hash_tables);
-    for (unsigned int j = 0; j < qalsh_config_.num_hash_tables; j++) {
-        const std::filesystem::path index_file_path = index_directory_ / std::format("base_idx_{}.bin", j);
-        b_plus_tree_searchers.emplace_back(index_file_path, qalsh_config_.page_size, keys[j]);
+        b_plus_tree_searchers_[i].Init(keys[i]);
     }
 
     // c-ANN search
     while (candidates.size() < static_cast<size_t>(std::ceil(qalsh_config_.beta * base_reader_->get_num_points()))) {
         for (unsigned int j = 0; j < qalsh_config_.num_hash_tables; j++) {
             std::vector<unsigned int> point_ids =
-                b_plus_tree_searchers[j].IncrementalSearch(qalsh_config_.bucket_width * search_radius / 2.0);
+                b_plus_tree_searchers_[j].IncrementalSearch(qalsh_config_.bucket_width * search_radius / 2.0);
 
             for (auto point_id : point_ids) {
                 if (visited.at(point_id)) {

@@ -213,8 +213,8 @@ void BPlusTreeBulkLoader::WritePage(unsigned int page_num, const std::vector<cha
 }
 
 // ---------- BPlusTreeSearcher Implementation ----------
-BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size, double key)
-    : page_size_(page_size), key_(key) {
+BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size)
+    : page_size_(page_size) {
     // Open the B+ tree file
     ifs_.open(file_path, std::ios::binary);
     if (!ifs_.is_open()) {
@@ -228,6 +228,12 @@ BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, uns
     level_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
     internal_node_order_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
     leaf_node_order_ = Utils::ReadFromBuffer<unsigned int>(header_buffer, offset);
+}
+
+void BPlusTreeSearcher::Init(double key) {
+    key_ = key;
+    left_search_location_.reset();
+    right_search_location_.reset();
 
     // Locate the first key k satisfying k >= key in the B+ tree
     LeafNode leaf_node = LocateLeafMayContainKey();

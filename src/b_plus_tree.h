@@ -81,8 +81,9 @@ class BPlusTreeBulkLoader {
 
 class BPlusTreeSearcher {
    public:
-    BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size, double key);
+    BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size);
 
+    void Init(double key);
     std::vector<unsigned int> IncrementalSearch(double bound);
 
    private:
