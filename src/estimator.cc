@@ -4,43 +4,37 @@
 
 #include <filesystem>
 
+#include "ann_searcher.h"
 #include "point_set.h"
+#include "types.h"
 
-double LinearScanEstimator::Estimate(const std::filesystem::path& dataset_directory) {
+// ---------------------------------------------
+// LinearScanEstimator Implementation
+// ---------------------------------------------
+
+AnnEstimator::AnnEstimator(std::string searcher_type) : searcher_type_(std::move(searcher_type)) {}
+
+double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     // Load dataset metadata
-    dataset_directory_ = dataset_directory;
-    dataset_metadata_.Load(dataset_directory_ / "metadata.toml");
+    DatasetMetadata dataset_metadata;
+    dataset_metadata.Load(dataset_directory / "metadata.toml");
 
     // Initialize the base and query set readers
-    auto base_set_reader{PointSetReaderFactory::Create(dataset_directory_ / "base.bin", dataset_metadata_.data_type,
-                                                       dataset_metadata_.base_num_points,
-                                                       dataset_metadata_.num_dimensions)};
-    auto query_set_reader{PointSetReaderFactory::Create(dataset_directory_ / "query.bin", dataset_metadata_.data_type,
-                                                        dataset_metadata_.query_num_points,
-                                                        dataset_metadata_.num_dimensions)};
+    auto base_set_reader{PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                                       dataset_metadata.base_num_points,
+                                                       dataset_metadata.num_dimensions)};
+    auto query_set_reader{PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata.data_type,
+                                                        dataset_metadata.query_num_points,
+                                                        dataset_metadata.num_dimensions)};
 
-    // Print the configuration
-    PrintConfiguration();
-
-    spdlog::info("Calculating Chamfer distance using Linear Scan Estimator...");
+    // Initialize the ANN searcher
+    auto ann_searcher = AnnSearcherFactory::Create(base_set_reader.get(), searcher_type_);
     double chamfer_distance{0.0};
 
-    for (unsigned int i = 0; i < dataset_metadata_.query_num_points; i++) {
+    for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
         PointVariant query = query_set_reader->GetPoint(i);
-        chamfer_distance += base_set_reader->CalculateDistance(query);
+        chamfer_distance += ann_searcher->Search(query).distance;
     }
 
     return chamfer_distance;
-}
-
-void LinearScanEstimator::PrintConfiguration() const {
-    spdlog::debug(
-        "The configuration is as follows:\n"
-        "    Dataset Directory: {}\n"
-        "    Data Type: {}\n"
-        "    Number of Points in Base Set: {}\n"
-        "    Number of Points in Query Set: {}\n"
-        "    Number of Dimensions: {}",
-        dataset_directory_.string(), dataset_metadata_.data_type, dataset_metadata_.base_num_points,
-        dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 }

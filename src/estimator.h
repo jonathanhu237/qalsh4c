@@ -3,24 +3,19 @@
 
 #include <filesystem>
 
-#include "types.h"
-
 class Estimator {
    public:
     virtual ~Estimator() = default;
     virtual double Estimate(const std::filesystem::path& dataset_directory) = 0;
 };
 
-class LinearScanEstimator : public Estimator {
+class AnnEstimator : public Estimator {
    public:
-    LinearScanEstimator() = default;
+    AnnEstimator(std::string searcher_type);
     double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
-    void PrintConfiguration() const;
-
-    std::filesystem::path dataset_directory_;
-    DatasetMetadata dataset_metadata_;
+    std::string searcher_type_;
 };
 
 #endif
