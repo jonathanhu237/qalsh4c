@@ -13,6 +13,7 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
+    src/ann_searcher.cc
     src/b_plus_tree.cc
     src/command.cc
     src/dataset_generator.cc
