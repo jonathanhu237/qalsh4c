@@ -213,13 +213,17 @@ int main(int argc, char** argv) {
     });
 
     // ------------------------------
-    // linear scan estimate command
+    // ann estimate command
     // ------------------------------
 
-    CLI::App* linear_scan_estimate_command =
-        estimate_command->add_subcommand("linear_scan", "Estimate Chamfer distance using linear scan");
+    CLI::App* ann_estimate_command = estimate_command->add_subcommand("ann", "Estimate Chamfer distance using ANN");
 
-    linear_scan_estimate_command->callback([&]() { estimator = std::make_unique<LinearScanEstimator>(); });
+    std::string ann_searcher_type;
+    ann_estimate_command->add_option("-s,--searcher_type", ann_searcher_type, "Type of ANN searcher (linear_scan)")
+        ->required()
+        ->check(CLI::IsMember({"linear_scan"}));
+
+    ann_estimate_command->callback([&]() { estimator = std::make_unique<AnnEstimator>(ann_searcher_type); });
 
     CLI11_PARSE(app, argc, argv);
 
