@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -103,6 +104,9 @@ class BPlusTreeSearcher {
     unsigned int level_{0};
     unsigned int internal_node_order_{0};
     unsigned int leaf_node_order_{0};
+
+    // Performance optimizations
+    std::unordered_map<unsigned int, std::vector<char>> page_cache_;
 };
 
 #endif

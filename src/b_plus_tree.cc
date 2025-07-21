@@ -68,7 +68,7 @@ LeafNode::LeafNode(const std::vector<char>& buffer) {
     for (unsigned int i = 0; i < num_entries_; ++i) {
         values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
     }
-};
+}
 
 size_t LeafNode::GetHeaderSize() {
     return sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
@@ -336,8 +336,16 @@ LeafNode BPlusTreeSearcher::LocateLeafByPageNum(unsigned int page_num) {
 }
 
 std::vector<char> BPlusTreeSearcher::ReadPage(unsigned int page_num) {
-    std::vector<char> buffer(page_size_, 0);
+    // Check cache first
+    auto cache_it = page_cache_.find(page_num);
+    if (cache_it != page_cache_.end()) {
+        return cache_it->second;
+    }
+
+    // Read from disk and cache
+    page_cache_[page_num].resize(page_size_);
     ifs_.seekg(static_cast<std::streamoff>(page_num * page_size_));
-    ifs_.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    return buffer;
+    ifs_.read(page_cache_[page_num].data(), static_cast<std::streamsize>(page_size_));
+
+    return page_cache_[page_num];
 }
