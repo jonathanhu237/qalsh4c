@@ -28,7 +28,7 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
 
     std::mt19937 gen(std::random_device{}());
 
-    // Save the metadata to a TOML file
+    // We must save the metadata first since it will be used by the estimator (update the chamfer distance later)
     dataset_metadata_.Save(dataset_directory / "metadata.toml");
 
     // Generate the base point set and the query point set
@@ -54,6 +54,9 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     std::chrono::duration<double, std::milli> elapsed = end - start;
     spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", dataset_metadata_.chamfer_distance,
                  elapsed.count());
+
+    // Save the updated metadata
+    dataset_metadata_.Save(dataset_directory / "metadata.toml");
 }
 
 void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_directory,
