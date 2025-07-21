@@ -3,17 +3,13 @@
 
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
-
-#include "utils.h"
 
 template <typename T>
 using Point = std::vector<T>;
@@ -88,8 +84,11 @@ class PointSetWriterFactory {
 class PointSetReader {
    public:
     virtual ~PointSetReader() = default;
+
+    [[nodiscard]] virtual unsigned int get_num_points() const = 0;
+    [[nodiscard]] virtual unsigned int get_num_dimensions() const = 0;
+
     virtual PointVariant GetPoint(unsigned int index) = 0;
-    virtual double CalculateDistance(const PointVariant& query) = 0;
 };
 
 // ---------------------------------------------
@@ -102,8 +101,10 @@ class InMemoryPointSetReader : public PointSetReader {
     InMemoryPointSetReader(const std::filesystem::path& file_path, unsigned int num_points,
                            unsigned int num_dimensions);
 
+    [[nodiscard]] unsigned int get_num_points() const override;
+    [[nodiscard]] unsigned int get_num_dimensions() const override;
+
     PointVariant GetPoint(unsigned int index) override;
-    double CalculateDistance(const PointVariant& query) override;
 
    private:
     unsigned int num_points_;
@@ -126,8 +127,10 @@ class DiskPointSetReader : public PointSetReader {
     DiskPointSetReader(DiskPointSetReader&&) noexcept = default;
     DiskPointSetReader& operator=(DiskPointSetReader&&) noexcept = default;
 
+    [[nodiscard]] unsigned int get_num_points() const override;
+    [[nodiscard]] unsigned int get_num_dimensions() const override;
+
     PointVariant GetPoint(unsigned int index) override;
-    double CalculateDistance(const PointVariant& query) override;
 
    private:
     std::ifstream ifs_;
@@ -229,19 +232,18 @@ InMemoryPointSetReader<T>::InMemoryPointSetReader(const std::filesystem::path& f
 }
 
 template <typename T>
-PointVariant InMemoryPointSetReader<T>::GetPoint(unsigned int index) {
-    return points_.at(index);
+unsigned int InMemoryPointSetReader<T>::get_num_points() const {
+    return num_points_;
 }
 
 template <typename T>
-double InMemoryPointSetReader<T>::CalculateDistance(const PointVariant& query) {
-    double distance = std::numeric_limits<double>::max();
-    const auto& concrete_query = std::get<Point<T>>(query);
-    for (const auto& point : points_) {
-        double curr_distance = Utils::CalculateL1Distance(point, concrete_query);
-        distance = std::min(curr_distance, distance);
-    }
-    return distance;
+unsigned int InMemoryPointSetReader<T>::get_num_dimensions() const {
+    return num_dimensions_;
+}
+
+template <typename T>
+PointVariant InMemoryPointSetReader<T>::GetPoint(unsigned int index) {
+    return points_.at(index);
 }
 
 // ---------------------------------------------
@@ -266,32 +268,21 @@ DiskPointSetReader<T>::~DiskPointSetReader() {
 }
 
 template <typename T>
+unsigned int DiskPointSetReader<T>::get_num_points() const {
+    return num_points_;
+}
+
+template <typename T>
+unsigned int DiskPointSetReader<T>::get_num_dimensions() const {
+    return num_dimensions_;
+}
+
+template <typename T>
 PointVariant DiskPointSetReader<T>::GetPoint(unsigned int index) {
     ifs_.seekg(index * sizeof(T) * num_dimensions_, std::ios::beg);
     Point<T> point(num_dimensions_);
     ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
     return point;
-}
-
-template <typename T>
-double DiskPointSetReader<T>::CalculateDistance(const PointVariant& query) {
-    const auto& concrete_query = std::get<Point<T>>(query);
-
-    if (concrete_query.size() != num_dimensions_) {
-        spdlog::error("Query point dimensions do not match the set dimensions.");
-    }
-
-    double distance = std::numeric_limits<double>::max();
-    Point<T> point(num_dimensions_);
-
-    ifs_.seekg(0, std::ios::beg);
-    for (unsigned int i = 0; i < num_points_; i++) {
-        ifs_.read(reinterpret_cast<char*>(point.data()), sizeof(T) * num_dimensions_);
-        double curr_distance = Utils::CalculateL1Distance(point, concrete_query);
-        distance = std::min(curr_distance, distance);
-    }
-
-    return distance;
 }
 
 #endif
