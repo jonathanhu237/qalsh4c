@@ -23,6 +23,22 @@
             ],
             "env": [],
             "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Debug QALSH ANN Estimator",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "args": [
+                "estimate",
+                "-d",
+                "./data/toy",
+                "ann",
+                "-s",
+                "qalsh"
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
         }
     ]
 }
