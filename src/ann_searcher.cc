@@ -75,7 +75,7 @@ QalshAnnSearcher::QalshAnnSearcher(PointSetReader* base_reader, std::filesystem:
 
 AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
     std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
-    std::vector<bool> visited(base_reader_->get_num_points(), false);
+    std::vector<char> visited(base_reader_->get_num_points(), 0);
     std::unordered_map<unsigned int, unsigned int> collision_count;
     std::vector<double> keys(qalsh_config_.num_hash_tables);
     double search_radius = 1.0;
@@ -100,7 +100,7 @@ AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
                 b_plus_tree_searchers_[j].IncrementalSearch(qalsh_config_.bucket_width * search_radius / 2.0);
 
             for (auto point_id : point_ids) {
-                if (visited.at(point_id)) {
+                if (visited[point_id] != 0) {
                     continue;
                 }
 
@@ -115,7 +115,7 @@ AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
                         },
                         point, query_point);
                     candidates.emplace(distance, point_id);
-                    visited.at(point_id) = true;
+                    visited[point_id] = 1;  // Changed from true
                 }
             }
         }
