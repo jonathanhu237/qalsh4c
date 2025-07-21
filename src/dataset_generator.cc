@@ -2,8 +2,10 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <utility>
 
+#include "estimator.h"
 #include "point_set.h"
 #include "types.h"
 
@@ -43,10 +45,8 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
                                       dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (unsigned int i = 0; i < dataset_metadata_.query_num_points; i++) {
-        PointVariant query = query_set_reader->GetPoint(i);
-        dataset_metadata_.chamfer_distance += base_set_reader->CalculateDistance(query);
-    }
+    AnnEstimator ann_estimator("linear_scan");
+    dataset_metadata_.chamfer_distance = ann_estimator.Estimate(dataset_directory);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
     spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", dataset_metadata_.chamfer_distance,
