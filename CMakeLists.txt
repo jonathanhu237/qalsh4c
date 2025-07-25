@@ -12,18 +12,11 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 
-add_executable(qalsh_chamfer 
-    src/ann_searcher.cc
-    src/b_plus_tree.cc
-    src/command.cc
-    src/dataset_generator.cc
-    src/estimator.cc
-    src/global.cc
-    src/indexer.cc
-    src/main.cc
-    src/point_set.cc
-    src/types.cc
+file(GLOB qalsh_chamfer_src 
+    "src/*.cc"
 )
+
+add_executable(qalsh_chamfer ${qalsh_chamfer_src})
 
 target_link_libraries(qalsh_chamfer PRIVATE 
     CLI11::CLI11
