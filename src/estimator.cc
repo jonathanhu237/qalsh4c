@@ -4,10 +4,14 @@
 
 #include <filesystem>
 #include <memory>
+#include <numeric>
+#include <vector>
 
 #include "ann_searcher.h"
 #include "point_set.h"
 #include "types.h"
+#include "utils.h"
+#include "weights_generator.h"
 
 // ---------------------------------------------
 // AnnEstimator Implementation
@@ -57,4 +61,64 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     }
 
     return chamfer_distance;
+}
+
+// ---------------------------------------------
+// SamplingEstimator Implementation
+// ---------------------------------------------
+
+SamplingEstimator::SamplingEstimator(std::string searcher_type, unsigned int num_samples)
+    : searcher_type_(std::move(searcher_type)), num_samples_(num_samples) {
+    spdlog::debug("Creating SamplingEstimator with searcher type: {}", searcher_type_);
+}
+
+double SamplingEstimator::Estimate(const std::filesystem::path& dataset_directory) {
+    // Initialize the weights generator based on the searcher type.
+    std::unique_ptr<WeightsGenerator> weights_generator;
+
+    if (searcher_type_ == "uniform") {
+        weights_generator = std::make_unique<UniformWeightsGenerator>();
+    } else {
+        spdlog::error("Unsupported searcher type: {}", searcher_type_);
+        return 0.0;
+    }
+
+    if (!weights_generator) {
+        spdlog::error("Failed to create WeightsGenerator of type: {}", searcher_type_);
+        return 0.0;
+    }
+
+    // Generate weights for the dataset.
+    std::vector<double> weights = weights_generator->Generate(dataset_directory);
+
+    // Load dataset metadata
+    spdlog::debug("Loading dataset metadata");
+    DatasetMetadata dataset_metadata;
+    dataset_metadata.Load(dataset_directory / "metadata.toml");
+
+    // Check the size of weights
+    if (weights.size() != dataset_metadata.base_num_points) {
+        spdlog::error("Weights size does not match the number of base points in the dataset");
+        return 0.0;
+    }
+
+    // Sample the points using the generated weights.
+    double approximation = 0.0;
+    double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+    auto base_set_reader{PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                                       dataset_metadata.base_num_points,
+                                                       dataset_metadata.num_dimensions)};
+    auto query_set_reader{PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata.data_type,
+                                                        dataset_metadata.query_num_points,
+                                                        dataset_metadata.num_dimensions)};
+    LinearScanAnnSearcher linear_searcher(base_set_reader.get());
+
+    for (unsigned int i = 0; i < num_samples_; i++) {
+        unsigned int point_id = Utils::SampleFromWeights(weights);
+        PointVariant query = query_set_reader->GetPoint(point_id);
+        AnnResult result = linear_searcher.Search(query);
+        approximation += sum * result.distance / weights[point_id];
+    }
+
+    return approximation / num_samples_;
 }

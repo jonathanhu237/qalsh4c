@@ -226,6 +226,22 @@ int main(int argc, char** argv) {
 
     ann_estimate_command->callback([&]() { estimator = std::make_unique<AnnEstimator>(ann_searcher_type); });
 
+    // ------------------------------
+    // sample estimate command
+    // ------------------------------
+
+    CLI::App* sampling = estimate_command->add_subcommand("sampling", "Estimate Chamfer distance using sampling");
+
+    std::string sampling_searcher_type;
+    sampling->add_option("-s,--searcher_type", sampling_searcher_type, "Type of sampling searcher (uniform, qalsh)")
+        ->required()
+        ->check(CLI::IsMember({"uniform", "qalsh"}));
+
+    unsigned int num_samples{0};
+    sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")->required();
+
+    sampling->callback([&]() { estimator = std::make_unique<SamplingEstimator>(sampling_searcher_type, num_samples); });
+
     CLI11_PARSE(app, argc, argv);
 
     return 0;

@@ -18,4 +18,14 @@ class AnnEstimator : public Estimator {
     std::string searcher_type_;
 };
 
+class SamplingEstimator : public Estimator {
+   public:
+    SamplingEstimator(std::string searcher_type, unsigned int num_samples);
+    double Estimate(const std::filesystem::path& dataset_directory) override;
+
+   private:
+    std::string searcher_type_;
+    unsigned int num_samples_;
+};
+
 #endif
