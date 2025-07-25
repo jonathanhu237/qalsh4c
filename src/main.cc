@@ -219,7 +219,8 @@ int main(int argc, char** argv) {
     CLI::App* ann_estimate_command = estimate_command->add_subcommand("ann", "Estimate Chamfer distance using ANN");
 
     std::string ann_searcher_type;
-    ann_estimate_command->add_option("-s,--searcher_type", ann_searcher_type, "Type of ANN searcher (linear_scan)")
+    ann_estimate_command
+        ->add_option("-s,--searcher_type", ann_searcher_type, "Type of ANN searcher (linear_scan, qalsh)")
         ->required()
         ->check(CLI::IsMember({"linear_scan", "qalsh"}));
 
