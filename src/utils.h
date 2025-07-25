@@ -25,6 +25,8 @@ class Utils {
 
     template <typename T>
     T static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
+
+    auto static SampleFromWeights(const std::vector<double> &weights) -> unsigned int;
 };
 
 template <typename T1, typename T2>
