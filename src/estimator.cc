@@ -10,7 +10,7 @@
 #include "types.h"
 
 // ---------------------------------------------
-// LinearScanEstimator Implementation
+// AnnEstimator Implementation
 // ---------------------------------------------
 
 AnnEstimator::AnnEstimator(std::string searcher_type) : searcher_type_(std::move(searcher_type)) {
