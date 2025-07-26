@@ -95,7 +95,7 @@ QalshAnnSearcher::QalshAnnSearcher(PointSetReader* base_reader, std::filesystem:
         if (Global::high_memory_mode) {
             qalsh_searchers_.emplace_back(std::make_unique<InMemorySearcher>(base_reader_, dot_vectors_[j]));
         } else {
-            const std::filesystem::path index_file_path = index_directory_ / std::format("base_idx_{}.bin", j);
+            const std::filesystem::path index_file_path = index_directory_ / "b_plus_trees" / std::format("{}.bin", j);
             qalsh_searchers_.emplace_back(
                 std::make_unique<BPlusTreeSearcher>(index_file_path, qalsh_config_.page_size));
         }

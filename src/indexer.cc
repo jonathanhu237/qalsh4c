@@ -78,7 +78,8 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
         std::ranges::sort(dot_products_with_id);
 
         // Bulk load the B+ tree with sorted dot products
-        BPlusTreeBulkLoader bulk_loader(index_directory / std::format("base_idx_{}.bin", i), qalsh_config_.page_size);
+        BPlusTreeBulkLoader bulk_loader(index_directory / "b_plus_trees" / std::format("{}.bin", i),
+                                        qalsh_config_.page_size);
         bulk_loader.Build(dot_products_with_id);
     }
     auto end = std::chrono::high_resolution_clock::now();
