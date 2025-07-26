@@ -9,6 +9,6 @@ std::vector<double> UniformWeightsGenerator::Generate(const std::filesystem::pat
     DatasetMetadata metadata;
     metadata.Load(dataset_directory / "metadata.toml");
 
-    std::vector<double> weights(metadata.base_num_points, 1.0);
+    std::vector<double> weights(metadata.query_num_points, 1.0);
     return weights;
 }

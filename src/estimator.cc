@@ -97,8 +97,8 @@ double SamplingEstimator::Estimate(const std::filesystem::path& dataset_director
     dataset_metadata.Load(dataset_directory / "metadata.toml");
 
     // Check the size of weights
-    if (weights.size() != dataset_metadata.base_num_points) {
-        spdlog::error("Weights size does not match the number of base points in the dataset");
+    if (weights.size() != dataset_metadata.query_num_points) {
+        spdlog::error("Weights size does not match the number of query points in the dataset");
         return 0.0;
     }
 
