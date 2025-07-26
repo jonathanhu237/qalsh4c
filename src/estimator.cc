@@ -58,7 +58,8 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     double chamfer_distance{0.0};
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
         PointVariant query = query_set_reader->GetPoint(i);
-        chamfer_distance += ann_searcher->Search(query).distance;
+        AnnResult result = ann_searcher->Search(query);
+        chamfer_distance += result.distance;
     }
 
     if (searcher_type_ == "linear_scan" && Global::measure_time) {
