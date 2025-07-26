@@ -22,6 +22,7 @@ add_executable(qalsh_chamfer
     src/indexer.cc
     src/main.cc
     src/point_set.cc
+    src/qalsh_searcher.cc
     src/timer.cc
     src/types.cc
     src/utils.cc

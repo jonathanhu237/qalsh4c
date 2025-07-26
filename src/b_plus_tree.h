@@ -9,7 +9,6 @@
 
 class LeafNode;
 
-using SearchLocation = std::pair<LeafNode, size_t>;
 using KeyValuePair = std::pair<double, unsigned int>;
 
 class InternalNode {
