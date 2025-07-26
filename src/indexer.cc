@@ -35,12 +35,12 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     // Create the index directory if it does not exist
     std::filesystem::path index_directory = dataset_directory_ / "qalsh_index";
     if (!std::filesystem::exists(index_directory)) {
-        spdlog::info("Creating index directory: {}", index_directory.string());
+        spdlog::debug("Creating index directory: {}", index_directory.string());
         std::filesystem::create_directories(index_directory);
     }
 
     // Generate the dot vectors
-    spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
+    spdlog::debug("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables,
                                                  std::vector<double>(dataset_metadata_.num_dimensions));
@@ -49,7 +49,7 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     }
 
     // Index the base set
-    spdlog::info("Indexing base set...");
+    spdlog::debug("Indexing base set...");
     auto start = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
@@ -72,10 +72,10 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
-    spdlog::info("Indexing completed in {:.2f} ms.", elapsed.count());
+    spdlog::debug("Indexing completed in {:.2f} ms.", elapsed.count());
 
     // Save the dot product vectors
-    spdlog::info("Saving dot product vectors...");
+    spdlog::debug("Saving dot product vectors...");
     std::ofstream ofs(index_directory / "dot_vectors.bin", std::ios::binary);
     if (!ofs.is_open()) {
         spdlog::error(
@@ -86,6 +86,6 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     }
 
     // Save the QALSH configuration
-    spdlog::info("Saving QALSH configuration...");
+    spdlog::debug("Saving QALSH configuration...");
     qalsh_config_.Save(index_directory / "config.toml");
 }
