@@ -6,7 +6,7 @@
 #include <format>
 #include <fstream>
 
-#include "constants.h"
+#include "global.h"
 #include "utils.h"
 
 // ---------------------------------------------
@@ -72,10 +72,10 @@ void QalshConfiguration::Load(const std::filesystem::path& file_path) {
 }
 
 void QalshConfiguration::Regularize(unsigned int num_points) {
-    if (bucket_width <= Constants::kEpsilon) {
+    if (bucket_width <= Global::kEpsilon) {
         bucket_width = 2.0 * std::sqrt(approximation_ratio);
     }
-    if (beta <= Constants::kEpsilon) {
+    if (beta <= Global::kEpsilon) {
         beta = 100.0 / static_cast<double>(num_points);
     }
 

@@ -9,7 +9,6 @@
 #include <mutex>
 
 #include "command.h"
-#include "constants.h"
 #include "dataset_generator.h"
 #include "estimator.h"
 #include "global.h"
@@ -108,11 +107,11 @@ int main(int argc, char** argv) {
 
     double left_boundary{0.0};
     synthesize_dataset_command->add_option("-l,--left_boundary", left_boundary, "Left boundary for generated points")
-        ->default_val(Constants::kDefaultLeftBoundary);
+        ->default_val(Global::kDefaultLeftBoundary);
 
     double right_boundary{0.0};
     synthesize_dataset_command->add_option("-r,--right_boundary", right_boundary, "Right boundary for generated points")
-        ->default_val(Constants::kDefaultRightBoundary);
+        ->default_val(Global::kDefaultRightBoundary);
 
     synthesize_dataset_command->callback([&]() {
         DatasetMetadata dataset_metadata = DatasetMetadata{
@@ -167,7 +166,7 @@ int main(int argc, char** argv) {
     double error_probability{0.0};
     qalsh_index_command
         ->add_option("-e, --error_probability", error_probability, "Error probability for the indexer (default: 1/e)")
-        ->default_val(Constants::kDefaultErrorProbability)
+        ->default_val(Global::kDefaultErrorProbability)
         ->default_str("1/e");
 
     unsigned int num_hash_tables{0};
@@ -187,8 +186,8 @@ int main(int argc, char** argv) {
     unsigned int page_size{0};
     qalsh_index_command
         ->add_option("-B,--page_size", page_size,
-                     std::format("Page size for the indexer (default: {} bytes)", Constants::kDefaultPageSize))
-        ->default_val(Constants::kDefaultPageSize);
+                     std::format("Page size for the indexer (default: {} bytes)", Global::kDefaultPageSize))
+        ->default_val(Global::kDefaultPageSize);
 
     qalsh_index_command->callback([&]() {
         QalshConfiguration qalsh_config = {.approximation_ratio = approximation_ratio,
