@@ -245,7 +245,8 @@ int main(int argc, char** argv) {
         ->check(CLI::IsMember({"uniform", "qalsh"}));
 
     unsigned int num_samples{0};
-    sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")->required();
+    sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")
+        ->default_str("log(n)");
 
     sampling->callback([&]() { estimator = std::make_unique<SamplingEstimator>(sampling_searcher_type, num_samples); });
 

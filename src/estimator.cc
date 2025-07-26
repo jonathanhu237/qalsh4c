@@ -72,7 +72,6 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
 // ---------------------------------------------
 // SamplingEstimator Implementation
 // ---------------------------------------------
-
 SamplingEstimator::SamplingEstimator(std::string searcher_type, unsigned int num_samples)
     : searcher_type_(std::move(searcher_type)), num_samples_(num_samples) {
     spdlog::info("Creating SamplingEstimator with searcher type: {}", searcher_type_);
@@ -120,6 +119,11 @@ double SamplingEstimator::Estimate(const std::filesystem::path& dataset_director
                                                         dataset_metadata.query_num_points,
                                                         dataset_metadata.num_dimensions)};
     LinearScanAnnSearcher linear_searcher(base_set_reader.get());
+
+    if (num_samples_ == 0) {
+        num_samples_ = static_cast<unsigned int>(std::log(dataset_metadata.query_num_points));
+        spdlog::info("Number of samples set to log(n): {}", num_samples_);
+    }
 
     for (unsigned int i = 0; i < num_samples_; i++) {
         unsigned int point_id = Utils::SampleFromWeights(weights);
