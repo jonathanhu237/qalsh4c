@@ -16,4 +16,10 @@ class UniformWeightsGenerator : public WeightsGenerator {
     std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
 };
 
+class QalshWeightsGenerator : public WeightsGenerator {
+   public:
+    QalshWeightsGenerator() = default;
+    std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
+};
+
 #endif

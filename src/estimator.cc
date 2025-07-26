@@ -78,6 +78,8 @@ double SamplingEstimator::Estimate(const std::filesystem::path& dataset_director
 
     if (searcher_type_ == "uniform") {
         weights_generator = std::make_unique<UniformWeightsGenerator>();
+    } else if (searcher_type_ == "qalsh") {
+        weights_generator = std::make_unique<QalshWeightsGenerator>();
     } else {
         spdlog::error("Unsupported searcher type: {}", searcher_type_);
         return 0.0;
