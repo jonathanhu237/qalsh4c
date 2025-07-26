@@ -143,7 +143,7 @@ AnnResult QalshAnnSearcher::Search(const PointVariant& query_point) {
                             distance = Utils::CalculateL1Distance(concrete_point, concrete_query_point);
                         },
                         point, query_point);
-                    candidates.emplace(distance, point_id);
+                    candidates.emplace(AnnResult{.point_id = point_id, .distance = distance});
                     visited[point_id] = 1;  // Changed from true
                 }
             }
