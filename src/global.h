@@ -4,6 +4,7 @@
 class Global {
    public:
     static bool high_memory_mode;
+    static bool measure_time;
 };
 
 #endif

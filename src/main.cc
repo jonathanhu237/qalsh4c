@@ -35,12 +35,19 @@ int main(int argc, char** argv) {
     app.add_flag("-m,--high_memory", Global::high_memory_mode, "Enable high memory mode")
         ->default_str(Global::high_memory_mode ? "true" : "false");
 
+    app.add_flag("-t,--measure_time", Global::measure_time, "Enable time measurement")
+        ->default_str(Global::measure_time ? "true" : "false");
+
     app.require_subcommand(1);
     std::unique_ptr<Command> command;
 
     app.callback([&]() {
         if (Global::high_memory_mode) {
             spdlog::warn("High memory mode is enabled.");
+        }
+
+        if (Global::measure_time) {
+            spdlog::warn("Time measurement is enabled.");
         }
 
         if (!command) {
