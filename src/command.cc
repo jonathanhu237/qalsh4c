@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <format>
+#include <iostream>
 #include <ratio>
 
 #include "types.h"
@@ -64,10 +65,10 @@ void EstimateCommand::Execute() {
     double relative_error = std::abs((estimate - metadata.chamfer_distance) / metadata.chamfer_distance);
 
     // Log the results
-    spdlog::info(
-        std::format("The result is as follows:\n"
-                    "    Time Consumed: {:.2f} ms\n"
-                    "    Estimated Chamfer distance: {}\n"
-                    "    Relative error: {:.2f}%",
-                    estimated_time, estimate, relative_error * 100.0));
+    std::cout << std::format(
+        "The result is as follows:\n"
+        "    Time Consumed: {:.2f} ms\n"
+        "    Estimated Chamfer distance: {}\n"
+        "    Relative error: {:.2f}%",
+        estimated_time, estimate, relative_error * 100.0);
 }
