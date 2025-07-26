@@ -50,6 +50,13 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
         return;
     }
 
+    // Create the B+ tree directory.
+    std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";
+    if (!std::filesystem::exists(b_plus_tree_directory)) {
+        spdlog::info("Creating B+ tree directory: {}", b_plus_tree_directory.string());
+        std::filesystem::create_directories(b_plus_tree_directory);
+    }
+
     // Generate the dot vectors
     spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
@@ -78,8 +85,7 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
         std::ranges::sort(dot_products_with_id);
 
         // Bulk load the B+ tree with sorted dot products
-        BPlusTreeBulkLoader bulk_loader(index_directory / "b_plus_trees" / std::format("{}.bin", i),
-                                        qalsh_config_.page_size);
+        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), qalsh_config_.page_size);
         bulk_loader.Build(dot_products_with_id);
     }
     auto end = std::chrono::high_resolution_clock::now();
