@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
     std::string log_level;
-    app.add_option("-l,--log_level", log_level, "Set the logging level (default: info)")
-        ->default_val("info")
+    app.add_option("-l,--log_level", log_level, "Set the logging level (default: warn)")
+        ->default_val("warn")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}))
         ->each([&](const std::string& level) {
             auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
