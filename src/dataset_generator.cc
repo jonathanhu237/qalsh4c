@@ -22,7 +22,7 @@ DatasetSynthesizer::DatasetSynthesizer(DatasetMetadata dataset_metadata, double 
 void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory) {
     // Create the directory if it does not exist
     if (!std::filesystem::exists(dataset_directory)) {
-        spdlog::debug("Creating dataset directory: {}", dataset_directory.string());
+        spdlog::info("Creating dataset directory: {}", dataset_directory.string());
         std::filesystem::create_directory(dataset_directory);
     }
 
@@ -32,14 +32,14 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     dataset_metadata_.Save(dataset_directory / "metadata.toml");
 
     // Generate the base point set and the query point set
-    spdlog::debug("Generating base point set...");
+    spdlog::info("Generating base point set...");
     GeneratePointSet(dataset_directory, "base", dataset_metadata_.base_num_points);
 
-    spdlog::debug("Generating query point set...");
+    spdlog::info("Generating query point set...");
     GeneratePointSet(dataset_directory, "query", dataset_metadata_.query_num_points);
 
     // Calculate the Chamfer distance between the base and query sets
-    spdlog::debug("Calculating Chamfer distance between base and query sets...");
+    spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
         PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata_.data_type,
                                       dataset_metadata_.base_num_points, dataset_metadata_.num_dimensions);
@@ -52,8 +52,8 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
     dataset_metadata_.chamfer_distance = ann_estimator.Estimate(dataset_directory);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
-    spdlog::debug("Chamfer distance calculated: {}, took {:.2f} ms", dataset_metadata_.chamfer_distance,
-                  elapsed.count());
+    spdlog::info("Chamfer distance calculated: {}, took {:.2f} ms", dataset_metadata_.chamfer_distance,
+                 elapsed.count());
 
     // Save the updated metadata
     dataset_metadata_.Save(dataset_directory / "metadata.toml");

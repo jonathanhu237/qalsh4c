@@ -18,17 +18,17 @@
 // ---------------------------------------------
 
 AnnEstimator::AnnEstimator(std::string searcher_type) : searcher_type_(std::move(searcher_type)) {
-    spdlog::debug("Creating AnnEstimator with searcher type: {}", searcher_type_);
+    spdlog::info("Creating AnnEstimator with searcher type: {}", searcher_type_);
 }
 
 double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     // Load dataset metadata
-    spdlog::debug("Loading dataset metadata");
+    spdlog::info("Loading dataset metadata");
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory / "metadata.toml");
 
     // Initialize the base and query set readers
-    spdlog::debug("Creating base and query set readers");
+    spdlog::info("Creating base and query set readers");
     auto base_set_reader{PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
                                                        dataset_metadata.base_num_points,
                                                        dataset_metadata.num_dimensions)};
@@ -37,7 +37,7 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
                                                         dataset_metadata.num_dimensions)};
 
     // Initialize the ANN searcher
-    spdlog::debug("Creating ANN searcher of type: {}", searcher_type_);
+    spdlog::info("Creating ANN searcher of type: {}", searcher_type_);
     std::unique_ptr<AnnSearcher> ann_searcher;
     if (searcher_type_ == "linear_scan") {
         ann_searcher = std::make_unique<LinearScanAnnSearcher>(base_set_reader.get());
@@ -53,7 +53,7 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
         return 0.0;
     }
 
-    spdlog::debug("Calculating Chamfer distance using ANN searcher");
+    spdlog::info("Calculating Chamfer distance using ANN searcher");
     double chamfer_distance{0.0};
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
         PointVariant query = query_set_reader->GetPoint(i);
@@ -69,7 +69,7 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
 
 SamplingEstimator::SamplingEstimator(std::string searcher_type, unsigned int num_samples)
     : searcher_type_(std::move(searcher_type)), num_samples_(num_samples) {
-    spdlog::debug("Creating SamplingEstimator with searcher type: {}", searcher_type_);
+    spdlog::info("Creating SamplingEstimator with searcher type: {}", searcher_type_);
 }
 
 double SamplingEstimator::Estimate(const std::filesystem::path& dataset_directory) {
@@ -94,7 +94,7 @@ double SamplingEstimator::Estimate(const std::filesystem::path& dataset_director
     std::vector<double> weights = weights_generator->Generate(dataset_directory);
 
     // Load dataset metadata
-    spdlog::debug("Loading dataset metadata");
+    spdlog::info("Loading dataset metadata");
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory / "metadata.toml");
 
