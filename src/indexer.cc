@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "b_plus_tree.h"
+#include "global.h"
 #include "point_set.h"
 #include "types.h"
 #include "utils.h"
@@ -37,6 +38,16 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     if (!std::filesystem::exists(index_directory)) {
         spdlog::info("Creating index directory: {}", index_directory.string());
         std::filesystem::create_directories(index_directory);
+    }
+
+    // Save the QALSH configuration
+    spdlog::info("Saving QALSH configuration...");
+    qalsh_config_.Save(index_directory / "config.toml");
+
+    if (Global::high_memory_mode) {
+        // We just save the QALSH configuration in high memory mode, since
+        // the dot vectors and data will be generated in memory in the query phase.
+        return;
     }
 
     // Generate the dot vectors
@@ -84,8 +95,4 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     for (const auto& vec : dot_vectors) {
         ofs.write(reinterpret_cast<const char*>(vec.data()), static_cast<std::streamsize>(vec.size() * sizeof(double)));
     }
-
-    // Save the QALSH configuration
-    spdlog::info("Saving QALSH configuration...");
-    qalsh_config_.Save(index_directory / "config.toml");
 }
