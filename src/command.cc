@@ -69,6 +69,7 @@ void EstimateCommand::Execute() {
         "The result is as follows:\n"
         "    Time Consumed: {:.2f} ms\n"
         "    Estimated Chamfer distance: {}\n"
+        "    Ground Truth Chamfer distance: {}\n"
         "    Relative error: {:.2f}%\n",
-        estimated_time, estimate, relative_error * 100.0);
+        estimated_time, estimate, metadata.chamfer_distance, relative_error * 100.0);
 }
