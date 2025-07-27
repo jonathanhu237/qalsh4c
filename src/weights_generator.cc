@@ -29,7 +29,8 @@ std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path&
 
     // Generate weights based on QALSH algorithm.
     std::vector<double> weights(dataset_metadata.query_num_points);
-    QalshAnnSearcher qalsh_ann_searcher(base_set_reader.get(), dataset_directory / "qalsh_index");
+    QalshAnnSearcher qalsh_ann_searcher;
+    qalsh_ann_searcher.Init(dataset_directory / "qalsh_index");
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
         PointVariant query_point = query_set_reader->GetPoint(i);
         AnnResult result = qalsh_ann_searcher.Search(query_point);
