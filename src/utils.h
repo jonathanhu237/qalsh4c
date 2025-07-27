@@ -31,6 +31,8 @@ class Utils {
 
     template <typename T>
     void static WritePoints(const std::vector<std::vector<T>> &points, const std::string &path);
+
+    std::vector<std::vector<uint8_t>> static ReadBmpGrayscale(const std::string &path);
 };
 
 template <typename T1, typename T2>
