@@ -62,7 +62,6 @@ int main(int argc, char** argv) {
     // ------------------------------------------------------------
     // generate dataset command
     // ------------------------------------------------------------
-
     CLI::App* generate_dataset_command =
         app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer Distance Approximation");
 
@@ -83,7 +82,6 @@ int main(int argc, char** argv) {
     // ---------------------------------------------
     // synthesize dataset command
     // ---------------------------------------------
-
     CLI::App* synthesize_dataset_command = generate_dataset_command->add_subcommand(
         "synthesize", "Generate a dataset by synthesizing points within a specified range");
 
@@ -130,7 +128,6 @@ int main(int argc, char** argv) {
     // ------------------------------------------------------------
     // index command
     // ------------------------------------------------------------
-
     CLI::App* index_command = app.add_subcommand("index", "Index a dataset for Chamfer Distance Approximation");
     index_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
@@ -219,7 +216,6 @@ int main(int argc, char** argv) {
     // ------------------------------------------------------------
     // estimate command
     // ------------------------------------------------------------
-
     CLI::App* estimate_command = app.add_subcommand("estimate", "Estimate Chamfer distance");
 
     estimate_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
