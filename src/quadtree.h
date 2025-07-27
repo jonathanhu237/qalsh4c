@@ -20,7 +20,7 @@ class Quadtree {
    public:
     Quadtree(const std::filesystem::path& dataset_directory, unsigned int max_level, bool need_random_shift);
     void Build();
-    std::vector<unsigned int> DepthFirstSearch() const;
+    [[nodiscard]] std::vector<unsigned int> DepthFirstSearch() const;
 
    private:
     void ComputeShift(const std::vector<double>& lower, std::vector<double>& upper);
