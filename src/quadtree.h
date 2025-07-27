@@ -31,7 +31,8 @@ class Quadtree {
         const std::vector<bool>& edge, const std::vector<double>& lower, const std::vector<double>& mid_point,
         const std::vector<double>& upper) const;
 
-    std::unique_ptr<PointSetReader> base_reader_;
+    std::unique_ptr<CombinePointSetReader> combine_reader_;
+
     unsigned int num_points_;
     unsigned int num_dimensions_;
     unsigned int max_level_;

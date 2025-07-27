@@ -27,9 +27,14 @@ Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int 
     dataset_metadata.Load(dataset_directory / "metadata.toml");
 
     // Initialize members.
-    base_reader_ = PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
-                                                 dataset_metadata.base_num_points, dataset_metadata.num_dimensions);
-    num_points_ = dataset_metadata.base_num_points;
+    auto base_reader_ =
+        PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                      dataset_metadata.base_num_points, dataset_metadata.num_dimensions);
+    auto query_reader_ =
+        PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata.data_type,
+                                      dataset_metadata.query_num_points, dataset_metadata.num_dimensions);
+    combine_reader_ = std::make_unique<CombinePointSetReader>(std::move(base_reader_), std::move(query_reader_));
+    num_points_ = dataset_metadata.base_num_points + dataset_metadata.query_num_points;
     num_dimensions_ = dataset_metadata.num_dimensions;
 
     // Initialize shift.
@@ -38,7 +43,7 @@ Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int 
 
 void Quadtree::Build() {
     // Get the number of dimensions.
-    unsigned int num_dimensions = base_reader_->get_num_dimensions();
+    unsigned int num_dimensions = combine_reader_->get_num_dimensions();
 
     // Suppose the `dataset` is[[2, 8], [6, 2], [7, 4], [3, 6], [9, 7]],
     // then `lower` will be [2, 2] and `upper` will be [9, 8], that is,
@@ -47,8 +52,8 @@ void Quadtree::Build() {
     std::vector<double> lower(num_dimensions_, std::numeric_limits<double>::max());
     std::vector<double> upper(num_dimensions_, std::numeric_limits<double>::lowest());
 
-    for (unsigned int i = 0; i < base_reader_->get_num_points(); i++) {
-        PointVariant point = base_reader_->GetPoint(i);
+    for (unsigned int i = 0; i < combine_reader_->get_num_points(); i++) {
+        PointVariant point = combine_reader_->GetPoint(i);
 
         std::visit(
             [&](const auto& concrete_point) {
@@ -101,7 +106,7 @@ std::unique_ptr<QuadtreeNode> Quadtree::BuildTreeAux(const std::vector<unsigned 
     // Generate the sub clusters
     std::unordered_map<std::vector<bool>, std::vector<unsigned int>> sub_clusters_map;
     for (auto point_id : cluster) {
-        PointVariant point = base_reader_->GetPoint(point_id);
+        PointVariant point = combine_reader_->GetPoint(point_id);
         std::vector<bool> edge(num_dimensions_);
 
         std::visit(
