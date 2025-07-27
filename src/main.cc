@@ -7,7 +7,9 @@
 #include <format>
 #include <memory>
 #include <mutex>
+#include <utility>
 
+#include "ann_searcher.h"
 #include "command.h"
 #include "dataset_generator.h"
 #include "estimator.h"
@@ -15,6 +17,7 @@
 #include "indexer.h"
 #include "sink.h"
 #include "types.h"
+#include "weights_generator.h"
 
 int main(int argc, char** argv) {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
@@ -56,9 +59,9 @@ int main(int argc, char** argv) {
         command->Execute();
     });
 
-    // ------------------------------
+    // ------------------------------------------------------------
     // generate dataset command
-    // ------------------------------
+    // ------------------------------------------------------------
 
     CLI::App* generate_dataset_command =
         app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer Distance Approximation");
@@ -77,9 +80,9 @@ int main(int argc, char** argv) {
         command = std::unique_ptr<Command>(new GenerateDatasetCommand(std::move(dataset_generator), dataset_directory));
     });
 
-    // ------------------------------
+    // ---------------------------------------------
     // synthesize dataset command
-    // ------------------------------
+    // ---------------------------------------------
 
     CLI::App* synthesize_dataset_command = generate_dataset_command->add_subcommand(
         "synthesize", "Generate a dataset by synthesizing points within a specified range");
@@ -124,9 +127,9 @@ int main(int argc, char** argv) {
         dataset_generator = std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary);
     });
 
-    // ------------------------------
+    // ------------------------------------------------------------
     // index command
-    // ------------------------------
+    // ------------------------------------------------------------
 
     CLI::App* index_command = app.add_subcommand("index", "Index a dataset for Chamfer Distance Approximation");
     index_command->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
@@ -141,9 +144,9 @@ int main(int argc, char** argv) {
         command = std::unique_ptr<Command>(new IndexCommand(std::move(indexer), dataset_directory));
     });
 
-    // ------------------------------
+    // ---------------------------------------------
     // qalsh index command
-    // ------------------------------
+    // ---------------------------------------------
 
     CLI::App* qalsh_index_command = index_command->add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
 
@@ -200,9 +203,9 @@ int main(int argc, char** argv) {
         indexer = std::make_unique<QalshIndexer>(qalsh_config);
     });
 
-    // ------------------------------
+    // ------------------------------------------------------------
     // estimate command
-    // ------------------------------
+    // ------------------------------------------------------------
 
     CLI::App* estimate_command = app.add_subcommand("estimate", "Estimate Chamfer distance");
 
@@ -218,36 +221,65 @@ int main(int argc, char** argv) {
         command = std::unique_ptr<Command>(new EstimateCommand(std::move(estimator), dataset_directory));
     });
 
-    // ------------------------------
+    // ---------------------------------------------
     // ann estimate command
-    // ------------------------------
-
+    // ---------------------------------------------
     CLI::App* ann_estimate_command = estimate_command->add_subcommand("ann", "Estimate Chamfer distance using ANN");
 
-    std::string ann_searcher_type;
-    ann_estimate_command
-        ->add_option("-s,--searcher_type", ann_searcher_type, "Type of ANN searcher (linear_scan, qalsh)")
-        ->required()
-        ->check(CLI::IsMember({"linear_scan", "qalsh"}));
+    std::unique_ptr<AnnSearcher> ann_searcher;
+    ann_estimate_command->require_subcommand(1);
 
-    ann_estimate_command->callback([&]() { estimator = std::make_unique<AnnEstimator>(ann_searcher_type); });
+    ann_estimate_command->callback([&]() {
+        if (!ann_searcher) {
+            spdlog::error("ANN searcher is not set.");
+        } else {
+            estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
+        }
+    });
 
     // ------------------------------
-    // sample estimate command
+    // linear scan ann estimate
     // ------------------------------
+    CLI::App* linear_scan_ann = ann_estimate_command->add_subcommand("linear_scan", "Use linear scan for ann");
+    linear_scan_ann->callback([&]() { ann_searcher = std::make_unique<LinearScanAnnSearcher>(); });
 
+    // ------------------------------
+    // qalsh ann estimate
+    // ------------------------------
+    CLI::App* qalsh_ann = ann_estimate_command->add_subcommand("qalsh", "Use QALSH for ann");
+    qalsh_ann->callback([&]() { ann_searcher = std::make_unique<QalshAnnSearcher>(); });
+
+    // ---------------------------------------------
+    // sampling estimate command
+    // ---------------------------------------------
     CLI::App* sampling = estimate_command->add_subcommand("sampling", "Estimate Chamfer distance using sampling");
-
-    std::string sampling_searcher_type;
-    sampling->add_option("-s,--searcher_type", sampling_searcher_type, "Type of sampling searcher (uniform, qalsh)")
-        ->required()
-        ->check(CLI::IsMember({"uniform", "qalsh"}));
 
     unsigned int num_samples{0};
     sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")
         ->default_str("log(n)");
 
-    sampling->callback([&]() { estimator = std::make_unique<SamplingEstimator>(sampling_searcher_type, num_samples); });
+    std::unique_ptr<WeightsGenerator> weights_generator;
+    sampling->require_subcommand(1);
+
+    sampling->callback([&]() {
+        if (!weights_generator) {
+            spdlog::error("Weights generator is not set.");
+        }
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples);
+    });
+
+    // ------------------------------
+    // uniform sampling estimate
+    // ------------------------------
+    CLI::App* uniform_sampling = sampling->add_subcommand("uniform", "Generate samples using uniform distribution");
+    uniform_sampling->callback([&]() { weights_generator = std::make_unique<UniformWeightsGenerator>(); });
+
+    // ------------------------------
+    // qalsh sampling estimate
+    // ------------------------------
+    CLI::App* qalsh_sampling =
+        sampling->add_subcommand("qalsh", "Generate samples using the weights generated by QALSH");
+    qalsh_sampling->callback([&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(); });
 
     CLI11_PARSE(app, argc, argv);
 

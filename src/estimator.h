@@ -2,6 +2,10 @@
 #define ESTIMATOR_H_
 
 #include <filesystem>
+#include <memory>
+
+#include "ann_searcher.h"
+#include "weights_generator.h"
 
 class Estimator {
    public:
@@ -11,20 +15,20 @@ class Estimator {
 
 class AnnEstimator : public Estimator {
    public:
-    AnnEstimator(std::string searcher_type);
+    AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher);
     double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
-    std::string searcher_type_;
+    std::unique_ptr<AnnSearcher> ann_searcher_;
 };
 
 class SamplingEstimator : public Estimator {
    public:
-    SamplingEstimator(std::string searcher_type, unsigned int num_samples);
+    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples);
     double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
-    std::string searcher_type_;
+    std::unique_ptr<WeightsGenerator> weights_generator_;
     unsigned int num_samples_;
 };
 

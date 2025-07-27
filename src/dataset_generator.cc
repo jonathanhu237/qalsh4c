@@ -3,8 +3,10 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <memory>
 #include <utility>
 
+#include "ann_searcher.h"
 #include "estimator.h"
 #include "point_set.h"
 #include "types.h"
@@ -48,7 +50,7 @@ void DatasetSynthesizer::Generate(const std::filesystem::path &dataset_directory
                                       dataset_metadata_.query_num_points, dataset_metadata_.num_dimensions);
 
     auto start = std::chrono::high_resolution_clock::now();
-    AnnEstimator ann_estimator("linear_scan");
+    AnnEstimator ann_estimator(std::make_unique<LinearScanAnnSearcher>());
     dataset_metadata_.chamfer_distance = ann_estimator.Estimate(dataset_directory);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;

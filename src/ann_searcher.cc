@@ -9,10 +9,12 @@
 #include <queue>
 #include <random>
 #include <variant>
+#include <vector>
 
+#include "b_plus_tree.h"
 #include "global.h"
+#include "hash_table_searcher.h"
 #include "point_set.h"
-#include "qalsh_searcher.h"
 #include "timer.h"
 #include "types.h"
 #include "utils.h"
@@ -20,8 +22,12 @@
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
-
-LinearScanAnnSearcher::LinearScanAnnSearcher(PointSetReader* base_reader) : base_reader_(base_reader) {}
+void LinearScanAnnSearcher::Init(const std::filesystem::path& dataset_directory) {
+    DatasetMetadata dataset_metadata;
+    dataset_metadata.Load(dataset_directory / "metadata.toml");
+    base_reader_ = PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                                 dataset_metadata.base_num_points, dataset_metadata.num_dimensions);
+}
 
 AnnResult LinearScanAnnSearcher::Search(const PointVariant& query_point) {
     AnnResult result{.point_id = 0, .distance = std::numeric_limits<double>::max()};
@@ -53,9 +59,17 @@ AnnResult LinearScanAnnSearcher::Search(const PointVariant& query_point) {
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
+void QalshAnnSearcher::Init(const std::filesystem::path& dataset_directory) {
+    // Load dataset metadata.
+    DatasetMetadata dataset_metadata;
+    dataset_metadata.Load(dataset_directory / "metadata.toml");
 
-QalshAnnSearcher::QalshAnnSearcher(PointSetReader* base_reader, std::filesystem::path index_directory)
-    : base_reader_(base_reader), index_directory_(std::move(index_directory)) {
+    // Initialize members.
+    base_reader_ = PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                                 dataset_metadata.base_num_points, dataset_metadata.num_dimensions);
+    index_directory_ = dataset_directory / "qalsh_index";
+
+    // Load QALSH Configuration
     std::filesystem::path config_path = index_directory_ / "config.toml";
     spdlog::info("Loading Qalsh configuration from {}", config_path.string());
     qalsh_config_.Load(config_path);
@@ -91,11 +105,23 @@ QalshAnnSearcher::QalshAnnSearcher(PointSetReader* base_reader, std::filesystem:
 
     // Initialize QALSH searchers.
     qalsh_searchers_.reserve(qalsh_config_.num_hash_tables);
-    for (unsigned int j = 0; j < qalsh_config_.num_hash_tables; j++) {
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         if (Global::high_memory_mode) {
-            qalsh_searchers_.emplace_back(std::make_unique<InMemorySearcher>(base_reader_, dot_vectors_[j]));
+            std::vector<KeyValuePair> data(dataset_metadata.base_num_points);
+            for (unsigned int j = 0; j < dataset_metadata.base_num_points; j++) {
+                PointVariant point = base_reader_->GetPoint(j);
+                double dot_product = 0.0;
+                std::visit(
+                    [&](const auto& concrete_point) {
+                        dot_product = Utils::DotProduct(concrete_point, dot_vectors_[i]);
+                    },
+                    point);
+                data.emplace_back(dot_product, j);
+            }
+            std::ranges::sort(data);
+            qalsh_searchers_.emplace_back(std::make_unique<InMemorySearcher>(data));
         } else {
-            const std::filesystem::path index_file_path = index_directory_ / "b_plus_trees" / std::format("{}.bin", j);
+            const std::filesystem::path index_file_path = index_directory_ / "b_plus_trees" / std::format("{}.bin", i);
             qalsh_searchers_.emplace_back(
                 std::make_unique<BPlusTreeSearcher>(index_file_path, qalsh_config_.page_size));
         }
