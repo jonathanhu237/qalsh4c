@@ -20,9 +20,7 @@ std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path&
     // Load dataset metadata.
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory / "metadata.toml");
-    auto base_set_reader{PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
-                                                       dataset_metadata.base_num_points,
-                                                       dataset_metadata.num_dimensions)};
+
     auto query_set_reader{PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata.data_type,
                                                         dataset_metadata.query_num_points,
                                                         dataset_metadata.num_dimensions)};
