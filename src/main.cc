@@ -147,7 +147,6 @@ int main(int argc, char** argv) {
     // ---------------------------------------------
     // qalsh index command
     // ---------------------------------------------
-
     CLI::App* qalsh_index_command = index_command->add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
 
     double approximation_ratio{0.0};
@@ -202,6 +201,20 @@ int main(int argc, char** argv) {
                                            .page_size = page_size};
         indexer = std::make_unique<QalshIndexer>(qalsh_config);
     });
+
+    // ---------------------------------------------
+    // quadtree index command
+    // ---------------------------------------------
+    CLI::App* quadtree_index_command = index_command->add_subcommand("quadtree", "Index a dataset using Quadtree");
+
+    unsigned int max_level{0};
+    quadtree_index_command->add_option(
+        "-l,--max-level", max_level,
+        "Max level for the Quadtree (default: 0, which means the there is no limit for the level)");
+
+    QuadtreeConfiguration quadtree_config = {.max_level = max_level};
+
+    quadtree_index_command->callback([&]() { indexer = std::make_unique<QuadtreeIndexer>(quadtree_config); });
 
     // ------------------------------------------------------------
     // estimate command

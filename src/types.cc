@@ -12,7 +12,6 @@
 // ---------------------------------------------
 // DatasetMetadata Implementation
 // ---------------------------------------------
-
 void DatasetMetadata::Save(const std::filesystem::path& file_path) const {
     toml::table metadata;
     metadata.insert("data_type", data_type);
@@ -39,9 +38,8 @@ void DatasetMetadata::Load(const std::filesystem::path& file_path) {
 }
 
 // ---------------------------------------------
-// DatasetMetadata Implementation
+// QalshConfiguration Implementation
 // ---------------------------------------------
-
 void QalshConfiguration::Save(const std::filesystem::path& file_path) const {
     toml::table config;
     config.insert("approximation_ratio", approximation_ratio);
@@ -95,4 +93,26 @@ void QalshConfiguration::Regularize(unsigned int num_points) {
         double alpha = (eta * p1 + p2) / (1 + eta);
         collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
     }
+}
+
+// ---------------------------------------------
+// QuadtreeConfiguration Implementation
+// ---------------------------------------------
+void QuadtreeConfiguration::Save(const std::filesystem::path& file_path) const {
+    toml::table metadata;
+    metadata.insert("max_level", max_level);
+    metadata.insert("level", level);
+
+    std::ofstream metadata_ofs(file_path);
+    if (!metadata_ofs.is_open()) {
+        spdlog::error("Failed to open metadata file for writing.");
+    }
+    metadata_ofs << metadata;
+}
+
+void QuadtreeConfiguration::Load(const std::filesystem::path& file_path) {
+    toml::table tbl = toml::parse_file(file_path.string());
+
+    max_level = Utils::GetValueFromTomlTable<unsigned int>(tbl, "max_level");
+    level = Utils::GetValueFromTomlTable<unsigned int>(tbl, "level");
 }

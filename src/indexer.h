@@ -31,4 +31,13 @@ class QalshIndexer : public Indexer {
     std::mt19937 gen_;
 };
 
+class QuadtreeIndexer : public Indexer {
+   public:
+    QuadtreeIndexer(QuadtreeConfiguration quadtree_config);
+    void BuildIndex(const std::filesystem::path& dataset_directory) override;
+
+   private:
+    QuadtreeConfiguration quadtree_config_;
+};
+
 #endif

@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <filesystem>
 #include <format>
 #include <ios>
 #include <memory>
@@ -17,7 +18,6 @@
 // ---------------------------------------------
 // QalshIndexer Implementation
 // ---------------------------------------------
-
 QalshIndexer::QalshIndexer(QalshConfiguration qalsh_config)
     : qalsh_config_(qalsh_config), gen_(std::random_device{}()) {}
 
@@ -102,4 +102,28 @@ void QalshIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
     for (const auto& vec : dot_vectors) {
         ofs.write(reinterpret_cast<const char*>(vec.data()), static_cast<std::streamsize>(vec.size() * sizeof(double)));
     }
+}
+
+// ---------------------------------------------
+// QuadtreeIndexer Implementation
+// ---------------------------------------------
+QuadtreeIndexer::QuadtreeIndexer(QuadtreeConfiguration quadtree_config) : quadtree_config_(quadtree_config) {}
+
+void QuadtreeIndexer::BuildIndex(const std::filesystem::path& dataset_directory) {
+    // Create the directory for the index if not exists.
+    std::filesystem::path index_directory = dataset_directory / "quadtree_index";
+    if (!std::filesystem::exists(index_directory)) {
+        std::filesystem::create_directories(index_directory);
+    }
+
+    // Save the Quadtree configuration
+    quadtree_config_.Save(index_directory / "config.toml");
+
+    if (Global::high_memory_mode) {
+        // We do not build the index on the disk in the high memory mode, the index will
+        // be built in the memory in the query phrase.
+        return;
+    }
+
+    spdlog::error("The construction of Quadtree in the disk has not yet been implemented.");
 }

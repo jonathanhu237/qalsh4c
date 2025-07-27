@@ -29,6 +29,14 @@ struct QalshConfiguration {
     void Regularize(unsigned int num_points);
 };
 
+struct QuadtreeConfiguration {
+    unsigned int max_level{0};
+    unsigned int level{0};
+
+    void Save(const std::filesystem::path& file_path) const;
+    void Load(const std::filesystem::path& file_path);
+};
+
 struct AnnResult {
     unsigned int point_id{0};
     double distance{0.0};
