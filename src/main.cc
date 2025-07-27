@@ -87,9 +87,9 @@ int main(int argc, char** argv) {
 
     std::string data_type;
     synthesize_dataset_command
-        ->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, double)")
+        ->add_option("-t,--data-type", data_type, "Data type for the dataset (uint8, int, float, double)")
         ->default_val("double")
-        ->check(CLI::IsMember({"uint8", "int", "double"}));
+        ->check(CLI::IsMember({"uint8", "int", "float", "double"}));
 
     unsigned int base_num_points{0};
     synthesize_dataset_command
