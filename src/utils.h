@@ -6,6 +6,8 @@
 
 #include <Eigen/Eigen>
 #include <format>
+#include <fstream>
+#include <random>
 #include <string_view>
 #include <vector>
 
@@ -27,6 +29,12 @@ class Utils {
     T static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
 
     auto static SampleFromWeights(const std::vector<double> &weights) -> unsigned int;
+
+    template <typename T>
+    std::vector<std::vector<T>> SampleRandomPoints(const std::vector<std::vector<T>> &points, uint32_t num_points);
+
+    template <typename TData>
+    void WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path);
 };
 
 template <typename T1, typename T2>
@@ -83,6 +91,30 @@ T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
     offset += sizeof(T);
 
     return data;
+}
+
+template <typename T>
+std::vector<std::vector<T>> SampleRandomPoints(const std::vector<std::vector<T>> &points, uint32_t num_points) {
+    if (points.size() < num_points) {
+        spdlog::error("Number of points is less than the number of points to sample");
+    }
+
+    std::vector<std::vector<T>> sampled_points;
+    std::mt19937 gen(std::random_device{}());
+
+    std::sample(points.begin(), points.end(), std::back_inserter(sampled_points), num_points, gen);
+
+    return sampled_points;
+}
+
+template <typename TData>
+void WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path) {
+    std::ofstream ofs(path, std::ios::binary | std::ios::out);
+
+    for (size_t i = 0; i < points.size(); i++) {
+        ofs.write(reinterpret_cast<const char *>(points[i].data()), sizeof(TData) * points[i].size());
+    }
+    ofs.close();
 }
 
 #endif
