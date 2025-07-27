@@ -31,10 +31,11 @@ class Utils {
     auto static SampleFromWeights(const std::vector<double> &weights) -> unsigned int;
 
     template <typename T>
-    std::vector<std::vector<T>> SampleRandomPoints(const std::vector<std::vector<T>> &points, uint32_t num_points);
+    std::vector<std::vector<T>> static SampleRandomPoints(const std::vector<std::vector<T>> &points,
+                                                          uint32_t num_points);
 
     template <typename TData>
-    void WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path);
+    void static WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path);
 };
 
 template <typename T1, typename T2>
