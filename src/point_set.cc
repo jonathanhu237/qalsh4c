@@ -44,6 +44,9 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
         if (data_type == "int") {
             return std::make_unique<InMemoryPointSetReader<int>>(file_path, num_points, num_dimensions);
         }
+        if (data_type == "float") {
+            return std::make_unique<InMemoryPointSetReader<double>>(file_path, num_points, num_dimensions);
+        }
         if (data_type == "double") {
             return std::make_unique<InMemoryPointSetReader<double>>(file_path, num_points, num_dimensions);
         }
@@ -53,6 +56,9 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
         }
         if (data_type == "int") {
             return std::make_unique<DiskPointSetReader<int>>(file_path, num_points, num_dimensions);
+        }
+        if (data_type == "float") {
+            return std::make_unique<InMemoryPointSetReader<double>>(file_path, num_points, num_dimensions);
         }
         if (data_type == "double") {
             return std::make_unique<DiskPointSetReader<double>>(file_path, num_points, num_dimensions);
