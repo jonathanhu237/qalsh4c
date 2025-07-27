@@ -1,5 +1,5 @@
-#ifndef QALSH_SEARCHER_H_
-#define QALSH_SEARCHER_H_
+#ifndef HASH_TABLE_SEARCHER_H_
+#define HASH_TABLE_SEARCHER_H_
 
 #include <filesystem>
 #include <optional>
@@ -7,19 +7,18 @@
 #include <vector>
 
 #include "b_plus_tree.h"
-#include "point_set.h"
 
 using SearchLocation = std::pair<LeafNode, size_t>;
 
-class QalshSearcher {
+class HashTableSearcher {
    public:
-    virtual ~QalshSearcher() = default;
+    virtual ~HashTableSearcher() = default;
 
     virtual void Init(double key) = 0;
     virtual std::vector<unsigned int> IncrementalSearch(double bound) = 0;
 };
 
-class BPlusTreeSearcher : public QalshSearcher {
+class BPlusTreeSearcher : public HashTableSearcher {
    public:
     BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size);
 
@@ -48,9 +47,9 @@ class BPlusTreeSearcher : public QalshSearcher {
     std::unordered_map<unsigned int, std::vector<char>> page_cache_;
 };
 
-class InMemorySearcher : public QalshSearcher {
+class InMemorySearcher : public HashTableSearcher {
    public:
-    InMemorySearcher(PointSetReader* base_reader, std::vector<double> dot_vector);
+    InMemorySearcher(const std::vector<KeyValuePair>& data);
 
     void Init(double key) override;
     std::vector<unsigned int> IncrementalSearch(double bound) override;

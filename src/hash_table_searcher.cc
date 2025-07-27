@@ -1,4 +1,4 @@
-#include "qalsh_searcher.h"
+#include "hash_table_searcher.h"
 
 #include <spdlog/spdlog.h>
 
@@ -7,7 +7,6 @@
 #include <filesystem>
 
 #include "b_plus_tree.h"
-#include "point_set.h"
 #include "utils.h"
 
 // ---------------------------------------------
@@ -153,17 +152,7 @@ std::vector<char> BPlusTreeSearcher::ReadPage(unsigned int page_num) {
 // ---------------------------------------------
 // InMemorySearcher Implementation
 // ---------------------------------------------
-InMemorySearcher::InMemorySearcher(PointSetReader* base_reader, std::vector<double> dot_vector) {
-    data_.reserve(base_reader->get_num_points());
-    for (unsigned int i = 0; i < base_reader->get_num_points(); i++) {
-        PointVariant point = base_reader->GetPoint(i);
-        double dot_product = 0.0;
-        std::visit([&](const auto& concrete_point) { dot_product = Utils::DotProduct(concrete_point, dot_vector); },
-                   point);
-        data_.emplace_back(dot_product, i);
-    }
-    std::ranges::sort(data_);
-}
+InMemorySearcher::InMemorySearcher(const std::vector<KeyValuePair>& data) : data_(data) {}
 
 void InMemorySearcher::Init(double key) {
     key_ = key;

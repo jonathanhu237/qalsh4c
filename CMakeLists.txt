@@ -19,10 +19,10 @@ add_executable(qalsh_chamfer
     src/dataset_generator.cc
     src/estimator.cc
     src/global.cc
+    src/hash_table_searcher.cc
     src/indexer.cc
     src/main.cc
     src/point_set.cc
-    src/qalsh_searcher.cc
     src/quadtree.cc
     src/timer.cc
     src/types.cc
