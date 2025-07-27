@@ -92,7 +92,7 @@ T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
 }
 
 template <typename TData>
-void WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path) {
+void Utils::WritePoints(const std::vector<std::vector<TData>> &points, const std::string &path) {
     std::ofstream ofs(path, std::ios::binary | std::ios::out);
 
     for (size_t i = 0; i < points.size(); i++) {
