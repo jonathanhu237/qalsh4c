@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <ios>
 #include <numeric>
 #include <random>
 
@@ -118,3 +119,22 @@ std::vector<std::vector<uint8_t>> Utils::ReadBmpGrayscale(const std::string &pat
     return pixel_data;
 }
 // NOLINTEND
+
+std::vector<std::vector<float>> Utils::ReadFvecs(const std::string &path) {
+    std::vector<std::vector<float>> data;
+    uint32_t dimension = 0;
+
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        throw std::runtime_error(std::format("Failed to open file: {}", path));
+    }
+
+    while (ifs.read(reinterpret_cast<char *>(&dimension), sizeof(uint32_t))) {
+        std::vector<float> vec(dimension);
+
+        ifs.read(reinterpret_cast<char *>(vec.data()), static_cast<std::streamoff>(sizeof(float) * dimension));
+        data.emplace_back(std::move(vec));
+    }
+
+    return data;
+}
