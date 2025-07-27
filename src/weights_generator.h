@@ -22,4 +22,10 @@ class QalshWeightsGenerator : public WeightsGenerator {
     std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
 };
 
+class QuadtreeWeightsGenerator : public WeightsGenerator {
+   public:
+    QuadtreeWeightsGenerator() = default;
+    std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
+};
+
 #endif
