@@ -1,6 +1,7 @@
 #ifndef QUADTREE_H_
 #define QUADTREE_H_
 
+#include <filesystem>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -17,7 +18,7 @@ struct QuadtreeNode {
 
 class Quadtree {
    public:
-    Quadtree(PointSetReader* base_reader, unsigned int max_level, bool need_random_shift);
+    Quadtree(const std::filesystem::path& dataset_directory, unsigned int max_level, bool need_random_shift);
     std::unique_ptr<QuadtreeNode> Build();
 
    private:
@@ -29,7 +30,7 @@ class Quadtree {
         const std::vector<bool>& edge, const std::vector<double>& lower, const std::vector<double>& mid_point,
         const std::vector<double>& upper) const;
 
-    PointSetReader* base_reader_;
+    std::unique_ptr<PointSetReader> base_reader_;
     unsigned int num_points_;
     unsigned int num_dimensions_;
     unsigned int max_level_;

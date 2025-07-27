@@ -11,16 +11,25 @@
 #include <vector>
 
 #include "point_set.h"
+#include "types.h"
 
 void QuadtreeNode::SetCluster(const std::vector<unsigned int>& new_cluster) { cluster = new_cluster; }
+
 void QuadtreeNode::AddChild(std::unique_ptr<QuadtreeNode> node) { children.emplace_back(std::move(node)); }
 
-Quadtree::Quadtree(PointSetReader* base_reader, unsigned int max_level, bool need_random_shift)
-    : base_reader_(base_reader),
-      num_points_(base_reader_->get_num_points()),
-      num_dimensions_(base_reader_->get_num_dimensions()),
-      max_level_(max_level),
-      need_random_shift_(need_random_shift) {
+Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int max_level, bool need_random_shift)
+    : max_level_(max_level), need_random_shift_(need_random_shift) {
+    // Load dataset metadata.
+    DatasetMetadata dataset_metadata;
+    dataset_metadata.Load(dataset_directory / "metadata.toml");
+
+    // Initialize members.
+    base_reader_ = PointSetReaderFactory::Create(dataset_directory / "base.bin", dataset_metadata.data_type,
+                                                 dataset_metadata.base_num_points, dataset_metadata.num_dimensions);
+    num_points_ = dataset_metadata.base_num_points;
+    num_dimensions_ = dataset_metadata.num_dimensions;
+
+    // Initialize shift.
     shift_.resize(num_dimensions_, 0);
 }
 
