@@ -19,7 +19,7 @@ struct QuadtreeNode {
 class Quadtree {
    public:
     Quadtree(const std::filesystem::path& dataset_directory, unsigned int max_level, bool need_random_shift);
-    std::unique_ptr<QuadtreeNode> Build();
+    void Build();
 
    private:
     void ComputeShift(const std::vector<double>& lower, std::vector<double>& upper);
@@ -37,6 +37,8 @@ class Quadtree {
 
     bool need_random_shift_;
     std::vector<double> shift_;
+
+    std::unique_ptr<QuadtreeNode> root_;
 };
 
 #endif

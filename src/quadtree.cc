@@ -33,7 +33,7 @@ Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int 
     shift_.resize(num_dimensions_, 0);
 }
 
-std::unique_ptr<QuadtreeNode> Quadtree::Build() {
+void Quadtree::Build() {
     // Get the number of dimensions.
     unsigned int num_dimensions = base_reader_->get_num_dimensions();
 
@@ -65,7 +65,7 @@ std::unique_ptr<QuadtreeNode> Quadtree::Build() {
     // Build the Quadtree
     std::vector<unsigned int> cluster(num_points_);
     std::iota(cluster.begin(), cluster.end(), 0);
-    return BuildTreeAux(cluster, lower, upper);
+    root_ = BuildTreeAux(cluster, lower, upper);
 }
 
 void Quadtree::ComputeShift(const std::vector<double>& lower, std::vector<double>& upper) {
