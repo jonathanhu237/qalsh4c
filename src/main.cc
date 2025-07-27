@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 
 #include <CLI/CLI.hpp>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <mutex>
@@ -123,6 +124,31 @@ int main(int argc, char** argv) {
             .chamfer_distance = 0.0  // Will be calculated later
         };
         dataset_generator = std::make_unique<DatasetSynthesizer>(dataset_metadata, left_boundary, right_boundary);
+    });
+
+    // ---------------------------------------------
+    // convert dataset command
+    // ---------------------------------------------
+    CLI::App* convert_dataset =
+        generate_dataset_command->add_subcommand("convert", "Convert known dataset into unified form.");
+
+    std::string dataset_name;
+    convert_dataset->add_option("-n,--dataset-name", dataset_name, "The name of the dataset (sift, gist, trevi, p53)")
+        ->check(CLI::IsMember({"mnist", "sift", "gist", "p53"}));
+
+    std::filesystem::path raw_dataset_directory;
+    convert_dataset
+        ->add_option("-r,--raw-data-directory", raw_dataset_directory, "The directory contains the original dataset.")
+        ->required();
+
+    convert_dataset
+        ->add_option("-Q,--query_num_points", query_num_points,
+                     "Number of points within query set in the dataset (default: 0, which make converter split the "
+                     "dataset in equal)")
+        ->default_val(0);
+
+    convert_dataset->callback([&]() {
+        dataset_generator = std::make_unique<DatasetConverter>(dataset_name, raw_dataset_directory, query_num_points);
     });
 
     // ------------------------------------------------------------
