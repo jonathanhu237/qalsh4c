@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <utility>
+
 #include "global.h"
 
 std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesystem::path& file_path,
@@ -58,4 +60,30 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
     }
     spdlog::error("Unsupported data type or configuration");
     return nullptr;
+}
+
+// ---------------------------------------------
+// CombinePointSetReader Implementation
+// ---------------------------------------------
+CombinePointSetReader::CombinePointSetReader(std::unique_ptr<PointSetReader> base_reader,
+                                             std::unique_ptr<PointSetReader> query_reader)
+    : base_reader_(std::move(base_reader)),
+      query_reader_(std::move(query_reader)),
+      num_points_(base_reader_->get_num_points() + query_reader_->get_num_dimensions()),
+      num_dimensions_(base_reader_->get_num_dimensions()) {}
+
+unsigned int CombinePointSetReader::get_num_points() const { return num_points_; }
+
+unsigned int CombinePointSetReader::get_num_dimensions() const { return num_dimensions_; }
+
+PointVariant CombinePointSetReader::GetPoint(unsigned int index) {
+    if (index >= num_points_) {
+        spdlog::error("Point index is out of range for the combined dataset.");
+        // The program will terminate automatically, so we do not return manually here.
+    }
+
+    if (index < base_reader_->get_num_points()) {
+        return base_reader_->GetPoint(index);
+    }
+    return query_reader_->GetPoint(index - base_reader_->get_num_points());
 }

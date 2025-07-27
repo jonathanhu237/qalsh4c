@@ -148,6 +148,25 @@ class PointSetReaderFactory {
 };
 
 // ---------------------------------------------
+// CombinePointSetReader Definition
+// ---------------------------------------------
+class CombinePointSetReader : PointSetReader {
+   public:
+    CombinePointSetReader(std::unique_ptr<PointSetReader> base_reader, std::unique_ptr<PointSetReader> query_reader);
+
+    [[nodiscard]] unsigned int get_num_points() const override;
+    [[nodiscard]] unsigned int get_num_dimensions() const override;
+
+    PointVariant GetPoint(unsigned int index) override;
+
+   private:
+    std::unique_ptr<PointSetReader> base_reader_;
+    std::unique_ptr<PointSetReader> query_reader_;
+    unsigned int num_points_;
+    unsigned int num_dimensions_;
+};
+
+// ---------------------------------------------
 // InMemoryPointSetWriter Implementation
 // ---------------------------------------------
 
