@@ -183,7 +183,7 @@ void DatasetConverter::ConvertTexmexDataset() {
     const std::filesystem::path output_base_path = output_dataset_directory_ / "base.bin";
     const std::filesystem::path output_query_path = output_dataset_directory_ / "query.bin";
 
-    std::vector<std::vector<float>> original_base = ReadFvecs(original_base_path);
+    std::vector<std::vector<float>> original_base = Utils::ReadFvecs(original_base_path);
     if (!CheckPoints(original_base, Global::kSiftNumPoints, Global::kSiftNumDimensions)) {
         spdlog::error("{} is invalid", original_base_path.string());
     }

@@ -41,7 +41,6 @@ class DatasetConverter : public DatasetGenerator {
 
    private:
     void ConvertTexmexDataset();
-    std::vector<std::vector<float>> ReadFvecs(const std::filesystem::path &path);
 
     template <typename T>
     bool CheckPoints(const std::vector<std::vector<T>> &points, uint32_t num_points, uint32_t num_dimensions);
