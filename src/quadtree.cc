@@ -5,7 +5,10 @@
 #include <memory>
 #include <numeric>
 #include <random>
+#include <ranges>
+#include <stack>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -139,4 +142,33 @@ std::pair<std::vector<double>, std::vector<double>> Quadtree::FindBounds(const s
     }
 
     return {sub_lower, sub_upper};
+}
+
+std::vector<unsigned int> Quadtree::DepthFirstSearch() const {
+    std::vector<unsigned int> dfs_order(num_points_);
+    std::stack<const QuadtreeNode*> stack;
+    std::unordered_set<const QuadtreeNode*> visited;
+
+    stack.emplace(root_);
+    while (!stack.empty()) {
+        const QuadtreeNode* vertex = stack.top();
+        stack.pop();
+
+        if (visited.contains(vertex)) {
+            continue;
+        }
+        visited.emplace(vertex);
+
+        if (vertex->children.empty()) {
+            if (vertex->cluster.has_value()) {
+                dfs_order.insert(dfs_order.end(), vertex->cluster->begin(), vertex->cluster->end());
+            }
+        }
+
+        for (const auto& it : std::ranges::reverse_view(vertex->children)) {
+            stack.emplace(it.get());
+        }
+    }
+
+    return dfs_order;
 }
