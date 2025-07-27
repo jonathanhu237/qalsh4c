@@ -154,7 +154,7 @@ std::vector<unsigned int> Quadtree::DepthFirstSearch() const {
     std::stack<const QuadtreeNode*> stack;
     std::unordered_set<const QuadtreeNode*> visited;
 
-    stack.emplace(root_);
+    stack.emplace(root_.get());
     while (!stack.empty()) {
         const QuadtreeNode* vertex = stack.top();
         stack.pop();
