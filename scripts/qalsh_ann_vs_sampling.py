@@ -62,7 +62,7 @@ def run_estimation_task(task_args):
         "qalsh",
     ]
     log_filename = os.path.join(
-        LOGS_DIR, f"qalsh_ann_vs_sampling/{db}_{method}_qalsh_output.log"
+        LOGS_DIR, "qalsh_ann_vs_sampling", f"{db}_{method}_qalsh_output.log"
     )
 
     if not run_command(estimate_cmd, log_file=log_filename):
