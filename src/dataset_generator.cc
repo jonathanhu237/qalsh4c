@@ -156,6 +156,9 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
         spdlog::error(std::format("Unsupported dataset: {}", dataset_name_));
     }
 
+    // We must save the metadata first since it will be used by the estimator (update the chamfer distance later)
+    dataset_metadata_.Save(output_dataset_directory_ / "metadata.toml");
+
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     auto base_set_reader =
