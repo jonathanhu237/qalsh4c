@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <ios>
 #include <optional>
 #include <variant>
 #include <vector>
@@ -17,7 +19,8 @@
 // --------------------------------------------------
 // UniformWeightsGenerator Implementation
 // --------------------------------------------------
-std::vector<double> UniformWeightsGenerator::Generate(const std::filesystem::path& dataset_directory) {
+std::vector<double> UniformWeightsGenerator::Generate(const std::filesystem::path& dataset_directory,
+                                                      [[maybe_unused]] bool use_cache) {
     // Load dataset metadata
     DatasetMetadata metadata;
     metadata.Load(dataset_directory / "metadata.toml");
@@ -29,7 +32,7 @@ std::vector<double> UniformWeightsGenerator::Generate(const std::filesystem::pat
 // --------------------------------------------------
 // QalshWeightsGenerator Implementation
 // --------------------------------------------------
-std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path& dataset_directory) {
+std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path& dataset_directory, bool use_cache) {
     // Load dataset metadata.
     std::filesystem::path metadata_path = dataset_directory / "metadata.toml";
     if (!std::filesystem::exists(metadata_path)) {
@@ -47,6 +50,18 @@ std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path&
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH...");
     std::vector<double> weights(dataset_metadata.query_num_points);
+
+    if (use_cache) {
+        std::filesystem::path cache_file_path = dataset_directory / "qalsh_weights.bin";
+        if (std::filesystem::exists(cache_file_path)) {
+            std::ifstream ifs(cache_file_path);
+            ifs.read(reinterpret_cast<char*>(weights.data()),
+                     static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
+            return weights;
+        }
+        spdlog::warn("Cache file doesn't exist. Generating the new one...");
+    }
+
     QalshAnnSearcher qalsh_ann_searcher;
     qalsh_ann_searcher.Init(dataset_directory);
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
@@ -55,16 +70,38 @@ std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path&
         weights[i] = result.distance;  // Use the distance as the weight
     }
 
+    if (use_cache) {
+        std::filesystem::path cache_file_path = dataset_directory / "qalsh_weights.bin";
+        std::ofstream ofs(cache_file_path);
+        ofs.write(reinterpret_cast<const char*>(weights.data()),
+                  static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
+    }
+
     return weights;
 }
 
 // --------------------------------------------------
 // QuadtreeWeightsGenerator Implementation
 // --------------------------------------------------
-std::vector<double> QuadtreeWeightsGenerator::Generate(const std::filesystem::path& dataset_directory) {
+std::vector<double> QuadtreeWeightsGenerator::Generate(const std::filesystem::path& dataset_directory, bool use_cache) {
     // Load dataset metadata.
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory / "metadata.toml");
+
+    // Generate weights based on Quadtree.
+    spdlog::info("Generating weights using Quadtree...");
+    std::vector<double> weights(dataset_metadata.query_num_points);
+
+    if (use_cache) {
+        std::filesystem::path cache_file_path = dataset_directory / "quadtree_weights.bin";
+        if (std::filesystem::exists(cache_file_path)) {
+            std::ifstream ifs(cache_file_path);
+            ifs.read(reinterpret_cast<char*>(weights.data()),
+                     static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
+            return weights;
+        }
+        spdlog::warn("Cache file doesn't exist. Generating the new one...");
+    }
 
     // Load Quadtree configuration.
     QuadtreeConfiguration config;
@@ -145,7 +182,6 @@ std::vector<double> QuadtreeWeightsGenerator::Generate(const std::filesystem::pa
                                       dataset_metadata.query_num_points, dataset_metadata.num_dimensions);
 
     // Calculate the weights
-    std::vector<double> weights(query_num_points);
     for (unsigned int i = 0; i < query_num_points; i++) {
         unsigned int query_idx_in_dfs = base_num_points + i;
         unsigned int dfs_pos = point_pos_in_dfs[query_idx_in_dfs];
@@ -167,6 +203,13 @@ std::vector<double> QuadtreeWeightsGenerator::Generate(const std::filesystem::pa
                 weights[i] = std::min(dist_left, dist_right);
             },
             query, left_point, right_point);
+    }
+
+    if (use_cache) {
+        std::filesystem::path cache_file_path = dataset_directory / "quadtree_weights.bin";
+        std::ofstream ofs(cache_file_path);
+        ofs.write(reinterpret_cast<const char*>(weights.data()),
+                  static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
     }
 
     // Return

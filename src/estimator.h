@@ -24,12 +24,14 @@ class AnnEstimator : public Estimator {
 
 class SamplingEstimator : public Estimator {
    public:
-    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples);
+    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
+                      bool use_cache = false);
     double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
     std::unique_ptr<WeightsGenerator> weights_generator_;
     unsigned int num_samples_;
+    bool use_cache_;
 };
 
 #endif

@@ -57,16 +57,18 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
 // ---------------------------------------------
 // SamplingEstimator Implementation
 // ---------------------------------------------
-SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples)
-    : weights_generator_(std::move(weights_generator)), num_samples_(num_samples) {}
+SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
+                                     bool use_cache)
+    : weights_generator_(std::move(weights_generator)), num_samples_(num_samples), use_cache_(use_cache) {}
 
 double SamplingEstimator::Estimate(const std::filesystem::path& dataset_directory) {
-    // Generate weights for the dataset.
+    // Load or Generate weights for the dataset.
     if (!weights_generator_) {
         spdlog::error("Weights generator is not set.");
         return 0.0;
     }
-    std::vector<double> weights = weights_generator_->Generate(dataset_directory);
+
+    std::vector<double> weights = weights_generator_->Generate(dataset_directory, use_cache_);
 
     // Load dataset metadata.
     spdlog::info("Loading dataset metadata");

@@ -7,25 +7,25 @@
 class WeightsGenerator {
    public:
     virtual ~WeightsGenerator() = default;
-    virtual std::vector<double> Generate(const std::filesystem::path& dataset_directory) = 0;
+    virtual std::vector<double> Generate(const std::filesystem::path& dataset_directory, bool use_cache = false) = 0;
 };
 
 class UniformWeightsGenerator : public WeightsGenerator {
    public:
     UniformWeightsGenerator() = default;
-    std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
+    std::vector<double> Generate(const std::filesystem::path& dataset_directory, bool use_cache = false) override;
 };
 
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
     QalshWeightsGenerator() = default;
-    std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
+    std::vector<double> Generate(const std::filesystem::path& dataset_directory, bool use_cache = false) override;
 };
 
 class QuadtreeWeightsGenerator : public WeightsGenerator {
    public:
     QuadtreeWeightsGenerator() = default;
-    std::vector<double> Generate(const std::filesystem::path& dataset_directory) override;
+    std::vector<double> Generate(const std::filesystem::path& dataset_directory, bool use_cache = false) override;
 };
 
 #endif

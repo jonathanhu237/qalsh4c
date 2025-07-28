@@ -296,6 +296,12 @@ int main(int argc, char** argv) {
     sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")
         ->default_str("log(n)");
 
+    bool use_cache{false};
+    sampling
+        ->add_flag("-c,--use-cache", use_cache,
+                   "Use cached weights files (qalsh_weights.bin, quadtree_weights.bin) if available")
+        ->default_val(false);
+
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
 
@@ -303,7 +309,7 @@ int main(int argc, char** argv) {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set.");
         }
-        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples);
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, use_cache);
     });
 
     // ------------------------------
