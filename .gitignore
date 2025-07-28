@@ -17,3 +17,6 @@ data/toy/*
 
 # logs
 logs
+
+# python
+__pycache__
