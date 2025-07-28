@@ -54,6 +54,7 @@ std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path&
     if (use_cache) {
         std::filesystem::path cache_file_path = dataset_directory / "qalsh_weights.bin";
         if (std::filesystem::exists(cache_file_path)) {
+            spdlog::info("The cache file exist, reading the weights from the file.");
             std::ifstream ifs(cache_file_path);
             ifs.read(reinterpret_cast<char*>(weights.data()),
                      static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
@@ -95,6 +96,7 @@ std::vector<double> QuadtreeWeightsGenerator::Generate(const std::filesystem::pa
     if (use_cache) {
         std::filesystem::path cache_file_path = dataset_directory / "quadtree_weights.bin";
         if (std::filesystem::exists(cache_file_path)) {
+            spdlog::info("The cache file exist, reading the weights from the file.");
             std::ifstream ifs(cache_file_path);
             ifs.read(reinterpret_cast<char*>(weights.data()),
                      static_cast<std::streamoff>(sizeof(double) * dataset_metadata.query_num_points));
