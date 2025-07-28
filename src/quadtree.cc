@@ -1,5 +1,7 @@
 #include "quadtree.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <limits>
 #include <memory>
@@ -42,6 +44,7 @@ Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int 
 }
 
 void Quadtree::Build() {
+    spdlog::info("Building the quadtree...");
     // Get the number of dimensions.
     unsigned int num_dimensions = combine_reader_->get_num_dimensions();
 
@@ -49,6 +52,7 @@ void Quadtree::Build() {
     // then `lower` will be [2, 2] and `upper` will be [9, 8], that is,
     // the `lower` is the coordinates of the southwest corner of the dataset,
     // and the `upper` is the northeast.
+    spdlog::info("Getting the lower and upper bound for the combined dataset...");
     std::vector<double> lower(num_dimensions_, std::numeric_limits<double>::max());
     std::vector<double> upper(num_dimensions_, std::numeric_limits<double>::lowest());
 
@@ -67,13 +71,14 @@ void Quadtree::Build() {
 
     // Initialize the shift if set need_random_shift_ as true.
     if (need_random_shift_) {
+        spdlog::info("Computing the random shift...");
         ComputeShift(lower, upper);
     }
 
     // Build the Quadtree
     std::vector<unsigned int> cluster(num_points_);
     std::iota(cluster.begin(), cluster.end(), 0);
-    root_ = BuildTreeAux(cluster, lower, upper);
+    root_ = BuildTreeAux(cluster, lower, upper, max_level_);
 }
 
 void Quadtree::ComputeShift(const std::vector<double>& lower, std::vector<double>& upper) {
@@ -88,11 +93,11 @@ void Quadtree::ComputeShift(const std::vector<double>& lower, std::vector<double
 }
 
 std::unique_ptr<QuadtreeNode> Quadtree::BuildTreeAux(const std::vector<unsigned int>& cluster,
-                                                     const std::vector<double>& lower,
-                                                     const std::vector<double>& upper) {
+                                                     const std::vector<double>& lower, const std::vector<double>& upper,
+                                                     unsigned int cur_max_level) {
     auto node = std::make_unique<QuadtreeNode>();
 
-    if (max_level_ == 1 || cluster.size() <= 1) {
+    if (cur_max_level == 1 || cluster.size() <= 1) {
         node->SetCluster(cluster);
         return node;
     }
@@ -123,7 +128,7 @@ std::unique_ptr<QuadtreeNode> Quadtree::BuildTreeAux(const std::vector<unsigned 
     // Loop over each non-empty sub-cells.
     for (const auto& [edge, sub_cluster] : sub_clusters_map) {
         auto [sub_lower, sub_upper] = FindBounds(edge, lower, mid_point, upper);
-        node->AddChild(BuildTreeAux(sub_cluster, sub_lower, sub_upper));
+        node->AddChild(BuildTreeAux(sub_cluster, sub_lower, sub_upper, cur_max_level - 1));
     }
 
     return node;

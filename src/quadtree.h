@@ -26,7 +26,8 @@ class Quadtree {
     void ComputeShift(const std::vector<double>& lower, std::vector<double>& upper);
     [[nodiscard]] std::unique_ptr<QuadtreeNode> BuildTreeAux(const std::vector<unsigned int>& cluster,
                                                              const std::vector<double>& lower,
-                                                             const std::vector<double>& upper);
+                                                             const std::vector<double>& upper,
+                                                             unsigned int cur_max_level);
     [[nodiscard]] std::pair<std::vector<double>, std::vector<double>> FindBounds(
         const std::vector<bool>& edge, const std::vector<double>& lower, const std::vector<double>& mid_point,
         const std::vector<double>& upper) const;
