@@ -14,3 +14,6 @@ data/toy/*
 
 # local files
 *local*
+
+# logs
+logs
