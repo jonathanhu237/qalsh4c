@@ -16,6 +16,9 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesys
         if (data_type == "int") {
             return std::make_unique<InMemoryPointSetWriter<int>>(file_path, num_dimensions);
         }
+        if (data_type == "float") {
+            return std::make_unique<InMemoryPointSetWriter<float>>(file_path, num_dimensions);
+        }
         if (data_type == "double") {
             return std::make_unique<InMemoryPointSetWriter<double>>(file_path, num_dimensions);
         }
@@ -25,6 +28,9 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesys
         }
         if (data_type == "int") {
             return std::make_unique<DiskPointSetWriter<int>>(file_path, num_dimensions);
+        }
+        if (data_type == "float") {
+            return std::make_unique<InMemoryPointSetWriter<float>>(file_path, num_dimensions);
         }
         if (data_type == "double") {
             return std::make_unique<DiskPointSetWriter<double>>(file_path, num_dimensions);
