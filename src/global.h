@@ -24,11 +24,11 @@ class Global {
     static constexpr unsigned int kGistNumDimensions = 960;
     static constexpr std::string_view kGistDataType = "float";
 
-    static constexpr unsigned int kTreviNumPoints = 101020;
+    static constexpr unsigned int kTreviNumPoints = 101120;
     static constexpr unsigned int kTreviNumDimensions = 4096;
     static constexpr std::string_view kTreviDataType = "uint8";
 
-    static constexpr unsigned int kP53NumPoints = 31059;
+    static constexpr unsigned int kP53NumPoints = 31159;
     static constexpr unsigned int kP53NumDimensions = 5408;
     static constexpr std::string_view kP53DataType = "float";
 
