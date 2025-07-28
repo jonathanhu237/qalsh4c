@@ -121,6 +121,7 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
     output_dataset_directory_ = dataset_directory;
 
     if (dataset_name_ == "sift") {
+        spdlog::info("Converting SIFT dataset ....");
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kSiftDataType),
             .base_num_points =
@@ -131,6 +132,7 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
         };
         ConvertSift();
     } else if (dataset_name_ == "gist") {
+        spdlog::info("Converting GIST dataset ....");
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kGistDataType),
             .base_num_points =
@@ -141,6 +143,7 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
         };
         ConvertGist();
     } else if (dataset_name_ == "trevi") {
+        spdlog::info("Converting TREVI dataset ....");
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kTreviDataType),
             .base_num_points =
@@ -151,6 +154,7 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
         };
         ConvertTrevi();
     } else if (dataset_name_ == "p53") {
+        spdlog::info("Converting P53 dataset ....");
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kP53DataType),
             .base_num_points =
@@ -195,15 +199,18 @@ void DatasetConverter::ConvertTexmexDataset() {
     const std::filesystem::path output_query_path = output_dataset_directory_ / "query.bin";
 
     std::vector<std::vector<float>> original_base = Utils::ReadFvecs(original_base_path);
-    if (!CheckPoints(original_base, Global::kSiftNumPoints, Global::kSiftNumDimensions)) {
+    if (!CheckPoints(original_base, dataset_metadata_.base_num_points + dataset_metadata_.query_num_points,
+                     dataset_metadata_.num_dimensions)) {
         spdlog::error("{} is invalid", original_base_path.string());
     }
 
     // Sample queries from the dataset.
+    spdlog::info("Spliting dataset...");
     auto [base_set, query_set] = SplitDataset(original_base, dataset_metadata_.query_num_points);
 
     // We need to convert the float points to uint8 points in sift dataset
     if (dataset_name_ == "sift") {
+        spdlog::info("Converting SIFT dataset into uint8 format...");
         std::vector<std::vector<uint8_t>> base_set_uint8;
         std::vector<std::vector<uint8_t>> query_set_uint8;
 
@@ -225,9 +232,11 @@ void DatasetConverter::ConvertTexmexDataset() {
             query_set_uint8.emplace_back(std::move(point_uint8));
         }
 
+        spdlog::info("Writing points...");
         Utils::WritePoints<uint8_t>(base_set_uint8, output_base_path);
         Utils::WritePoints<uint8_t>(query_set_uint8, output_query_path);
     } else {
+        spdlog::info("Writing points...");
         Utils::WritePoints<float>(base_set, output_base_path);
         Utils::WritePoints<float>(query_set, output_query_path);
     }

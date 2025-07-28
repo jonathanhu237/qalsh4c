@@ -42,6 +42,10 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     ann_searcher_->Init(dataset_directory);
     double chamfer_distance{0.0};
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
+        double progress_percent = static_cast<double>(i + 1) * 100.0 / dataset_metadata.query_num_points;
+        spdlog::info("Progress: {:.2f}% ({} / {}) points processed.", progress_percent, i + 1,
+                     dataset_metadata.query_num_points);
+
         PointVariant query = query_set_reader->GetPoint(i);
         AnnResult result = ann_searcher_->Search(query);
         chamfer_distance += result.distance;
