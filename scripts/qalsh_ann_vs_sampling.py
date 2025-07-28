@@ -61,7 +61,9 @@ def run_estimation_task(task_args):
         method,
         "qalsh",
     ]
-    log_filename = os.path.join(LOGS_DIR, f"{db}_{method}_qalsh_output.log")
+    log_filename = os.path.join(
+        LOGS_DIR, f"qalsh_ann_vs_sampling/{db}_{method}_qalsh_output.log"
+    )
 
     if not run_command(estimate_cmd, log_file=log_filename):
         print(f"Estimation failed for '{method}' on {db}.")
