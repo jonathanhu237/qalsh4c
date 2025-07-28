@@ -10,7 +10,7 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesys
                                                               const std::string& data_type,
                                                               unsigned int num_dimensions) {
     if (Global::high_memory_mode) {
-        if (data_type == "uint8_t") {
+        if (data_type == "uint8") {
             return std::make_unique<InMemoryPointSetWriter<uint8_t>>(file_path, num_dimensions);
         }
         if (data_type == "int") {
@@ -23,7 +23,7 @@ std::unique_ptr<PointSetWriter> PointSetWriterFactory::Create(const std::filesys
             return std::make_unique<InMemoryPointSetWriter<double>>(file_path, num_dimensions);
         }
     } else {
-        if (data_type == "uint8_t") {
+        if (data_type == "uint8") {
             return std::make_unique<DiskPointSetWriter<uint8_t>>(file_path, num_dimensions);
         }
         if (data_type == "int") {
@@ -44,7 +44,7 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
                                                               const std::string& data_type, unsigned int num_points,
                                                               unsigned int num_dimensions) {
     if (Global::high_memory_mode) {
-        if (data_type == "uint8_t") {
+        if (data_type == "uint8") {
             return std::make_unique<InMemoryPointSetReader<uint8_t>>(file_path, num_points, num_dimensions);
         }
         if (data_type == "int") {
@@ -57,7 +57,7 @@ std::unique_ptr<PointSetReader> PointSetReaderFactory::Create(const std::filesys
             return std::make_unique<InMemoryPointSetReader<double>>(file_path, num_points, num_dimensions);
         }
     } else {
-        if (data_type == "uint8_t") {
+        if (data_type == "uint8") {
             return std::make_unique<DiskPointSetReader<uint8_t>>(file_path, num_points, num_dimensions);
         }
         if (data_type == "int") {
