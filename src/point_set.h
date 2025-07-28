@@ -14,7 +14,7 @@
 template <typename T>
 using Point = std::vector<T>;
 
-using PointVariant = std::variant<Point<uint8_t>, Point<int>, Point<double>>;
+using PointVariant = std::variant<Point<uint8_t>, Point<int>, Point<float>, Point<double>>;
 
 // ---------------------------------------------
 // PointSetWriter Definition
