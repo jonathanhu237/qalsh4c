@@ -148,7 +148,7 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
         query_num_points_ = query_num_points_ == 0 ? Global::kTreviNumPoints / 2 : query_num_points_;
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kTreviDataType),
-            .base_num_points = query_num_points_ = Global::kTreviNumPoints - query_num_points_,
+            .base_num_points = Global::kTreviNumPoints - query_num_points_,
             .query_num_points = query_num_points_,
             .num_dimensions = Global::kTreviNumDimensions,
             .chamfer_distance = 0  // Update later
