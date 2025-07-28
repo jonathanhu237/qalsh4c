@@ -134,7 +134,8 @@ int main(int argc, char** argv) {
 
     std::string dataset_name;
     convert_dataset->add_option("-n,--dataset-name", dataset_name, "The name of the dataset (sift, gist, trevi, p53)")
-        ->check(CLI::IsMember({"mnist", "sift", "gist", "p53"}));
+        ->check(CLI::IsMember({"mnist", "sift", "gist", "p53"}))
+        ->required();
 
     std::filesystem::path raw_dataset_directory;
     convert_dataset
