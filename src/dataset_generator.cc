@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -122,44 +123,44 @@ void DatasetConverter::Generate(const std::filesystem::path &dataset_directory) 
 
     if (dataset_name_ == "sift") {
         spdlog::info("Converting SIFT dataset ....");
+        query_num_points_ = query_num_points_ == 0 ? Global::kSiftNumPoints / 2 : query_num_points_;
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kSiftDataType),
-            .base_num_points =
-                query_num_points_ == 0 ? Global::kSiftNumPoints / 2 : Global::kSiftNumPoints - query_num_points_,
-            .query_num_points = query_num_points_ == 0 ? Global::kSiftNumPoints / 2 : query_num_points_,
+            .base_num_points = Global::kSiftNumPoints - query_num_points_,
+            .query_num_points = query_num_points_,
             .num_dimensions = Global::kSiftNumDimensions,
             .chamfer_distance = 0  // Update later
         };
         ConvertSift();
     } else if (dataset_name_ == "gist") {
         spdlog::info("Converting GIST dataset ....");
+        query_num_points_ = query_num_points_ == 0 ? Global::kGistNumPoints / 2 : query_num_points_;
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kGistDataType),
-            .base_num_points =
-                query_num_points_ == 0 ? Global::kGistNumPoints / 2 : Global::kGistNumPoints - query_num_points_,
-            .query_num_points = query_num_points_ == 0 ? Global::kGistNumPoints / 2 : query_num_points_,
+            .base_num_points = Global::kGistNumPoints - query_num_points_,
+            .query_num_points = query_num_points_,
             .num_dimensions = Global::kGistNumDimensions,
             .chamfer_distance = 0  // Update later
         };
         ConvertGist();
     } else if (dataset_name_ == "trevi") {
         spdlog::info("Converting TREVI dataset ....");
+        query_num_points_ = query_num_points_ == 0 ? Global::kTreviNumPoints / 2 : query_num_points_;
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kTreviDataType),
-            .base_num_points =
-                query_num_points_ == 0 ? Global::kTreviNumPoints / 2 : Global::kTreviNumPoints - query_num_points_,
-            .query_num_points = query_num_points_ == 0 ? Global::kTreviNumPoints / 2 : query_num_points_,
+            .base_num_points = query_num_points_ = Global::kTreviNumPoints - query_num_points_,
+            .query_num_points = query_num_points_,
             .num_dimensions = Global::kTreviNumDimensions,
             .chamfer_distance = 0  // Update later
         };
         ConvertTrevi();
     } else if (dataset_name_ == "p53") {
         spdlog::info("Converting P53 dataset ....");
+        query_num_points_ = query_num_points_ == 0 ? Global::kP53NumPoints / 2 : query_num_points_;
         dataset_metadata_ = DatasetMetadata{
             .data_type = std::string(Global::kP53DataType),
-            .base_num_points =
-                query_num_points_ == 0 ? Global::kP53NumPoints / 2 : Global::kP53NumPoints - query_num_points_,
-            .query_num_points = query_num_points_ == 0 ? Global::kP53NumPoints / 2 : query_num_points_,
+            .base_num_points = Global::kP53NumPoints - query_num_points_,
+            .query_num_points = query_num_points_,
             .num_dimensions = Global::kP53NumDimensions,
             .chamfer_distance = 0  // Update later
         };
