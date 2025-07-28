@@ -44,7 +44,6 @@ Quadtree::Quadtree(const std::filesystem::path& dataset_directory, unsigned int 
 }
 
 void Quadtree::Build() {
-    spdlog::info("Building the quadtree...");
     // Get the number of dimensions.
     unsigned int num_dimensions = combine_reader_->get_num_dimensions();
 
@@ -76,6 +75,7 @@ void Quadtree::Build() {
     }
 
     // Build the Quadtree
+    spdlog::info("Building the quadtree...");
     std::vector<unsigned int> cluster(num_points_);
     std::iota(cluster.begin(), cluster.end(), 0);
     root_ = BuildTreeAux(cluster, lower, upper, max_level_);
