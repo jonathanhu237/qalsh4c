@@ -81,7 +81,7 @@ CombinePointSetReader::CombinePointSetReader(std::unique_ptr<PointSetReader> bas
                                              std::unique_ptr<PointSetReader> query_reader)
     : base_reader_(std::move(base_reader)),
       query_reader_(std::move(query_reader)),
-      num_points_(base_reader_->get_num_points() + query_reader_->get_num_dimensions()),
+      num_points_(base_reader_->get_num_points() + query_reader_->get_num_points()),
       num_dimensions_(base_reader_->get_num_dimensions()) {}
 
 unsigned int CombinePointSetReader::get_num_points() const { return num_points_; }
@@ -90,7 +90,7 @@ unsigned int CombinePointSetReader::get_num_dimensions() const { return num_dime
 
 PointVariant CombinePointSetReader::GetPoint(unsigned int index) {
     if (index >= num_points_) {
-        spdlog::error("Point index is out of range for the combined dataset.");
+        spdlog::error("Point index ({}) is out of range ({}) for the combined dataset.", index, num_points_);
         // The program will terminate automatically, so we do not return manually here.
     }
 
