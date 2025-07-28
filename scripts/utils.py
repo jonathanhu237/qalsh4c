@@ -1,6 +1,6 @@
 import subprocess
 
-DATABASES = ["sift", "gist", "trevi", "p53"]
+DATABASES = ["sift", "trevi", "p53"]
 LOGS_DIR = "logs"
 EXECUTABLE = "./build/qalsh_chamfer"
 DATA_BASE_PATH = "./data"
