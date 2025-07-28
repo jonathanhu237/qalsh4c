@@ -31,17 +31,24 @@ std::vector<double> UniformWeightsGenerator::Generate(const std::filesystem::pat
 // --------------------------------------------------
 std::vector<double> QalshWeightsGenerator::Generate(const std::filesystem::path& dataset_directory) {
     // Load dataset metadata.
+    std::filesystem::path metadata_path = dataset_directory / "metadata.toml";
+    if (!std::filesystem::exists(metadata_path)) {
+        spdlog::error("The metadata file is not exist, path: {}", metadata_path.string());
+    }
+
+    spdlog::info("Loading dataset metadata...");
     DatasetMetadata dataset_metadata;
-    dataset_metadata.Load(dataset_directory / "metadata.toml");
+    dataset_metadata.Load(metadata_path);
 
     auto query_set_reader{PointSetReaderFactory::Create(dataset_directory / "query.bin", dataset_metadata.data_type,
                                                         dataset_metadata.query_num_points,
                                                         dataset_metadata.num_dimensions)};
 
     // Generate weights based on QALSH algorithm.
+    spdlog::info("Generating weights using QALSH...");
     std::vector<double> weights(dataset_metadata.query_num_points);
     QalshAnnSearcher qalsh_ann_searcher;
-    qalsh_ann_searcher.Init(dataset_directory / "qalsh_index");
+    qalsh_ann_searcher.Init(dataset_directory);
     for (unsigned int i = 0; i < dataset_metadata.query_num_points; i++) {
         PointVariant query_point = query_set_reader->GetPoint(i);
         AnnResult result = qalsh_ann_searcher.Search(query_point);
