@@ -248,9 +248,8 @@ void DatasetConverter::ConvertGist() { ConvertTexmexDataset(); }
 
 void DatasetConverter::ConvertTrevi() {
     const std::filesystem::path raw_dir_path = raw_dataset_directory_;
-    const std::filesystem::path output_dir_path = output_dataset_directory_;
-    const std::filesystem::path output_ds_path = output_dir_path / "trevi.ds";
-    const std::filesystem::path output_q_path = output_dir_path / "trevi.q";
+    const std::filesystem::path output_base_path = output_dataset_directory_ / "base.bin";
+    const std::filesystem::path output_query_path = output_dataset_directory_ / "query.bin";
 
     constexpr size_t kPatchDim = 64;
     constexpr size_t kPatchSize = kPatchDim * kPatchDim;
@@ -291,16 +290,16 @@ void DatasetConverter::ConvertTrevi() {
         throw std::runtime_error("The converted trevi queries are invalid.");
     }
 
-    Utils::WritePoints(dataset, output_ds_path.string());
-    Utils::WritePoints(queries, output_q_path.string());
+    Utils::WritePoints(dataset, output_base_path.string());
+    Utils::WritePoints(queries, output_query_path.string());
 }
 
 void DatasetConverter::ConvertP53() {
     const std::filesystem::path raw_dir_path = raw_dataset_directory_;
     const std::filesystem::path output_dir_path = output_dataset_directory_;
     const std::filesystem::path raw_dataset_path = raw_dir_path / "K9.data";
-    const std::filesystem::path output_ds_path = output_dir_path / "p53.ds";
-    const std::filesystem::path output_q_path = output_dir_path / "p53.q";
+    const std::filesystem::path output_ds_path = output_dir_path / "base.bin";
+    const std::filesystem::path output_q_path = output_dir_path / "query.bin";
 
     std::ifstream ifs(raw_dataset_path);
     if (!ifs.is_open()) {
