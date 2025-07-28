@@ -85,6 +85,14 @@ void DatasetSynthesizer::GeneratePointSet(const std::filesystem::path &dataset_d
             std::ranges::generate(point, [&]() { return static_cast<int>(dist(gen_)); });
             point_set_writer->AddPoint(point);
         }
+    } else if (dataset_metadata_.data_type == "float") {
+        std::uniform_real_distribution<float> dist(static_cast<float>(left_boundary_),
+                                                   static_cast<float>(right_boundary_));
+        for (unsigned int i = 0; i < num_points; i++) {
+            Point<float> point(dataset_metadata_.num_dimensions);
+            std::ranges::generate(point, [&]() { return dist(gen_); });
+            point_set_writer->AddPoint(point);
+        }
     } else if (dataset_metadata_.data_type == "uint8") {
         std::uniform_int_distribution<uint8_t> dist(static_cast<uint8_t>(left_boundary_),
                                                     static_cast<uint8_t>(right_boundary_));
