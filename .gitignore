@@ -11,3 +11,6 @@ data/toy/*
 !data/toy/base.bin
 !data/toy/query.bin
 !data/toy/metadata.toml
+
+# local files
+*local*
