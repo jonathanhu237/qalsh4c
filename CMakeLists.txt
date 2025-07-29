@@ -12,21 +12,7 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
-    src/ann_searcher.cc
-    src/b_plus_tree.cc
-    src/command.cc
-    src/dataset_generator.cc
-    src/estimator.cc
-    src/global.cc
-    src/hash_table_searcher.cc
-    src/indexer.cc
     src/main.cc
-    src/point_set.cc
-    src/quadtree.cc
-    src/timer.cc
-    src/types.cc
-    src/utils.cc
-    src/weights_generator.cc
 )
 
 target_link_libraries(qalsh_chamfer PRIVATE 
