@@ -91,36 +91,42 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-a",
         "--num_points_a",
         type=int,
         default=1000,
         help="Number of points in the first point set (A).",
     )
     parser.add_argument(
+        "-b",
         "--num_points_b",
         type=int,
         default=1000,
         help="Number of points in the second point set (B).",
     )
     parser.add_argument(
+        "-d",
         "--num_dimensions",
         type=int,
         default=256,
         help="Number of dimension for the point sets.",
     )
     parser.add_argument(
+        "-l",
         "--left_boundary",
         type=float,
         default=-1024,
         help="The left boundary of uniform distribution used in dataset generation",
     )
     parser.add_argument(
+        "-r",
         "--right_boundary",
         type=float,
         default=1024,
         help="The right boundary of uniform distribution used in dataset generation",
     )
     parser.add_argument(
+        "-o",
         "--output_directory",
         type=str,
         required=True,
