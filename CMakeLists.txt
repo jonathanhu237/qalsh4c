@@ -10,7 +10,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -Wall -Wextra -Wpedan
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
-find_package(tomlplusplus CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
     src/ann_searcher.cc
