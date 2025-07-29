@@ -8,9 +8,9 @@ build/*
 data/*
 !data/toy/
 data/toy/*
-!data/toy/base.bin
-!data/toy/query.bin
-!data/toy/metadata.toml
+!data/toy/A.bin
+!data/toy/B.bin
+!data/toy/metadata.json
 
 # local files
 *local*
