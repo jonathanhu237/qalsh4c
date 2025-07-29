@@ -123,7 +123,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_directory",
         type=str,
-        default="./data/toy",
+        required=True,
         help="The directory to save dataset.",
     )
 
