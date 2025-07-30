@@ -13,7 +13,13 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 add_executable(qalsh_chamfer 
+    src/ann_searcher.cc
+    src/command.cc
+    src/dataset_metadata.cc
+    src/estimator.cc
     src/main.cc
+    src/point_set.cc
+    src/utils.cc
 )
 
 target_link_libraries(qalsh_chamfer PRIVATE 
