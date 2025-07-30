@@ -2,7 +2,6 @@
 #define UTILS_H_
 
 #include <spdlog/spdlog.h>
-#include <toml++/toml.h>
 
 #include <Eigen/Eigen>
 
