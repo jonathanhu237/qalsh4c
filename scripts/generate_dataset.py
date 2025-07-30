@@ -19,11 +19,13 @@ def generate_point_set(
     point_set = np.random.uniform(
         low=left_boundary, high=right_boundary, size=(num_points, num_dimension)
     )
-    point_set.astype(np.float32).tofile(file_path)
+    point_set.astype(np.double).tofile(file_path)
     return point_set
 
 
-def compute_chamfer_distance(point_set_a: np.ndarray, point_set_b: np.ndarray) -> float:
+def compute_chamfer_distance(
+    point_set_a: np.ndarray, point_set_b: np.ndarray
+) -> np.double:
     """Compute the exact Chamfer distance between two point sets."""
     # Distance from each point in A to closest point in B
     distances_a_to_b = cdist(point_set_a, point_set_b, metric="cityblock")
@@ -35,7 +37,7 @@ def compute_chamfer_distance(point_set_a: np.ndarray, point_set_b: np.ndarray) -
 
     # Chamfer distance is the sum of both directions
     chamfer_distance = np.sum(min_distances_a_to_b) + np.sum(min_distances_b_to_a)
-    return float(chamfer_distance)
+    return np.double(chamfer_distance)
 
 
 def generate_dataset(
@@ -114,14 +116,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-l",
         "--left_boundary",
-        type=float,
+        type=np.double,
         default=-1024,
         help="The left boundary of uniform distribution used in dataset generation",
     )
     parser.add_argument(
         "-r",
         "--right_boundary",
-        type=float,
+        type=np.double,
         default=1024,
         help="The right boundary of uniform distribution used in dataset generation",
     )
