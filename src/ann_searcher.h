@@ -17,21 +17,20 @@ class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;
 
-    virtual void Init(PointSetMetadata point_set_metadata) = 0;
+    virtual void Init(PointSetMetadata point_set_metadata, bool in_memory) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
     virtual void Reset() = 0;
 };
 
 class LinearScanAnnSearcher : public AnnSearcher {
    public:
-    LinearScanAnnSearcher(bool in_memory);
+    LinearScanAnnSearcher() = default;
 
-    void Init(PointSetMetadata point_set_metadata) override;
+    void Init(PointSetMetadata point_set_metadata, bool in_memory) override;
     AnnResult Search(const Point& query_point) override;
     void Reset() override;
 
    private:
-    bool in_memory_;
     std::unique_ptr<PointSet> base_set_;
 };
 

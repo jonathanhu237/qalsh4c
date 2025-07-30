@@ -10,10 +10,8 @@
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
-LinearScanAnnSearcher::LinearScanAnnSearcher(bool in_memory) : in_memory_(in_memory) {}
-
-void LinearScanAnnSearcher::Init(PointSetMetadata point_set_metadata) {
-    if (in_memory_) {
+void LinearScanAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
+    if (in_memory) {
         base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
     } else {
         base_set_ = std::make_unique<DiskPointSet>(point_set_metadata);
