@@ -10,6 +10,12 @@
 using Coordinate = float;
 using Point = std::vector<Coordinate>;
 
+struct PointSetMetadata {
+    std::filesystem::path file_path;
+    unsigned int num_points{0};
+    unsigned int num_dimensions{0};
+};
+
 // ---------------------------------------------
 // PointSet Definition
 // ---------------------------------------------
@@ -29,7 +35,7 @@ class PointSet {
 // ---------------------------------------------
 class InMemoryPointSet : public PointSet {
    public:
-    InMemoryPointSet(const std::filesystem::path& file_path, unsigned int num_points, unsigned int num_dimensions);
+    InMemoryPointSet(const PointSetMetadata& point_set_metadata);
 
     [[nodiscard]] unsigned int get_num_points() const override;
     [[nodiscard]] unsigned int get_num_dimensions() const override;
@@ -48,7 +54,7 @@ class InMemoryPointSet : public PointSet {
 // ---------------------------------------------
 class DiskPointSet : public PointSet {
    public:
-    DiskPointSet(const std::filesystem::path& file_path, unsigned int num_points, unsigned int num_dimensions);
+    DiskPointSet(const PointSetMetadata& point_set_metadata);
 
     [[nodiscard]] unsigned int get_num_points() const override;
     [[nodiscard]] unsigned int get_num_dimensions() const override;

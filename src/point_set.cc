@@ -5,12 +5,11 @@
 // ---------------------------------------------
 // InMemoryPointSetReader Implementation
 // ---------------------------------------------
-InMemoryPointSet::InMemoryPointSet(const std::filesystem::path& file_path, unsigned int num_points,
-                                   unsigned int num_dimensions)
-    : num_points_(num_points), num_dimensions_(num_dimensions) {
-    std::ifstream ifs(file_path, std::ios::binary);
+InMemoryPointSet::InMemoryPointSet(const PointSetMetadata& point_set_metadata)
+    : num_points_(point_set_metadata.num_points), num_dimensions_(point_set_metadata.num_dimensions) {
+    std::ifstream ifs(point_set_metadata.file_path, std::ios::binary);
     if (!ifs.is_open()) {
-        spdlog::error(std::format("Failed to open file: {}", file_path.string()));
+        spdlog::error(std::format("Failed to open file: {}", point_set_metadata.file_path.string()));
     }
 
     points_.resize(num_points_);
@@ -31,11 +30,11 @@ Point InMemoryPointSet::GetPoint(unsigned int index) { return points_.at(index);
 // ---------------------------------------------
 // DiskPointSetReader Implementation
 // ---------------------------------------------
-DiskPointSet::DiskPointSet(const std::filesystem::path& file_path, unsigned int num_points, unsigned int num_dimensions)
-    : num_points_(num_points), num_dimensions_(num_dimensions) {
-    ifs_.open(file_path, std::ios::binary);
+DiskPointSet::DiskPointSet(const PointSetMetadata& point_set_metadata)
+    : num_points_(point_set_metadata.num_points), num_dimensions_(point_set_metadata.num_dimensions) {
+    ifs_.open(point_set_metadata.file_path, std::ios::binary);
     if (!ifs_.is_open()) {
-        spdlog::error(std::format("Failed to open file: {}", file_path.string()));
+        spdlog::error(std::format("Failed to open file: {}", point_set_metadata.file_path.string()));
     }
 }
 
