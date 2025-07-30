@@ -34,3 +34,5 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 
     return result;
 }
+
+void LinearScanAnnSearcher::Reset() { base_set_.reset(); }
