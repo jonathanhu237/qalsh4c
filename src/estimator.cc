@@ -40,7 +40,7 @@ EstimateResult AnnEstimator::Estimate(const std::filesystem::path& dataset_direc
     double distance_ab = CalculateDistance(point_set_metadata_a, point_set_metadata_b);
 
     // Calculate the distance from B to A
-    spdlog::info("Calculating the distance from A to B...");
+    spdlog::info("Calculating the distance from B to A...");
     double distance_ba = CalculateDistance(point_set_metadata_b, point_set_metadata_a);
 
     // Retrun the result
