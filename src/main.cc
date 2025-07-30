@@ -2,7 +2,12 @@
 #include <spdlog/spdlog.h>
 
 #include <CLI/CLI.hpp>
+#include <filesystem>
+#include <memory>
 
+#include "ann_searcher.h"
+#include "command.h"
+#include "estimator.h"
 #include "sink.h"
 
 int main(int argc, char** argv) {
@@ -19,6 +24,57 @@ int main(int argc, char** argv) {
             logger->set_level(spdlog::level::from_str(level));
             spdlog::set_default_logger(logger);
         });
+
+    std::unique_ptr<Command> command;
+    app.require_subcommand(1);
+    app.callback([&]() {
+        if (!command) {
+            spdlog::error("Command is not set. Please specify a command.");
+        }
+        command->Execute();
+    });
+
+    // ------------------------------
+    // estimate
+    // ------------------------------
+    CLI::App* estimate = app.add_subcommand("estimate", "Estimate Chamfer distance.");
+
+    std::filesystem::path dataset_directory;
+    estimate->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+
+    bool in_memory{false};
+    estimate->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
+        ->default_str(in_memory ? "True" : "False");
+
+    std::unique_ptr<Estimator> estimator;
+    estimate->require_subcommand(1);
+    estimate->callback([&]() {
+        if (!estimator) {
+            spdlog::error("Estimator is not set. Please specify a estimator.");
+        }
+        command = std::make_unique<EstimateCommand>(std::move(estimator), dataset_directory, in_memory);
+    });
+
+    // ------------------------------
+    // ann estimate
+    // ------------------------------
+    CLI::App* ann = estimate->add_subcommand("ann", "Estimate Chamfer distance using ANN.");
+
+    std::unique_ptr<AnnSearcher> ann_searcher;
+    ann->require_subcommand(1);
+    ann->callback([&]() {
+        if (!ann_searcher) {
+            spdlog::error("Ann searcher is not set. Please specify a Ann searcher.");
+        }
+        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
+    });
+
+    // ------------------------------
+    // linear scan ann estimate
+    // ------------------------------
+    CLI::App* linear_scan = ann->add_subcommand("linear_scan", "Use linear scan for ANN.");
+
+    linear_scan->callback([&] { ann_searcher = std::make_unique<LinearScanAnnSearcher>(); });
 
     CLI11_PARSE(app, argc, argv);
 
