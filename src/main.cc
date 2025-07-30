@@ -11,19 +11,20 @@
 #include "sink.h"
 
 int main(int argc, char** argv) {
+    // Setup logger.
+    auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+    auto terminating_sink = std::make_shared<TerminatingSink<std::mutex>>(console_sink);
+    auto logger = std::make_shared<spdlog::logger>("qalsh_chamfer", terminating_sink);
+    spdlog::set_default_logger(logger);
+
+    // Parse command-line arguments.
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
     std::string log_level;
     app.add_option("-l,--log_level", log_level, "Set the logging level (default: warn)")
         ->default_val("warn")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}))
-        ->each([&](const std::string& level) {
-            auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-            auto terminating_sink = std::make_shared<TerminatingSink<std::mutex>>(console_sink);
-            auto logger = std::make_shared<spdlog::logger>("qalsh_chamfer", terminating_sink);
-            logger->set_level(spdlog::level::from_str(level));
-            spdlog::set_default_logger(logger);
-        });
+        ->each([&](const std::string& level) { spdlog::set_level(spdlog::level::from_str(level)); });
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
