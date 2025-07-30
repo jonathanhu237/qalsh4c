@@ -1,8 +1,11 @@
 {
+  "name": "qalsh-chamfer",
+  "version": "1.0.0",
   "dependencies": [
     "cli11",
     "eigen3",
     "spdlog",
     "nlohmann-json"
-  ]
+  ],
+  "builtin-baseline": "efcfaaf60d7ec57a159fc3110403d939bfb69729"
 }
