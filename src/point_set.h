@@ -7,7 +7,7 @@
 #include <fstream>
 #include <vector>
 
-using Coordinate = float;
+using Coordinate = double;
 using Point = std::vector<Coordinate>;
 
 struct PointSetMetadata {
