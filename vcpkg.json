@@ -3,6 +3,6 @@
     "cli11",
     "eigen3",
     "spdlog",
-    "tomlplusplus"
+    "nlohmann-json"
   ]
 }
