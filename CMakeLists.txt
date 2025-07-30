@@ -19,5 +19,4 @@ target_link_libraries(qalsh_chamfer PRIVATE
     CLI11::CLI11
     spdlog::spdlog
     Eigen3::Eigen
-    tomlplusplus::tomlplusplus
 )
