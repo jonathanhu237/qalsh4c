@@ -158,6 +158,37 @@ int main(int argc, char** argv) {
     // If in_memory = false, the setting of approximation_ratio would not have any effect.
     qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio); });
 
+    // ------------------------------
+    // sampling estimate
+    // ------------------------------
+    CLI::App* sampling = estimate->add_subcommand("sampling", "Estimate Chamfer distance using sampling.");
+
+    unsigned int num_samples{0};
+    sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")
+        ->default_str("log(n)");  // Will be updated later if num_samples is set to 0.
+
+    bool use_cache{false};
+    sampling
+        ->add_flag("-c,--use-cache", use_cache,
+                   "Use cached weights files (qalsh_weights.bin, quadtree_weights.bin) if available")
+        ->default_val(false);
+
+    std::unique_ptr<WeightsGenerator> weights_generator;
+    sampling->require_subcommand(1);
+    ann->callback([&]() {
+        if (!weights_generator) {
+            spdlog::error("Weights generator is not set. Please specify a weights generator.");
+        }
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, use_cache);
+    });
+
+    // ------------------------------
+    // uniform sampling estimate
+    // ------------------------------
+    CLI::App* uniform = sampling->add_subcommand("uniform", "Generate samples using uniform distribution.");
+
+    uniform->callback([&]() { weights_generator = std::make_unique<UniformWeightsGenerator>(); });
+
     CLI11_PARSE(app, argc, argv);
 
     return 0;

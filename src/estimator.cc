@@ -1,59 +1,32 @@
 #include "estimator.h"
 
-#include <memory>
+#include <spdlog/spdlog.h>
 
-#include "dataset_metadata.h"
+#include <memory>
+#include <numeric>
+#include <utility>
+
+#include "ann_searcher.h"
 #include "point_set.h"
+#include "utils.h"
 
 // --------------------------------------------------
 // AnnEstimator Implementation
 // --------------------------------------------------
 AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
 
-void AnnEstimator::set_in_memory(bool in_memory) { in_memory_ = in_memory; }
-
-double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
-    // Load dataset metadata
-    spdlog::info("Loading dataset metadata...");
-    DatasetMetadata dataset_metadata;
-    dataset_metadata.Load(dataset_directory / "metadata.json");
-
+double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
     // Check the ANN searcher
     if (!ann_searcher_) {
         spdlog::error("The ANN searcher is not set.");
     }
 
-    // Construct point set metadata
-    PointSetMetadata point_set_metadata_a = {
-        .file_path = dataset_directory / "A.bin",
-        .num_points = dataset_metadata.num_points_a,
-        .num_dimensions = dataset_metadata.num_dimensions,
-    };
-    PointSetMetadata point_set_metadata_b = {
-        .file_path = dataset_directory / "B.bin",
-        .num_points = dataset_metadata.num_points_b,
-        .num_dimensions = dataset_metadata.num_dimensions,
-    };
-
-    // Calculate the distance from A to B
-    spdlog::info("Calculating the distance from A to B...");
-    double distance_ab = CalculateDistance(point_set_metadata_a, point_set_metadata_b);
-
-    // Calculate the distance from B to A
-    spdlog::info("Calculating the distance from B to A...");
-    double distance_ba = CalculateDistance(point_set_metadata_b, point_set_metadata_a);
-
-    // Retrun the result
-    return distance_ab + distance_ba;
-}
-
-double AnnEstimator::CalculateDistance(const PointSetMetadata& from, const PointSetMetadata& to) {
     ann_searcher_->Reset();
-    ann_searcher_->Init(to, in_memory_);
+    ann_searcher_->Init(to, in_memory);
     double distance = 0;
 
     std::unique_ptr<PointSetReader> query_set;
-    if (in_memory_) {
+    if (in_memory) {
         query_set = std::make_unique<InMemoryPointSetReader>(from);
     } else {
         query_set = std::make_unique<DiskPointSetReader>(from);
@@ -65,4 +38,54 @@ double AnnEstimator::CalculateDistance(const PointSetMetadata& from, const Point
     }
 
     return distance;
+}
+
+// --------------------------------------------------
+// SamplingEstimator Implementation
+// --------------------------------------------------
+SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
+                                     bool use_cache)
+    : weights_generator_(std::move(weights_generator)), num_samples_(num_samples), use_cache_(use_cache) {}
+
+double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
+    // Check the ANN searcher
+    if (!weights_generator_) {
+        spdlog::error("The ANN searcher is not set.");
+    }
+
+    // Generate weights.
+    spdlog::info("Generating weights...");
+    std::vector<double> weights = weights_generator_->Generate(from, to, in_memory, use_cache_);
+
+    // Check the size of weights.
+    if (weights.size() != from.num_points) {
+        spdlog::error("Weights size does not match the number of query points in the dataset");
+    }
+
+    // Sample the points using the generated weights.
+    double approximation = 0.0;
+    double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+
+    std::unique_ptr<PointSetReader> from_set;
+    if (in_memory) {
+        from_set = std::make_unique<InMemoryPointSetReader>(from);
+    } else {
+        from_set = std::make_unique<DiskPointSetReader>(from);
+    }
+
+    if (num_samples_ == 0) {
+        num_samples_ = static_cast<unsigned int>(std::log(from_set->get_num_points()));
+        spdlog::info("Number of samples set to log(n): {}", num_samples_);
+    }
+
+    LinearScanAnnSearcher linear_scan_ann_searcher;
+    linear_scan_ann_searcher.Init(to, in_memory);
+    for (unsigned int i = 0; i < num_samples_; i++) {
+        unsigned int point_id = Utils::SampleFromWeights(weights);
+        Point query = from_set->GetPoint(point_id);
+        AnnResult result = linear_scan_ann_searcher.Search(query);
+        approximation += sum * result.distance / weights[point_id];
+    }
+
+    return approximation / num_samples_;
 }

@@ -38,18 +38,25 @@ void GenerateDatasetCommand::Execute() {
 
     // Generate the point sets.
     spdlog::info("Generating point set A...");
-    GeneratePointSet(output_directory_ / "A.bin", dataset_metadata_.num_points_a);
+    PointSetMetadata metadata_a = {.file_path = output_directory_ / "A.bin",
+                                   .num_points = dataset_metadata_.num_points_a,
+                                   .num_dimensions = dataset_metadata_.num_dimensions};
+    GeneratePointSet(metadata_a.file_path, metadata_a.num_points);
 
     spdlog::info("Generating point set B...");
-    GeneratePointSet(output_directory_ / "B.bin", dataset_metadata_.num_points_b);
+    PointSetMetadata metadata_b = {.file_path = output_directory_ / "B.bin",
+                                   .num_points = dataset_metadata_.num_points_b,
+                                   .num_dimensions = dataset_metadata_.num_dimensions};
+    GeneratePointSet(metadata_b.file_path, metadata_b.num_points);
 
     // We must save the metadata first since it will be used by the estimator (update the chamfer distance later)
     dataset_metadata_.Save(output_directory_ / "metadata.json");
 
-    // Calculate the Chamfer distance between the base and query sets
+    // Calculate the Chamfer distance between two sets.
     spdlog::info("Calculating Chamfer distance between base and query sets...");
     AnnEstimator ann_estimator(std::make_unique<LinearScanAnnSearcher>());
-    dataset_metadata_.chamfer_distance = ann_estimator.Estimate(output_directory_);
+    dataset_metadata_.chamfer_distance = ann_estimator.EstimateDistance(metadata_a, metadata_b, in_memory_) +
+                                         ann_estimator.EstimateDistance(metadata_b, metadata_a, in_memory_);
 
     // Save the updated metadata
     dataset_metadata_.Save(output_directory_ / "metadata.json");
@@ -178,16 +185,35 @@ EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, std::file
     : estimator_(std::move(estimator)), dataset_directory_(std::move(dataset_directory)), in_memory_(in_memory) {}
 
 void EstimateCommand::Execute() {
-    estimator_->set_in_memory(in_memory_);
-
-    auto start = std::chrono::high_resolution_clock::now();
-    double estimation = estimator_->Estimate(dataset_directory_);
-    auto end = std::chrono::high_resolution_clock::now();
-
+    // Load dataset metadata
+    spdlog::info("Loading dataset metadata...");
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory_ / "metadata.json");
 
+    // Construct point set metadata
+    PointSetMetadata point_set_metadata_a = {
+        .file_path = dataset_directory_ / "A.bin",
+        .num_points = dataset_metadata.num_points_a,
+        .num_dimensions = dataset_metadata.num_dimensions,
+    };
+    PointSetMetadata point_set_metadata_b = {
+        .file_path = dataset_directory_ / "B.bin",
+        .num_points = dataset_metadata.num_points_b,
+        .num_dimensions = dataset_metadata.num_dimensions,
+    };
+
+    // Calculate the distance from A to B
+    auto start = std::chrono::high_resolution_clock::now();
+    spdlog::info("Calculating the distance from A to B...");
+    double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, in_memory_);
+
+    // Calculate the distance from B to A
+    spdlog::info("Calculating the distance from B to A...");
+    double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, in_memory_);
+    auto end = std::chrono::high_resolution_clock::now();
+
     // Output the result.
+    double estimation = distance_ab + distance_ba;
     std::cout << std::format(
         "The result is as follows:\n"
         "    Time Consumed: {:.2f} ms\n"

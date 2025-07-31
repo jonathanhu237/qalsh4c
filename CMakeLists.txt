@@ -23,6 +23,7 @@ add_executable(qalsh_chamfer
     src/qalsh_config.cc
     src/qalsh_hash_table.cc
     src/utils.cc
+    src/weights_generator.cc
 )
 
 target_link_libraries(qalsh_chamfer PRIVATE 
