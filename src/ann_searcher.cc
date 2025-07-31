@@ -2,9 +2,15 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cmath>
 #include <memory>
+#include <queue>
+#include <random>
+#include <vector>
 
 #include "point_set.h"
+#include "qalsh_config.h"
+#include "qalsh_hash_table.h"
 #include "utils.h"
 
 // ---------------------------------------------
@@ -36,3 +42,101 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 }
 
 void LinearScanAnnSearcher::Reset() { base_set_.reset(); }
+
+// ---------------------------------------------
+// QalshAnnSearcher Implementation
+// ---------------------------------------------
+QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio) {
+    qalsh_config_.approximation_ratio = approximation_ratio;
+}
+
+void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
+    if (in_memory) {
+        // Initialize base set.
+        base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
+
+        // Regularize QALSH config.
+        qalsh_config_.Regularize(point_set_metadata.num_points);
+
+        // Generate dot vectors.
+        dot_vectors_.resize(qalsh_config_.num_hash_tables);
+        std::mt19937 gen(std::random_device{}());
+        std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+
+        for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+            dot_vectors_[i].resize(base_set_->get_num_dimensions());
+            std::ranges::generate(dot_vectors_[i], [&]() { return standard_cauchy_dist(gen); });
+        }
+
+        // Initialize QALSH hash tables.
+        hash_tables.reserve(qalsh_config_.num_hash_tables);
+        for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+            std::vector<KeyValuePair> data(point_set_metadata.num_points);
+            for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
+                data[j] = {.dot_product = Utils::DotProduct(base_set_->GetPoint(j), dot_vectors_[i]), .point_id = j};
+            }
+            hash_tables.emplace_back(std::make_unique<InmemoryQalshHashTable>(data));
+        }
+    }
+}
+
+AnnResult QalshAnnSearcher::Search(const Point& query_point) {
+    std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
+    std::vector<bool> visited(base_set_->get_num_points(), false);
+    std::unordered_map<unsigned int, unsigned int> collision_count;
+    std::vector<double> keys(qalsh_config_.num_hash_tables);
+    double search_radius = 1.0;
+
+    // Initialize the keys
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        keys[i] = Utils::DotProduct(query_point, dot_vectors_[i]);
+        hash_tables[i]->Init(keys[i]);
+    }
+
+    // c-ANN search
+    while (!shouldTerminate(candidates, search_radius)) {
+        // (R,c)-NN search
+        for (unsigned int j = 0; !shouldTerminate(candidates, search_radius) && j < qalsh_config_.num_hash_tables;
+             j++) {
+            while (!shouldTerminate(candidates, search_radius)) {
+                std::optional<unsigned int> point_id = hash_tables[j]->FindNext(
+                    qalsh_config_.bucket_width * search_radius / 2.0);  // NOLINT: readability-magic-numbers
+                if (!point_id.has_value()) {
+                    break;
+                }
+                if (visited[point_id.value()]) {
+                    continue;
+                }
+                if (++collision_count[point_id.value()] >= qalsh_config_.collision_threshold) {
+                    Point point = base_set_->GetPoint(point_id.value());
+                    double distance = Utils::L1Distance(point, query_point);
+                    candidates.emplace(AnnResult{.point_id = point_id.value(), .distance = distance});
+                    visited[point_id.value()] = true;
+                }
+            }
+        }
+
+        // Update search radius.
+        search_radius *= qalsh_config_.approximation_ratio;
+    }
+
+    if (!candidates.empty()) {
+        return candidates.top();
+    }
+
+    // Defense programming
+    return {.point_id = static_cast<unsigned int>(std::numeric_limits<double>::max()),
+            .distance = std::numeric_limits<unsigned int>::max()};
+}
+
+void QalshAnnSearcher::Reset() {
+    base_set_.reset();
+    dot_vectors_.clear();
+    hash_tables.clear();
+}
+
+bool QalshAnnSearcher::shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
+                                       double search_radius) {
+    return (!candidates.empty() && candidates.top().distance <= qalsh_config_.approximation_ratio * search_radius) ||
+           candidates.size() >= static_cast<unsigned int>(std::ceil(qalsh_config_.beta * base_set_->get_num_points()));
+}
