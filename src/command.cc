@@ -16,7 +16,6 @@
 // --------------------------------------------------
 // GenerateDatasetCommand Implementation
 // --------------------------------------------------
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 GenerateDatasetCommand::GenerateDatasetCommand(DatasetMetadata dataset_metadata, double left_boundary,
                                                double right_boundary, std::filesystem::path output_directory,
                                                bool in_memory)

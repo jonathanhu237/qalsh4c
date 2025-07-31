@@ -47,7 +47,6 @@ double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     return distance_ab + distance_ba;
 }
 
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 double AnnEstimator::CalculateDistance(const PointSetMetadata& from, const PointSetMetadata& to) {
     ann_searcher_->Reset();
     ann_searcher_->Init(to, in_memory_);
