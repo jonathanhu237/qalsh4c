@@ -47,3 +47,24 @@ void QalshConfig::Save(const std::filesystem::path& file_path) {
 
     ofs << metadata.dump(4);
 }
+
+void QalshConfig::Load(const std::filesystem::path& file_path) {
+    if (!std::filesystem::exists(file_path)) {
+        spdlog::error("The QALSH config file does not exists, file path: {}", file_path.string());
+    }
+
+    std::ifstream ifs(file_path);
+    nlohmann::json metadata = nlohmann::json::parse(ifs);
+
+    try {
+        metadata.at("approximation_ratio").get_to(approximation_ratio);
+        metadata.at("bucket_width").get_to(bucket_width);
+        metadata.at("beta").get_to(beta);
+        metadata.at("error_probability").get_to(error_probability);
+        metadata.at("num_hash_tables").get_to(num_hash_tables);
+        metadata.at("collision_threshold").get_to(collision_threshold);
+        metadata.at("page_size").get_to(page_size);
+    } catch (nlohmann::json::exception& e) {
+        spdlog::error("JSON format error: {}", e.what());
+    }
+}

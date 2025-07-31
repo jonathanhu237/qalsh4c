@@ -14,6 +14,7 @@ struct QalshConfig {
 
     void Regularize(unsigned int num_points);
     void Save(const std::filesystem::path& file_path);
+    void Load(const std::filesystem::path& file_path);
 };
 
 #endif
