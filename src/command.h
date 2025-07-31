@@ -7,6 +7,8 @@
 
 #include "dataset_metadata.h"
 #include "estimator.h"
+#include "point_set.h"
+#include "qalsh_config.h"
 
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class Command {
@@ -22,13 +24,27 @@ class GenerateDatasetCommand : public Command {
     void Execute() override;
 
    private:
-    void GeneratePointSet(const std::string &point_set_file_path, unsigned int num_points);
+    void GeneratePointSet(const std::string& point_set_file_path, unsigned int num_points);
 
     DatasetMetadata dataset_metadata_;
     double left_boundary_;
     double right_boundary_;
     std::filesystem::path output_directory_;
     bool in_memory_;
+
+    std::mt19937 gen_;
+};
+
+class IndexCommand : public Command {
+   public:
+    IndexCommand(double approximation_ratio, unsigned int page_size, std::filesystem::path dataset_directory);
+    void Execute() override;
+
+   private:
+    void BuildIndex(const PointSetMetadata& point_set_metadata, const std::filesystem::path& index_directory);
+
+    QalshConfig qalsh_config_;
+    std::filesystem::path dataset_directory_;
 
     std::mt19937 gen_;
 };

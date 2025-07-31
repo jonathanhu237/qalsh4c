@@ -86,11 +86,31 @@ int main(int argc, char** argv) {
     });
 
     // ------------------------------
+    // index
+    // ------------------------------
+    CLI::App* index = app.add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
+
+    double approximation_ratio{0.0};
+    index->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+        ->default_val(Global::kDefaultApproximationRatio);
+
+    unsigned int page_size{0};
+    index
+        ->add_option("-B,--page_size", page_size,
+                     std::format("Page size for the indexer (default: {} bytes)", Global::kDefaultPageSize))
+        ->default_val(Global::kDefaultPageSize);
+
+    std::filesystem::path dataset_directory;
+    index->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+
+    index->callback(
+        [&]() { command = std::make_unique<IndexCommand>(approximation_ratio, page_size, dataset_directory); });
+
+    // ------------------------------
     // estimate
     // ------------------------------
     CLI::App* estimate = app.add_subcommand("estimate", "Estimate Chamfer distance.");
 
-    std::filesystem::path dataset_directory;
     estimate->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
     estimate->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
@@ -131,7 +151,6 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
 
-    double approximation_ratio{0.0};
     qalsh_ann->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
