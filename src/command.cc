@@ -14,7 +14,6 @@
 #include "dataset_metadata.h"
 #include "estimator.h"
 #include "point_set.h"
-#include "qalsh_hash_table.h"
 #include "utils.h"
 
 // --------------------------------------------------
