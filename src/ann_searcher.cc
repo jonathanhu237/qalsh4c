@@ -90,7 +90,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         // Load QALSH config.
         std::filesystem::path parent_directory = point_set_metadata.file_path.parent_path();
         std::string stem = point_set_metadata.file_path.stem();
-        std::filesystem::path index_directory = parent_directory / stem;
+        std::filesystem::path index_directory = parent_directory / "index" / stem;
         qalsh_config_.Load(index_directory / "config.json");
 
         // Load dot vectors.
@@ -106,7 +106,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         hash_tables.reserve(qalsh_config_.num_hash_tables);
         for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
             hash_tables.emplace_back(std::make_unique<DiskQalshHashTable>(
-                index_directory / "index" / std::format("{}.bin", i), qalsh_config_.page_size));
+                index_directory / "b_plus_trees" / std::format("{}.bin", i), qalsh_config_.page_size));
         }
     }
 }
