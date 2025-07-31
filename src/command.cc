@@ -42,7 +42,7 @@ void GenerateDatasetCommand::Execute() {
     GeneratePointSet(output_directory_ / "B.bin", dataset_metadata_.num_points_b);
 
     // We must save the metadata first since it will be used by the estimator (update the chamfer distance later)
-    dataset_metadata_.Save(output_directory_ / "metadata.toml");
+    dataset_metadata_.Save(output_directory_ / "metadata.json");
 
     // Calculate the Chamfer distance between the base and query sets
     spdlog::info("Calculating Chamfer distance between base and query sets...");
@@ -50,7 +50,7 @@ void GenerateDatasetCommand::Execute() {
     dataset_metadata_.chamfer_distance = ann_estimator.Estimate(output_directory_);
 
     // Save the updated metadata
-    dataset_metadata_.Save(output_directory_ / "metadata.toml");
+    dataset_metadata_.Save(output_directory_ / "metadata.json");
 }
 
 void GenerateDatasetCommand::GeneratePointSet(const std::string &point_set_file_path, unsigned int num_points) {
