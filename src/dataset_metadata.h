@@ -10,6 +10,7 @@ struct DatasetMetadata {
     double chamfer_distance{0.0};
 
     void Load(const std::filesystem::path& file_path);
+    void Save(const std::filesystem::path& file_path) const;
 };
 
 #endif

@@ -23,3 +23,19 @@ void DatasetMetadata::Load(const std::filesystem::path& file_path) {
         spdlog::error("JSON format error: {}", e.what());
     }
 }
+
+void DatasetMetadata::Save(const std::filesystem::path& file_path) const {
+    nlohmann::json metadata;
+    metadata["num_points_a"] = num_points_a;
+    metadata["num_points_b"] = num_points_b;
+    metadata["num_dimensions"] = num_dimensions;
+    metadata["chamfer_distance"] = chamfer_distance;
+
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open()) {
+        spdlog::error("Failed to open file for writing: {}", file_path.string());
+        return;
+    }
+
+    ofs << metadata.dump(4);
+}
