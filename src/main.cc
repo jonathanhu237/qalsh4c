@@ -8,6 +8,7 @@
 #include "ann_searcher.h"
 #include "command.h"
 #include "estimator.h"
+#include "global.h"
 #include "sink.h"
 
 int main(int argc, char** argv) {
@@ -76,6 +77,23 @@ int main(int argc, char** argv) {
     CLI::App* linear_scan = ann->add_subcommand("linear_scan", "Use linear scan for ANN.");
 
     linear_scan->callback([&] { ann_searcher = std::make_unique<LinearScanAnnSearcher>(); });
+
+    // ------------------------------
+    // qalsh ann estimate
+    // ------------------------------
+    CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
+
+    double approximation_ratio{0.0};
+    qalsh_ann->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+        ->default_val(Global::kDefaultApproximationRatio);
+
+    qalsh_ann->callback([&] {
+        if (in_memory) {
+            ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio);
+        } else {
+            spdlog::error("The disk version of QalshAnnSearcher has not been implemented yet.");
+        }
+    });
 
     CLI11_PARSE(app, argc, argv);
 
