@@ -71,7 +71,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         // Initialize QALSH hash tables.
         hash_tables.reserve(qalsh_config_.num_hash_tables);
         for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-            std::vector<KeyValuePair> data(point_set_metadata.num_points);
+            std::vector<DotProductPointIdPair> data(point_set_metadata.num_points);
             for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
                 data[j] = {.dot_product = Utils::DotProduct(base_set_->GetPoint(j), dot_vectors_[i]), .point_id = j};
             }

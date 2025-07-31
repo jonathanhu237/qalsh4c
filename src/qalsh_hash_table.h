@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-struct KeyValuePair {
+struct DotProductPointIdPair {
     double dot_product{0.0};
     unsigned int point_id{0};
 };
@@ -15,7 +15,7 @@ class QalshHashTable {
    public:
     virtual ~QalshHashTable() = default;
 
-    virtual void Init(double key) = 0;
+    virtual void Init(double query_dot_product) = 0;
     virtual std::optional<unsigned> FindNext(double bound) = 0;
 };
 
@@ -26,7 +26,7 @@ class InmemoryQalshHashTable : public QalshHashTable {
         size_t index;
     };
 
-    InmemoryQalshHashTable(const std::vector<KeyValuePair>& data);
+    InmemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data);
 
     void Init(double key) override;
     std::optional<unsigned int> FindNext(double bound) override;
@@ -36,7 +36,7 @@ class InmemoryQalshHashTable : public QalshHashTable {
     std::optional<unsigned int> FindNextRight(double bound);
 
     double key_{0.0};
-    std::vector<KeyValuePair> data_;
+    std::vector<DotProductPointIdPair> data_;
 
     std::optional<SearchRecord> left_;
     std::optional<SearchRecord> right_;

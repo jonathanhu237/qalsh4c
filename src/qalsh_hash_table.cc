@@ -4,7 +4,7 @@
 #include <cmath>
 #include <optional>
 
-InmemoryQalshHashTable::InmemoryQalshHashTable(const std::vector<KeyValuePair>& data) : data_(data) {}
+InmemoryQalshHashTable::InmemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data) : data_(data) {}
 
 void InmemoryQalshHashTable::Init(double key) {
     key_ = key;
@@ -12,7 +12,8 @@ void InmemoryQalshHashTable::Init(double key) {
     right_.reset();
 
     // Locate the first key k satisfying k >= key.
-    auto it = std::ranges::lower_bound(data_, key, {}, [](const KeyValuePair& kvp) { return kvp.dot_product; });
+    auto it =
+        std::ranges::lower_bound(data_, key, {}, [](const DotProductPointIdPair& pair) { return pair.dot_product; });
     auto index = static_cast<size_t>(std::distance(data_.begin(), it));
 
     // Determine the left index and right index.
