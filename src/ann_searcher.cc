@@ -3,10 +3,15 @@
 #include <spdlog/spdlog.h>
 
 #include <cmath>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
 #include <memory>
 #include <optional>
 #include <queue>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "point_set.h"
@@ -77,6 +82,31 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
                 data[j] = {.dot_product = Utils::DotProduct(base_set_->GetPoint(j), dot_vectors_[i]), .point_id = j};
             }
             hash_tables.emplace_back(std::make_unique<InMemoryQalshHashTable>(data));
+        }
+    } else {
+        // Initialize base set.
+        base_set_ = std::make_unique<DiskPointSetReader>(point_set_metadata);
+
+        // Load QALSH config.
+        std::filesystem::path parent_directory = point_set_metadata.file_path.parent_path();
+        std::string stem = point_set_metadata.file_path.stem();
+        std::filesystem::path index_directory = parent_directory / stem;
+        qalsh_config_.Load(index_directory / "config.json");
+
+        // Load dot vectors.
+        std::ifstream ifs(index_directory / "dot_vectors.bin");
+        dot_vectors_.resize(qalsh_config_.num_hash_tables);
+        for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+            dot_vectors_[i].resize(base_set_->get_num_dimensions());
+            ifs.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
+                     static_cast<std::streamoff>(sizeof(Coordinate) * dot_vectors_.size()));
+        }
+
+        // Initialize QALSH hash tables.
+        hash_tables.reserve(qalsh_config_.num_hash_tables);
+        for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+            hash_tables.emplace_back(std::make_unique<DiskQalshHashTable>(
+                index_directory / "index" / std::format("{}.bin", i), qalsh_config_.page_size));
         }
     }
 }
