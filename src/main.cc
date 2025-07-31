@@ -24,8 +24,7 @@ int main(int argc, char** argv) {
     std::string log_level;
     app.add_option("-l,--log_level", log_level, "Set the logging level (default: warn)")
         ->default_val("warn")
-        ->check(CLI::IsMember({"debug", "info", "warn", "error"}))
-        ->each([&](const std::string& level) { spdlog::set_level(spdlog::level::from_str(level)); });
+        ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
@@ -33,6 +32,7 @@ int main(int argc, char** argv) {
         if (!command) {
             spdlog::error("Command is not set. Please specify a command.");
         }
+        spdlog::set_level(spdlog::level::from_str(log_level));
         command->Execute();
     });
 
