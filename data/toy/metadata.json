@@ -1,6 +1,6 @@
 {
-  "num_points_a": 1000,
-  "num_points_b": 1000,
-  "num_dimensions": 256,
-  "chamfer_distance": 302684993.4074875
+    "chamfer_distance": 302521144.6831645,
+    "num_dimensions": 256,
+    "num_points_a": 1000,
+    "num_points_b": 1000
 }
