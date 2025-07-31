@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     // index
     // ------------------------------
-    CLI::App* index = app.add_subcommand("qalsh", "Index a dataset using QALSH algorithm");
+    CLI::App* index = app.add_subcommand("index", "Index a dataset using QALSH algorithm");
 
     double approximation_ratio{0.0};
     index->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
