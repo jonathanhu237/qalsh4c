@@ -26,7 +26,7 @@ double Utils::DotProduct(const Point &pt1, const Point &pt2) {
     return v1.dot(v2);
 }
 
-unsigned int SampleFromWeights(const std::vector<double> &weights) {
+unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {
     double total_sum = std::accumulate(weights.begin(), weights.end(), 0.0);
     if (total_sum <= 0) {
         throw std::runtime_error("Total sum of weights must be positive.");
