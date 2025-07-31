@@ -17,7 +17,6 @@ InMemoryPointSetReader::InMemoryPointSetReader(const PointSetMetadata& point_set
     points_.resize(num_points_);
     for (unsigned int i = 0; i < num_points_; ++i) {
         points_[i].resize(num_dimensions_);
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         ifs.read(reinterpret_cast<char*>(points_[i].data()),
                  static_cast<std::streamoff>(sizeof(Coordinate)) * num_dimensions_);
     }
@@ -48,7 +47,6 @@ Point DiskPointSetReader::GetPoint(unsigned int index) {
     ifs_.seekg(index * static_cast<std::streamoff>(sizeof(Coordinate)) * num_dimensions_, std::ios::beg);
     Point point(num_dimensions_);
 
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     ifs_.read(reinterpret_cast<char*>(point.data()), static_cast<std::streamoff>(sizeof(Coordinate)) * num_dimensions_);
 
     return point;
@@ -64,7 +62,6 @@ void InMemoryPointSetWriter::AddPoint(const Point& point) { points_.emplace_back
 void InMemoryPointSetWriter::Flush() {
     std::ofstream ofs(file_path_);
     for (auto point : points_) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         ofs.write(reinterpret_cast<const char*>(point.data()),
                   static_cast<std::streamoff>(sizeof(Coordinate) * point.size()));
     }
@@ -78,7 +75,6 @@ DiskPointSetWriter::DiskPointSetWriter(const std::filesystem::path& file_path) {
 }
 
 void DiskPointSetWriter::AddPoint(const Point& point) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     ofs_.write(reinterpret_cast<const char*>(point.data()),
                static_cast<std::streamoff>(sizeof(Coordinate) * point.size()));
 }
