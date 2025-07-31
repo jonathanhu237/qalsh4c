@@ -10,6 +10,7 @@
 class Utils {
    public:
     static double L1Distance(const Point &pt1, const Point &pt2);
+    static double DotProduct(const Point &pt1, const Point &pt2);
 };
 
 #endif
