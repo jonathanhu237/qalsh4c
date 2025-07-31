@@ -20,9 +20,9 @@ struct PointSetMetadata {
 // PointSet Definition
 // ---------------------------------------------
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class PointSet {
+class PointSetReader {
    public:
-    virtual ~PointSet() = default;
+    virtual ~PointSetReader() = default;
 
     [[nodiscard]] virtual unsigned int get_num_points() const = 0;
     [[nodiscard]] virtual unsigned int get_num_dimensions() const = 0;
@@ -33,9 +33,9 @@ class PointSet {
 // ---------------------------------------------
 // InMemoryPointSet Definition
 // ---------------------------------------------
-class InMemoryPointSet : public PointSet {
+class InMemoryPointSetReader : public PointSetReader {
    public:
-    InMemoryPointSet(const PointSetMetadata& point_set_metadata);
+    InMemoryPointSetReader(const PointSetMetadata& point_set_metadata);
 
     [[nodiscard]] unsigned int get_num_points() const override;
     [[nodiscard]] unsigned int get_num_dimensions() const override;
@@ -52,9 +52,9 @@ class InMemoryPointSet : public PointSet {
 // ---------------------------------------------
 // DiskPointSet Definition
 // ---------------------------------------------
-class DiskPointSet : public PointSet {
+class DiskPointSetReader : public PointSetReader {
    public:
-    DiskPointSet(const PointSetMetadata& point_set_metadata);
+    DiskPointSetReader(const PointSetMetadata& point_set_metadata);
 
     [[nodiscard]] unsigned int get_num_points() const override;
     [[nodiscard]] unsigned int get_num_dimensions() const override;

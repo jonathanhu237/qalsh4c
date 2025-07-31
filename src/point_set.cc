@@ -5,7 +5,7 @@
 // ---------------------------------------------
 // InMemoryPointSetReader Implementation
 // ---------------------------------------------
-InMemoryPointSet::InMemoryPointSet(const PointSetMetadata& point_set_metadata)
+InMemoryPointSetReader::InMemoryPointSetReader(const PointSetMetadata& point_set_metadata)
     : num_points_(point_set_metadata.num_points), num_dimensions_(point_set_metadata.num_dimensions) {
     std::ifstream ifs(point_set_metadata.file_path, std::ios::binary);
     if (!ifs.is_open()) {
@@ -21,16 +21,16 @@ InMemoryPointSet::InMemoryPointSet(const PointSetMetadata& point_set_metadata)
     }
 }
 
-unsigned int InMemoryPointSet::get_num_points() const { return num_points_; }
+unsigned int InMemoryPointSetReader::get_num_points() const { return num_points_; }
 
-unsigned int InMemoryPointSet::get_num_dimensions() const { return num_dimensions_; }
+unsigned int InMemoryPointSetReader::get_num_dimensions() const { return num_dimensions_; }
 
-Point InMemoryPointSet::GetPoint(unsigned int index) { return points_.at(index); }
+Point InMemoryPointSetReader::GetPoint(unsigned int index) { return points_.at(index); }
 
 // ---------------------------------------------
 // DiskPointSetReader Implementation
 // ---------------------------------------------
-DiskPointSet::DiskPointSet(const PointSetMetadata& point_set_metadata)
+DiskPointSetReader::DiskPointSetReader(const PointSetMetadata& point_set_metadata)
     : num_points_(point_set_metadata.num_points), num_dimensions_(point_set_metadata.num_dimensions) {
     ifs_.open(point_set_metadata.file_path, std::ios::binary);
     if (!ifs_.is_open()) {
@@ -38,11 +38,11 @@ DiskPointSet::DiskPointSet(const PointSetMetadata& point_set_metadata)
     }
 }
 
-unsigned int DiskPointSet::get_num_points() const { return num_points_; }
+unsigned int DiskPointSetReader::get_num_points() const { return num_points_; }
 
-unsigned int DiskPointSet::get_num_dimensions() const { return num_dimensions_; }
+unsigned int DiskPointSetReader::get_num_dimensions() const { return num_dimensions_; }
 
-Point DiskPointSet::GetPoint(unsigned int index) {
+Point DiskPointSetReader::GetPoint(unsigned int index) {
     ifs_.seekg(index * static_cast<std::streamoff>(sizeof(Coordinate)) * num_dimensions_, std::ios::beg);
     Point point(num_dimensions_);
 

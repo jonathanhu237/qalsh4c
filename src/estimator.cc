@@ -53,11 +53,11 @@ double AnnEstimator::CalculateDistance(const PointSetMetadata& from, const Point
     ann_searcher_->Init(to, in_memory_);
     double distance = 0;
 
-    std::unique_ptr<PointSet> query_set;
+    std::unique_ptr<PointSetReader> query_set;
     if (in_memory_) {
-        query_set = std::make_unique<InMemoryPointSet>(from);
+        query_set = std::make_unique<InMemoryPointSetReader>(from);
     } else {
-        query_set = std::make_unique<DiskPointSet>(from);
+        query_set = std::make_unique<DiskPointSetReader>(from);
     }
 
     for (unsigned int point_id = 0; point_id < query_set->get_num_points(); point_id++) {

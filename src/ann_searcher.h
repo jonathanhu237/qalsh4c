@@ -35,7 +35,7 @@ class LinearScanAnnSearcher : public AnnSearcher {
     void Reset() override;
 
    private:
-    std::unique_ptr<PointSet> base_set_;
+    std::unique_ptr<PointSetReader> base_set_;
 };
 
 class QalshAnnSearcher : public AnnSearcher {
@@ -50,7 +50,7 @@ class QalshAnnSearcher : public AnnSearcher {
     bool shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
                          double search_radius);
 
-    std::unique_ptr<PointSet> base_set_;
+    std::unique_ptr<PointSetReader> base_set_;
 
     QalshConfig qalsh_config_;
     std::vector<Point> dot_vectors_;
