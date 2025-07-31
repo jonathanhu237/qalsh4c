@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <random>
 #include <vector>
@@ -75,7 +76,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
             for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
                 data[j] = {.dot_product = Utils::DotProduct(base_set_->GetPoint(j), dot_vectors_[i]), .point_id = j};
             }
-            hash_tables.emplace_back(std::make_unique<InmemoryQalshHashTable>(data));
+            hash_tables.emplace_back(std::make_unique<InMemoryQalshHashTable>(data));
         }
     }
 }
@@ -99,8 +100,13 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         for (unsigned int j = 0; !shouldTerminate(candidates, search_radius) && j < qalsh_config_.num_hash_tables;
              j++) {
             while (!shouldTerminate(candidates, search_radius)) {
-                std::optional<unsigned int> point_id = hash_tables[j]->FindNext(
-                    qalsh_config_.bucket_width * search_radius / 2.0);  // NOLINT: readability-magic-numbers
+                double bound = qalsh_config_.bucket_width * search_radius / 2.0;  // NOLINT: readability-magic-numbers
+
+                std::optional<unsigned int> point_id = hash_tables[j]->LeftFindNext(bound);
+                if (!point_id.has_value()) {
+                    point_id = hash_tables[j]->RightFindNext(bound);
+                }
+
                 if (!point_id.has_value()) {
                     break;
                 }

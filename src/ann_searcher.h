@@ -40,7 +40,8 @@ class LinearScanAnnSearcher : public AnnSearcher {
 
 class QalshAnnSearcher : public AnnSearcher {
    public:
-    QalshAnnSearcher(double approximation_ratio);
+    QalshAnnSearcher() = default;                  // Constructor for disk version searcher.
+    QalshAnnSearcher(double approximation_ratio);  // Constructor for in memory version searcher.
 
     void Init(PointSetMetadata point_set_metadata, bool in_memory) override;
     AnnResult Search(const Point& query_point) override;
