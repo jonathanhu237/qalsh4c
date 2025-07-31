@@ -1,6 +1,10 @@
 #include "qalsh_config.h"
 
+#include <spdlog/spdlog.h>
+
 #include <cmath>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <numbers>
 
 #include "global.h"
@@ -24,3 +28,22 @@ void QalshConfig::Regularize(unsigned int num_points) {
     collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
 }
 // NOLINTEND
+
+void QalshConfig::Save(const std::filesystem::path& file_path) {
+    nlohmann::json metadata;
+    metadata["approximation_ratio"] = approximation_ratio;
+    metadata["bucket_width"] = bucket_width;
+    metadata["beta"] = beta;
+    metadata["error_probability"] = error_probability;
+    metadata["num_hash_tables"] = num_hash_tables;
+    metadata["collision_threshold"] = collision_threshold;
+    metadata["page_size"] = page_size;
+
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open()) {
+        spdlog::error("Failed to open file for writing: {}", file_path.string());
+        return;
+    }
+
+    ofs << metadata.dump(4);
+}

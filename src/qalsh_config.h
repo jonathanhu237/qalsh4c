@@ -1,6 +1,8 @@
 #ifndef QALSH_CONFIG_H
 #define QALSH_CONFIG_H
 
+#include <filesystem>
+
 struct QalshConfig {
     double approximation_ratio{0.0};
     double bucket_width{0.0};
@@ -11,6 +13,7 @@ struct QalshConfig {
     unsigned int page_size{0};
 
     void Regularize(unsigned int num_points);
+    void Save(const std::filesystem::path& file_path);
 };
 
 #endif
