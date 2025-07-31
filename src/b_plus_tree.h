@@ -12,7 +12,7 @@ class InternalNode {
    public:
     friend class BPlusTree;
     friend class BPlusTreeBulkLoader;
-    friend class BPlusTreeSearcher;
+    friend class DiskQalshHashTable;
 
    private:
     InternalNode(unsigned int order);
@@ -33,7 +33,7 @@ class LeafNode {
    public:
     friend class BPlusTree;
     friend class BPlusTreeBulkLoader;
-    friend class BPlusTreeSearcher;
+    friend class DiskQalshHashTable;
 
    private:
     LeafNode(unsigned int order);
