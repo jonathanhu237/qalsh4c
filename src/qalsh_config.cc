@@ -9,9 +9,10 @@
 void QalshConfig::Regularize(unsigned int num_points) {
     bucket_width = 2.0 * std::sqrt(approximation_ratio);
     beta = 100.0 / static_cast<double>(num_points);
+    error_probability = Global::kDefaultErrorProbability;
 
     double term1 = std::sqrt(std::log(2.0 / beta));
-    double term2 = std::sqrt(std::log(1.0 / Global::kDefaultErrorProbability));
+    double term2 = std::sqrt(std::log(1.0 / error_probability));
     double p1 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width / 2.0);
     double p2 = 2.0 / std::numbers::pi_v<double> * atan(bucket_width / (2.0 * approximation_ratio));
     double numerator = std::pow(term1 + term2, 2.0);
