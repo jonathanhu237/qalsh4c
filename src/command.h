@@ -10,7 +10,6 @@
 #include "point_set.h"
 #include "qalsh_config.h"
 
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class Command {
    public:
     virtual ~Command() = default;

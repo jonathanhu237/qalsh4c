@@ -19,7 +19,6 @@ struct PointSetMetadata {
 // ---------------------------------------------
 // PointSet Definition
 // ---------------------------------------------
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class PointSetReader {
    public:
     virtual ~PointSetReader() = default;
@@ -71,7 +70,6 @@ class DiskPointSetReader : public PointSetReader {
 // ---------------------------------------------
 // PointSetWriter Definition
 // ---------------------------------------------
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class PointSetWriter {
    public:
     virtual ~PointSetWriter() = default;

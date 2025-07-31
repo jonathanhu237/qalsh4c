@@ -9,7 +9,6 @@
 #include "b_plus_tree.h"
 #include "types.h"
 
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class QalshHashTable {
    public:
     virtual ~QalshHashTable() = default;

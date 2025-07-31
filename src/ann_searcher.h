@@ -16,7 +16,6 @@ struct AnnResult {
     bool operator<(const AnnResult& rhs) const { return distance < rhs.distance; }
 };
 
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;

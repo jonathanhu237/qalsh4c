@@ -7,7 +7,6 @@
 #include "ann_searcher.h"
 #include "point_set.h"
 
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class Estimator {
    public:
     virtual ~Estimator() = default;
