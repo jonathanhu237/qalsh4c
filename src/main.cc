@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
         ->default_val(Global::kDefaultNumPointsA);
 
     unsigned int num_points_b{0};
-    generate_dataset->add_option("-b,--num_points_a", num_points_b, "Number of points in the second point set (B).")
+    generate_dataset->add_option("-b,--num_points_b", num_points_b, "Number of points in the second point set (B).")
         ->default_val(Global::kDefaultNumPointsB);
 
     unsigned int num_dimensions{0};
