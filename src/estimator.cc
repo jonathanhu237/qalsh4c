@@ -12,7 +12,7 @@ AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_sear
 
 void AnnEstimator::set_in_memory(bool in_memory) { in_memory_ = in_memory; }
 
-EstimateResult AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
+double AnnEstimator::Estimate(const std::filesystem::path& dataset_directory) {
     // Load dataset metadata
     spdlog::info("Loading dataset metadata...");
     DatasetMetadata dataset_metadata;
@@ -44,11 +44,7 @@ EstimateResult AnnEstimator::Estimate(const std::filesystem::path& dataset_direc
     double distance_ba = CalculateDistance(point_set_metadata_b, point_set_metadata_a);
 
     // Retrun the result
-    EstimateResult res;
-    res.chamfer_distance = distance_ab + distance_ba;
-    res.relative_error =
-        std::fabs(res.chamfer_distance - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance;
-    return res;
+    return distance_ab + distance_ba;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)

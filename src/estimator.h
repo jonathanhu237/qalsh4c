@@ -7,11 +7,6 @@
 #include "ann_searcher.h"
 #include "point_set.h"
 
-struct EstimateResult {
-    double chamfer_distance{0.0};
-    double relative_error{0.0};
-};
-
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class Estimator {
    public:
@@ -19,7 +14,7 @@ class Estimator {
 
     virtual void set_in_memory(bool in_memory) = 0;
 
-    virtual EstimateResult Estimate(const std::filesystem::path& dataset_directory) = 0;
+    virtual double Estimate(const std::filesystem::path& dataset_directory) = 0;
 };
 
 class AnnEstimator : public Estimator {
@@ -28,7 +23,7 @@ class AnnEstimator : public Estimator {
 
     void set_in_memory(bool in_memory) override;
 
-    EstimateResult Estimate(const std::filesystem::path& dataset_directory) override;
+    double Estimate(const std::filesystem::path& dataset_directory) override;
 
    private:
     double CalculateDistance(const PointSetMetadata& from, const PointSetMetadata& to);
