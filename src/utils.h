@@ -11,12 +11,13 @@ class Utils {
    public:
     static double L1Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
+    static unsigned int SampleFromWeights(const std::vector<double> &weights);
 
     template <typename T>
-    T static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
+    static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
 
     template <typename T>
-    void static WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
+    static void WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
 };
 
 template <typename T>
