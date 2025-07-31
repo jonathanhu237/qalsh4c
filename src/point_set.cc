@@ -1,6 +1,8 @@
 #include "point_set.h"
 
+#include <fstream>
 #include <ios>
+#include <utility>
 
 // ---------------------------------------------
 // InMemoryPointSetReader Implementation
@@ -51,3 +53,34 @@ Point DiskPointSetReader::GetPoint(unsigned int index) {
 
     return point;
 }
+
+// ---------------------------------------------
+// InMemoryPointSetWriter Implementation
+// ---------------------------------------------
+InMemoryPointSetWriter::InMemoryPointSetWriter(std::filesystem::path file_path) : file_path_(std::move(file_path)) {}
+
+void InMemoryPointSetWriter::AddPoint(const Point& point) { points_.emplace_back(point); }
+
+void InMemoryPointSetWriter::Flush() {
+    std::ofstream ofs(file_path_);
+    for (auto point : points_) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        ofs.write(reinterpret_cast<const char*>(point.data()),
+                  static_cast<std::streamoff>(sizeof(Coordinate) * point.size()));
+    }
+}
+
+// ---------------------------------------------
+// DiskPointSetWriter Implementation
+// ---------------------------------------------
+DiskPointSetWriter::DiskPointSetWriter(const std::filesystem::path& file_path) {
+    ofs_.open(file_path, std::ios::binary | std::ios::trunc);
+}
+
+void DiskPointSetWriter::AddPoint(const Point& point) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    ofs_.write(reinterpret_cast<const char*>(point.data()),
+               static_cast<std::streamoff>(sizeof(Coordinate) * point.size()));
+}
+
+void DiskPointSetWriter::Flush() { ofs_.flush(); }
