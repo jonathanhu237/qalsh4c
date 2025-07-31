@@ -6,12 +6,7 @@
 #include <fstream>
 #include <vector>
 
-#include "qalsh_hash_table.h"
-
-struct KeyPageNumPair {
-    double key;
-    unsigned int page_num;
-};
+#include "types.h"
 
 class InternalNode {
    public:
