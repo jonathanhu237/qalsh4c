@@ -7,14 +7,14 @@
         {
             "type": "lldb-dap",
             "request": "launch",
-            "name": "Debug QALSH ANN Estimator",
+            "name": "Debug QALSH ANN Estimator (In Memory)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
                 "estimate",
                 "-d",
                 "./data/toy",
+                "--in-memory",
                 "ann",
-                "-s",
                 "qalsh"
             ],
             "env": [],
