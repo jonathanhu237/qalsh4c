@@ -16,7 +16,7 @@ class Utils {
     T static ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
 
     template <typename T>
-    void WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
+    void static WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
 };
 
 template <typename T>
