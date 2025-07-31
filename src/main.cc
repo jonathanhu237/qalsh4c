@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
         if (in_memory) {
             ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio);
         } else {
-            spdlog::error("The disk version of QalshAnnSearcher has not been implemented yet.");
+            ann_searcher = std::make_unique<QalshAnnSearcher>();
         }
     });
 
