@@ -20,3 +20,7 @@ logs
 
 # python
 __pycache__
+
+# perf
+perf.data
+perf.data.old
