@@ -11,6 +11,7 @@
 #include "estimator.h"
 #include "global.h"
 #include "sink.h"
+#include "weights_generator.h"
 
 int main(int argc, char** argv) {
     // Setup logger.
@@ -154,13 +155,8 @@ int main(int argc, char** argv) {
     qalsh_ann->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_ann->callback([&] {
-        if (in_memory) {
-            ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio);
-        } else {
-            ann_searcher = std::make_unique<QalshAnnSearcher>();
-        }
-    });
+    // If in_memory = false, the setting of approximation_ratio would not have any effect.
+    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio); });
 
     CLI11_PARSE(app, argc, argv);
 
