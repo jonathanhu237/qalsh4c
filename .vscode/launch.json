@@ -7,26 +7,6 @@
         {
             "type": "lldb-dap",
             "request": "launch",
-            "name": "Debug Dataset Generator",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
-            "args": [
-                "generate_dataset",
-                "-d",
-                "./data/toy",
-                "synthesize",
-                "-B",
-                "1000",
-                "-Q",
-                "1000",
-                "-D",
-                "64"
-            ],
-            "env": [],
-            "cwd": "${workspaceRoot}"
-        },
-        {
-            "type": "lldb-dap",
-            "request": "launch",
             "name": "Debug QALSH ANN Estimator",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
