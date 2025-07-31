@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
-    ann->callback([&]() {
+    sampling->callback([&]() {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
