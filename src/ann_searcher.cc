@@ -83,7 +83,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
     std::vector<bool> visited(base_set_->get_num_points(), false);
-    std::unordered_map<unsigned int, unsigned int> collision_count;
+    std::vector<unsigned int> collision_count(base_set_->get_num_points(), 0);
     std::vector<double> keys(qalsh_config_.num_hash_tables);
     double search_radius = 1.0;
 
