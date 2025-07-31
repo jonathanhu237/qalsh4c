@@ -29,8 +29,9 @@ std::optional<unsigned int> InMemoryQalshHashTable::LeftFindNext(double bound) {
     unsigned int point_id = data_[left_.value()].point_id;
     if (left_.value() == 0) {
         left_.reset();
+    } else {
+        left_.value()--;
     }
-    left_.value()--;
 
     return point_id;
 }
@@ -43,8 +44,9 @@ std::optional<unsigned int> InMemoryQalshHashTable::RightFindNext(double bound) 
     unsigned int point_id = data_[right_.value()].point_id;
     if (right_.value() == data_.size() - 1) {
         right_.reset();
+    } else {
+        right_.value()++;
     }
-    right_.value()--;
 
     return point_id;
 }
