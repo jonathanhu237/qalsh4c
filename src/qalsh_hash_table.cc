@@ -4,9 +4,9 @@
 #include <cmath>
 #include <optional>
 
-InmemoryQalshHashTable::InmemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data) : data_(data) {}
+InMemoryQalshHashTable::InMemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data) : data_(data) {}
 
-void InmemoryQalshHashTable::Init(double key) {
+void InMemoryQalshHashTable::Init(double key) {
     key_ = key;
     left_.reset();
     right_.reset();
@@ -17,59 +17,34 @@ void InmemoryQalshHashTable::Init(double key) {
     auto index = static_cast<size_t>(std::distance(data_.begin(), it));
 
     // Determine the left index and right index.
-    left_ = (index == 0) ? std::nullopt
-                         : std::make_optional(SearchRecord{
-                               .distance = key_ - data_[index - 1].dot_product,
-                               .index = index - 1,
-                           });
-    right_ = (index == data_.size()) ? std::nullopt
-                                     : std::make_optional(SearchRecord{
-                                           .distance = data_[index].dot_product - key_,
-                                           .index = index,
-                                       });
+    left_ = (index == 0) ? std::nullopt : std::make_optional(index - 1);
+    right_ = (index == data_.size()) ? std::nullopt : std::make_optional(index);
 }
 
-std::optional<unsigned int> InmemoryQalshHashTable::FindNext(double bound) {
-    if (!left_.has_value() && !right_.has_value()) {
-        return std::nullopt;
-    }
-    if (!left_.has_value()) {
-        return FindNextRight(bound);
-    }
-    if (!right_.has_value()) {
-        return FindNextLeft(bound);
-    }
-
-    if (left_->distance <= right_->distance) {
-        return FindNextLeft(bound);
-    }
-    return FindNextRight(bound);
-}
-
-std::optional<unsigned int> InmemoryQalshHashTable::FindNextLeft(double bound) {
-    if (!left_.has_value() || left_->distance > bound) {
+std::optional<unsigned int> InMemoryQalshHashTable::LeftFindNext(double bound) {
+    if (!left_.has_value() || key_ - data_[left_.value()].dot_product > bound) {
         return std::nullopt;
     }
 
-    unsigned int point_id = data_[left_->index].point_id;
-    if (left_->index == 0) {
+    unsigned int point_id = data_[left_.value()].point_id;
+    if (left_.value() == 0) {
         left_.reset();
     }
-    left_->index--;
+    left_.value()--;
 
     return point_id;
 }
 
-std::optional<unsigned int> InmemoryQalshHashTable::FindNextRight(double bound) {
-    if (!right_.has_value() || right_->distance > bound) {
+std::optional<unsigned int> InMemoryQalshHashTable::RightFindNext(double bound) {
+    if (!right_.has_value() || data_[right_.value()].dot_product - key_ > bound) {
         return std::nullopt;
     }
 
-    unsigned int point_id = data_[right_->index].point_id;
-    if (right_->index == data_.size() - 1) {
+    unsigned int point_id = data_[right_.value()].point_id;
+    if (right_.value() == data_.size() - 1) {
         right_.reset();
     }
-    right_->index++;
+    right_.value()--;
 
     return point_id;
 }

@@ -1,7 +1,6 @@
 #ifndef QALSH_HASH_TABLE_H
 #define QALSH_HASH_TABLE_H
 
-#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -16,30 +15,24 @@ class QalshHashTable {
     virtual ~QalshHashTable() = default;
 
     virtual void Init(double query_dot_product) = 0;
-    virtual std::optional<unsigned> FindNext(double bound) = 0;
+    virtual std::optional<unsigned int> LeftFindNext(double bound) = 0;
+    virtual std::optional<unsigned int> RightFindNext(double bound) = 0;
 };
 
-class InmemoryQalshHashTable : public QalshHashTable {
+class InMemoryQalshHashTable : public QalshHashTable {
    public:
-    struct SearchRecord {
-        double distance;
-        size_t index;
-    };
-
-    InmemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data);
+    InMemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data);
 
     void Init(double key) override;
-    std::optional<unsigned int> FindNext(double bound) override;
+    std::optional<unsigned int> LeftFindNext(double bound) override;
+    std::optional<unsigned int> RightFindNext(double bound) override;
 
    private:
-    std::optional<unsigned int> FindNextLeft(double bound);
-    std::optional<unsigned int> FindNextRight(double bound);
-
     double key_{0.0};
     std::vector<DotProductPointIdPair> data_;
 
-    std::optional<SearchRecord> left_;
-    std::optional<SearchRecord> right_;
+    std::optional<unsigned int> left_;
+    std::optional<unsigned int> right_;
 };
 
 #endif
