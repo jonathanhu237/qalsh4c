@@ -45,3 +45,19 @@ To check other options for dataset generation, run:
 ```bash
 ./build/qalsh_chamfer generate_dataset -h
 ```
+
+## Index
+
+To use the disk version of QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset:
+
+```bash
+./build/qalsh_chamfer index -d data/toy
+```
+
+By default, the approximation ratio is 2.0 and the page size is 4096 bytes. You can use the following command to see how to modify these parameters:
+
+```bash
+./build/qalsh_chamfer index -h
+```
+
+Once the index is built, you can find the index files in the `./data/toy/index` directory.
