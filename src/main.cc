@@ -171,7 +171,8 @@ int main(int argc, char** argv) {
     sampling
         ->add_flag("-c,--use-cache", use_cache,
                    "Use cached weights files (qalsh_weights.bin, quadtree_weights.bin) if available")
-        ->default_val(false);
+        ->default_val(false)
+        ->default_str(use_cache ? "True" : "False");
 
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
@@ -186,8 +187,18 @@ int main(int argc, char** argv) {
     // uniform sampling estimate
     // ------------------------------
     CLI::App* uniform = sampling->add_subcommand("uniform", "Generate samples using uniform distribution.");
-
     uniform->callback([&]() { weights_generator = std::make_unique<UniformWeightsGenerator>(); });
+
+    // ------------------------------
+    // qalsh sampling estimate
+    // ------------------------------
+    CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
+
+    qalsh_sampling->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+        ->default_val(Global::kDefaultApproximationRatio);
+
+    qalsh_sampling->callback(
+        [&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(approximation_ratio); });
 
     CLI11_PARSE(app, argc, argv);
 
