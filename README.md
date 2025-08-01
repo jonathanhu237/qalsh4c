@@ -9,6 +9,7 @@ To build the project, you need to have the following dependencies installed:
 - [CMake](https://cmake.org/): version 3.28.3 or higher
 - [Ninja](https://ninja-build.org/): version 1.11.1 or higher
 - [GCC](https://gcc.gnu.org/): version 13.3.0 or higher
+- [Vcpkg](https://vcpkg.io/en/): version 2025-06-20 or higher
 
 To build the project in release mode, run the following commands:
 
