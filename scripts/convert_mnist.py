@@ -27,22 +27,28 @@ def main():
         description="Convert MNIST to Chamfer distance format"
     )
     parser.add_argument(
-        "--output-dir", default="data/mnist", help="Output directory for the dataset"
+        "-o",
+        "--output-dir",
+        default="data/mnist",
+        help="Output directory for the dataset",
     )
     parser.add_argument(
+        "-p",
         "--processes",
         type=int,
         default=None,
         help="Number of processes for parallel computation (default: auto-detect)",
     )
     parser.add_argument(
-        "--num-points-a",
+        "-a",
+        "--num_points_a",
         type=int,
         default=None,
         help="Number of points in set A (set B will contain remaining points)",
     )
     parser.add_argument(
-        "--log-level",
+        "-l",
+        "--log_level",
         choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
         default="WARN",
         help="Set the logging level (default: WARN)",
