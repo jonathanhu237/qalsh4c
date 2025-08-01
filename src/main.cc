@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
     std::string log_level;
-    app.add_option("-l,--log_level", log_level, "Set the logging level (default: warn)")
+    app.add_option("-l,--log-level", log_level, "Set the logging level (default: warn)")
         ->default_val("warn")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
@@ -43,17 +43,17 @@ int main(int argc, char** argv) {
     CLI::App* index = app.add_subcommand("index", "Index a dataset using QALSH algorithm");
 
     double approximation_ratio{0.0};
-    index->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+    index->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
     unsigned int page_size{0};
     index
-        ->add_option("-B,--page_size", page_size,
+        ->add_option("-B,--page-size", page_size,
                      std::format("Page size for the indexer (default: {} bytes)", Global::kDefaultPageSize))
         ->default_val(Global::kDefaultPageSize);
 
     std::filesystem::path dataset_directory;
-    index->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+    index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
     index->callback(
         [&]() { command = std::make_unique<IndexCommand>(approximation_ratio, page_size, dataset_directory); });
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* estimate = app.add_subcommand("estimate", "Estimate Chamfer distance.");
 
-    estimate->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
+    estimate->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
     bool in_memory{false};
     estimate->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
 
-    qalsh_ann->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+    qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
     // If in_memory = false, the setting of approximation_ratio would not have any effect.
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     CLI::App* sampling = estimate->add_subcommand("sampling", "Estimate Chamfer distance using sampling.");
 
     unsigned int num_samples{0};
-    sampling->add_option("-n,--num_samples", num_samples, "Number of samples to use for estimation")
+    sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation")
         ->default_str("log(n)");  // Will be updated later if num_samples is set to 0.
 
     bool use_cache{false};
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
 
-    qalsh_sampling->add_option("-c, --approximation_ratio", approximation_ratio, "Approximation ratio for QALSH")
+    qalsh_sampling->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
     qalsh_sampling->callback(
