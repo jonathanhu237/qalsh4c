@@ -3,17 +3,28 @@
 
 #include <cstddef>
 #include <optional>
+#include <queue>
 #include <unordered_map>
 #include <vector>
 
 #include "b_plus_tree.h"
 #include "types.h"
 
+struct SearchRecord {
+    bool is_left;
+    double dist;
+};
+
+struct CompareSearchRecord {
+    bool operator()(const SearchRecord& a, const SearchRecord& b) const { return a.dist > b.dist; }
+};
+
 class QalshHashTable {
    public:
     virtual ~QalshHashTable() = default;
 
     virtual void Init(double query_dot_product) = 0;
+    virtual std::optional<unsigned int> FindNext(double bound) = 0;
     virtual std::optional<unsigned int> LeftFindNext(double bound) = 0;
     virtual std::optional<unsigned int> RightFindNext(double bound) = 0;
 };
@@ -23,6 +34,7 @@ class InMemoryQalshHashTable : public QalshHashTable {
     InMemoryQalshHashTable(const std::vector<DotProductPointIdPair>& data);
 
     void Init(double key) override;
+    std::optional<unsigned int> FindNext(double bound) override;
     std::optional<unsigned int> LeftFindNext(double bound) override;
     std::optional<unsigned int> RightFindNext(double bound) override;
 
@@ -32,6 +44,7 @@ class InMemoryQalshHashTable : public QalshHashTable {
 
     std::optional<unsigned int> left_;
     std::optional<unsigned int> right_;
+    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq;
 };
 
 class DiskQalshHashTable : public QalshHashTable {
@@ -43,6 +56,7 @@ class DiskQalshHashTable : public QalshHashTable {
 
     DiskQalshHashTable(const std::filesystem::path& file_path, unsigned int page_size);
     void Init(double key) override;
+    std::optional<unsigned int> FindNext(double bound) override;
     std::optional<unsigned int> LeftFindNext(double bound) override;
     std::optional<unsigned int> RightFindNext(double bound) override;
 

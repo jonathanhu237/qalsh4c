@@ -25,7 +25,56 @@ void InMemoryQalshHashTable::Init(double key) {
 
     // Determine the left index and right index.
     left_ = (index == 0) ? std::nullopt : std::make_optional(index - 1);
+    if (left_.has_value()) {
+        pq.emplace(SearchRecord{
+            .is_left = true,
+            .dist = key_ - data_[left_.value()].dot_product,
+        });
+    }
+
     right_ = (index == data_.size()) ? std::nullopt : std::make_optional(index);
+    if (right_.has_value()) {
+        pq.emplace(SearchRecord{
+            .is_left = false,
+            .dist = data_[right_.value()].dot_product - key_,
+        });
+    }
+}
+
+std::optional<unsigned int> InMemoryQalshHashTable::FindNext(double bound) {
+    if (pq.empty() || pq.top().dist > bound) {
+        return std::nullopt;
+    }
+
+    if (pq.top().is_left) {
+        unsigned int point_id = data_[left_.value()].point_id;
+        pq.pop();
+        if (left_.value() == 0) {
+            left_.reset();
+        } else {
+            left_.value()--;
+            pq.emplace(SearchRecord{
+                .is_left = true,
+                .dist = key_ - data_[left_.value()].dot_product,
+            });
+        }
+
+        return point_id;
+    }
+
+    unsigned int point_id = data_[right_.value()].point_id;
+    pq.pop();
+    if (right_.value() == data_.size() - 1) {
+        right_.reset();
+    } else {
+        right_.value()++;
+        pq.emplace(SearchRecord{
+            .is_left = false,
+            .dist = data_[right_.value()].dot_product - key_,
+        });
+    }
+
+    return point_id;
 }
 
 std::optional<unsigned int> InMemoryQalshHashTable::LeftFindNext(double bound) {
@@ -108,6 +157,11 @@ void DiskQalshHashTable::Init(double key) {
     } else {
         right_ = std::make_optional(SearchLocation{.leaf_node = leaf_node, .index = index});
     }
+}
+
+std::optional<unsigned int> DiskQalshHashTable::FindNext(double bound) {
+    spdlog::error("Hasn't been implemented yet.");
+    return std::nullopt;
 }
 
 std::optional<unsigned int> DiskQalshHashTable::LeftFindNext(double bound) {
