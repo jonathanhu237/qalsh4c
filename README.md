@@ -61,3 +61,26 @@ By default, the approximation ratio is 2.0 and the page size is 4096 bytes. You 
 ```
 
 Once the index is built, you can find the index files in the `./data/toy/index` directory.
+
+## Estimate
+
+We provide four methods for estimating the Chamfer distance:
+
+- Linear Scan ANN
+- QALSH ANN
+- Uniform Sampling
+- QALSH Sampling
+
+Each algorithm has both an disk and in-memory version. You can run the in-memory version by specifying the `--in-memory` flag. For example, the following command estimates the Chamfer distance for the `./data/toy` dataset using the in-memory version of QALSH Sampling:
+
+```bash
+./build/qalsh_chamfer estimate -d ./data/toy --in-memory sampling qalsh
+```
+
+If you remove the `--in-memory` flag from the command above, it will run the disk version of QALSH Sampling. In this case, you must build an index beforehand; otherwise, the algorithm will not run correctly.
+
+For more options, please use the following command:
+
+```bash
+./build/qalsh_chamfer estimate -h
+```
