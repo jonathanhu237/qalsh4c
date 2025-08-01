@@ -7,17 +7,19 @@ from pathlib import Path
 from utils import build_project
 
 
-def run_qalsh_sampling(dataset_path, num_samples):
+def run_sampling(dataset_path, num_samples, method):
     """
-    Run qalsh sampling with a specific number of samples and extract results.
+    Run sampling with a specific number of samples and extract results.
 
     Args:
         dataset_path: Path to the dataset directory
         num_samples: Number of samples to use
+        method: Sampling method to use ("qalsh" or "uniform")
 
     Returns:
         Relative error as a float
     """
+    # Build the command based on the sampling method
     cmd = [
         "./build/qalsh_chamfer",
         "estimate",
@@ -28,8 +30,10 @@ def run_qalsh_sampling(dataset_path, num_samples):
         "--use-cache",
         "-n",
         str(num_samples),
-        "qalsh",
     ]
+
+    # Add the sampling method
+    cmd.append(method)
 
     result = subprocess.run(
         cmd,
@@ -56,10 +60,17 @@ def run_qalsh_sampling(dataset_path, num_samples):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run qalsh sampling multiple times with different sample counts"
+        description="Run sampling multiple times with different sample counts"
     )
     parser.add_argument(
         "-m",
+        "--method",
+        choices=["qalsh", "uniform"],
+        default="qalsh",
+        help="Sampling method to use (default: qalsh)",
+    )
+    parser.add_argument(
+        "-n",
         "--max-samples",
         type=int,
         default=100,
@@ -100,7 +111,7 @@ def main():
     for i in range(1, args.max_samples + 1):
         sample_errors = []
         for _ in range(args.round):
-            relative_error = run_qalsh_sampling(args.dataset_path, i)
+            relative_error = run_sampling(args.dataset_path, i, args.method)
             if relative_error is None:
                 print(f"Error: Could not extract relative error for {i} samples")
                 sys.exit(1)
