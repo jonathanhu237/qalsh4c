@@ -128,11 +128,10 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     // c-ANN search
     while (!shouldTerminate(candidates, search_radius)) {
         // (R,c)-NN search
+        double bound = qalsh_config_.bucket_width * search_radius / 2.0;  // NOLINT: readability-magic-numbers
         for (unsigned int j = 0; !shouldTerminate(candidates, search_radius) && j < qalsh_config_.num_hash_tables;
              j++) {
             while (!shouldTerminate(candidates, search_radius)) {
-                double bound = qalsh_config_.bucket_width * search_radius / 2.0;  // NOLINT: readability-magic-numbers
-
                 std::optional<unsigned int> point_id = hash_tables[j]->LeftFindNext(bound);
                 if (!point_id.has_value()) {
                     point_id = hash_tables[j]->RightFindNext(bound);
