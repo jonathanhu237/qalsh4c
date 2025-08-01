@@ -36,6 +36,12 @@ def main():
         help="Number of processes for parallel computation (default: auto-detect)",
     )
     parser.add_argument(
+        "--num-points-a",
+        type=int,
+        default=None,
+        help="Number of points in set A (set B will contain remaining points)",
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
         default="WARN",
@@ -58,17 +64,29 @@ def main():
     # Load MNIST dataset
     X = load_mnist()
 
-    # Split data into two equal sets A and B
+    # Split data into sets A and B
     n_total = len(X)
-    n_half = n_total // 2
+
+    # Determine number of points in A
+    if args.num_points_a is not None:
+        n_a = args.num_points_a
+        if n_a >= n_total:
+            raise ValueError(
+                f"Number of points in A ({n_a}) must be less than total points ({n_total})"
+            )
+    else:
+        # If not specified, split in half
+        n_a = n_total // 2
+
+    n_b = n_total - n_a
 
     # Shuffle the data first
     indices = np.random.permutation(n_total)
     X_shuffled = X[indices]
 
     # Split into A and B
-    A = X_shuffled[:n_half]
-    B = X_shuffled[n_half : 2 * n_half]  # Ensure equal sizes
+    A = X_shuffled[:n_a]
+    B = X_shuffled[n_a : n_a + n_b]
 
     logging.info(f"""Split data into:
     Set A: {A.shape[0]} points
