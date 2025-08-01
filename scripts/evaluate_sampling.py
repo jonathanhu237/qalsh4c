@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from utils import build_project
 
@@ -50,10 +51,10 @@ def run_qalsh_sampling(dataset_path, num_samples):
                 relative_error = match.group(1)
                 break
 
-    if relative_error is None:
-        return {"num_samples": num_samples, "relative_error": "N/A"}
+        if relative_error is None:
+            return None
 
-    return {"num_samples": num_samples, "relative_error": relative_error}
+        return {"num_samples": num_samples, "relative_error": relative_error}
 
 
 def main():
@@ -102,6 +103,9 @@ def main():
     for i in range(1, args.max_samples + 1):
         for j in range(args.round):
             result = run_qalsh_sampling(args.dataset_path, i)
+            if result is None:
+                print(f"Error: Could not extract relative error for {i} samples")
+                sys.exit(1)
             result["round"] = j + 1  # Round number starts from 1
             results.append(result)
 
