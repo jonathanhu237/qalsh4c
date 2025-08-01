@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
 
     bool use_cache{false};
     sampling
-        ->add_flag("-c,--use-cache", use_cache,
+        ->add_flag("--use-cache", use_cache,
                    "Use cached weights files (qalsh_weights.bin, quadtree_weights.bin) if available")
         ->default_val(false)
         ->default_str(use_cache ? "True" : "False");
