@@ -16,7 +16,7 @@ def run_qalsh_sampling(dataset_path, num_samples):
         num_samples: Number of samples to use
 
     Returns:
-        Dictionary with num_samples and relative_error
+        Relative error as a float
     """
     cmd = [
         "./build/qalsh_chamfer",
@@ -46,15 +46,12 @@ def run_qalsh_sampling(dataset_path, num_samples):
     for line in output_lines:
         if "Relative error:" in line:
             # Extract the percentage value
-            match = re.search(r"Relative error:\s*([0-9.]+%)", line)
+            match = re.search(r"Relative error:\s*([0-9.]+)%", line)
             if match:
-                relative_error = match.group(1)
+                relative_error = float(match.group(1))
                 break
 
-        if relative_error is None:
-            return None
-
-        return {"num_samples": num_samples, "relative_error": relative_error}
+    return relative_error
 
 
 def main():
@@ -101,13 +98,17 @@ def main():
     # For each sample count, run 'round' times
     results = []
     for i in range(1, args.max_samples + 1):
-        for j in range(args.round):
-            result = run_qalsh_sampling(args.dataset_path, i)
-            if result is None:
+        sample_errors = []
+        for _ in range(args.round):
+            relative_error = run_qalsh_sampling(args.dataset_path, i)
+            if relative_error is None:
                 print(f"Error: Could not extract relative error for {i} samples")
                 sys.exit(1)
-            result["round"] = j + 1  # Round number starts from 1
-            results.append(result)
+            sample_errors.append(relative_error)
+
+        # Calculate mean relative error for this sample count
+        mean_error = sum(sample_errors) / len(sample_errors)
+        results.append({"num_samples": i, "relative_error": f"{mean_error:.2f}%"})
 
     # Write results to output file in JSON format
     with open(output_path, "w") as f:
