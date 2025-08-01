@@ -51,11 +51,11 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     QalshAnnSearcher qalsh_ann_searcher(approximation_ratio_);
     qalsh_ann_searcher.Init(to_metadata, in_memory);
 
-    std::unique_ptr<PointSetReader> from_set;
+    std::unique_ptr<PointSet> from_set;
     if (in_memory) {
-        from_set = std::make_unique<InMemoryPointSetReader>(from_metadata);
+        from_set = std::make_unique<InMemoryPointSet>(from_metadata);
     } else {
-        from_set = std::make_unique<DiskPointSetReader>(from_metadata);
+        from_set = std::make_unique<DiskPointSet>(from_metadata);
     }
 
     for (unsigned int i = 0; i < from_metadata.num_points; i++) {

@@ -49,7 +49,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     qalsh_config_.Regularize(point_set_metadata.num_points);
 
     // Initialize the point set reader.
-    auto point_set = std::make_unique<DiskPointSetReader>(point_set_metadata);
+    auto point_set = std::make_unique<DiskPointSet>(point_set_metadata);
 
     // Create the index directory if it does not exist.
     if (!std::filesystem::exists(index_directory)) {

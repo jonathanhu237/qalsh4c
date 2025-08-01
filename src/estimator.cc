@@ -25,11 +25,11 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     ann_searcher_->Init(to, in_memory);
     double distance = 0;
 
-    std::unique_ptr<PointSetReader> query_set;
+    std::unique_ptr<PointSet> query_set;
     if (in_memory) {
-        query_set = std::make_unique<InMemoryPointSetReader>(from);
+        query_set = std::make_unique<InMemoryPointSet>(from);
     } else {
-        query_set = std::make_unique<DiskPointSetReader>(from);
+        query_set = std::make_unique<DiskPointSet>(from);
     }
 
     for (unsigned int point_id = 0; point_id < query_set->get_num_points(); point_id++) {
@@ -66,11 +66,11 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     double approximation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
 
-    std::unique_ptr<PointSetReader> from_set;
+    std::unique_ptr<PointSet> from_set;
     if (in_memory) {
-        from_set = std::make_unique<InMemoryPointSetReader>(from);
+        from_set = std::make_unique<InMemoryPointSet>(from);
     } else {
-        from_set = std::make_unique<DiskPointSetReader>(from);
+        from_set = std::make_unique<DiskPointSet>(from);
     }
 
     if (num_samples_ == 0) {

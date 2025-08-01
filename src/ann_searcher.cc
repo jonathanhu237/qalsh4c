@@ -24,9 +24,9 @@
 // ---------------------------------------------
 void LinearScanAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
     if (in_memory) {
-        base_set_ = std::make_unique<InMemoryPointSetReader>(point_set_metadata);
+        base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
     } else {
-        base_set_ = std::make_unique<DiskPointSetReader>(point_set_metadata);
+        base_set_ = std::make_unique<DiskPointSet>(point_set_metadata);
     }
 }
 
@@ -59,7 +59,7 @@ QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio) {
 void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
     if (in_memory) {
         // Initialize base set.
-        base_set_ = std::make_unique<InMemoryPointSetReader>(point_set_metadata);
+        base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
 
         // Regularize QALSH config.
         qalsh_config_.Regularize(point_set_metadata.num_points);
@@ -85,7 +85,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         }
     } else {
         // Initialize base set.
-        base_set_ = std::make_unique<DiskPointSetReader>(point_set_metadata);
+        base_set_ = std::make_unique<DiskPointSet>(point_set_metadata);
 
         // Load QALSH config.
         std::filesystem::path parent_directory = point_set_metadata.file_path.parent_path();
