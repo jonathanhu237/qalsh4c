@@ -44,7 +44,7 @@ class InMemoryQalshHashTable : public QalshHashTable {
 
     std::optional<unsigned int> left_;
     std::optional<unsigned int> right_;
-    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq;
+    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq_;
 };
 
 class DiskQalshHashTable : public QalshHashTable {
