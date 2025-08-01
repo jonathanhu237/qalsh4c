@@ -50,9 +50,6 @@ std::optional<unsigned int> InMemoryQalshHashTable::FindNext(double bound) {
     }
 
     if (pq_.top().is_left) {
-        if (!left_.has_value()) {
-            spdlog::error("The left_ should have value");
-        }
         unsigned int point_id = data_[left_.value()].point_id;
         pq_.pop();
         if (left_.value() == 0) {
@@ -68,9 +65,6 @@ std::optional<unsigned int> InMemoryQalshHashTable::FindNext(double bound) {
         return point_id;
     }
 
-    if (!right_.has_value()) {
-        spdlog::error("The right_ should have value");
-    }
     unsigned int point_id = data_[right_.value()].point_id;
     pq_.pop();
     if (right_.value() == data_.size() - 1) {
