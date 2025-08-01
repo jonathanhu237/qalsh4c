@@ -71,6 +71,7 @@ class DiskQalshHashTable : public QalshHashTable {
     double key_{0.0};
     std::optional<SearchLocation> left_;
     std::optional<SearchLocation> right_;
+    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq_;
 
     // Header
     unsigned int root_page_num_{0};

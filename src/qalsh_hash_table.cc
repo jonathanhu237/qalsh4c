@@ -134,6 +134,10 @@ void DiskQalshHashTable::Init(double key) {
     key_ = key;
     left_.reset();
     right_.reset();
+    while (!pq_.empty()) {
+        pq_.pop();
+    }
+    page_cache_.clear();
 
     // Locate the first key k satisfying k >= key in the B+ tree
     LeafNode leaf_node = LocateLeafMayContainKey();
@@ -150,6 +154,12 @@ void DiskQalshHashTable::Init(double key) {
     } else {
         left_ = std::make_optional(SearchLocation{.leaf_node = leaf_node, .index = index - 1});
     }
+    if (left_.has_value()) {
+        pq_.emplace(SearchRecord{
+            .is_left = true,
+            .dist = key_ - left_->leaf_node.keys_[left_->index],
+        });
+    }
 
     // Determine the right search location
     if (index == leaf_node.keys_.size()) {
@@ -160,11 +170,64 @@ void DiskQalshHashTable::Init(double key) {
     } else {
         right_ = std::make_optional(SearchLocation{.leaf_node = leaf_node, .index = index});
     }
+    if (right_.has_value()) {
+        pq_.emplace(SearchRecord{
+            .is_left = false,
+            .dist = right_->leaf_node.keys_[right_->index] - key_,
+        });
+    }
 }
 
 std::optional<unsigned int> DiskQalshHashTable::FindNext(double bound) {
-    spdlog::error("Hasn't been implemented yet.");
-    return std::nullopt;
+    if (pq_.empty() || pq_.top().dist > bound) {
+        return std::nullopt;
+    }
+
+    if (pq_.top().is_left) {
+        auto& [leaf_node, index] = left_.value();
+        unsigned int point_id = leaf_node.values_[index];
+        pq_.pop();
+        if (index > 0) {
+            index--;
+        } else {
+            if (leaf_node.prev_leaf_page_num_ == 0) {
+                left_.reset();
+            } else {
+                leaf_node = LocateLeafByPageNum(leaf_node.prev_leaf_page_num_);
+                index = leaf_node.num_entries_ - 1;
+            }
+        }
+        if (left_.has_value()) {
+            pq_.emplace(SearchRecord{
+                .is_left = true,
+                .dist = key_ - leaf_node.keys_.at(index),
+            });
+        }
+
+        return point_id;
+    }
+
+    auto& [leaf_node, index] = right_.value();
+    unsigned int point_id = leaf_node.values_[index];
+    pq_.pop();
+    if (index < leaf_node.num_entries_ - 1) {
+        index++;
+    } else {
+        if (leaf_node.next_leaf_page_num_ == 0) {
+            right_.reset();
+        } else {
+            leaf_node = LocateLeafByPageNum(leaf_node.next_leaf_page_num_);
+            index = 0;
+        }
+    }
+    if (right_.has_value()) {
+        pq_.emplace(SearchRecord{
+            .is_left = false,
+            .dist = leaf_node.keys_.at(index) - key_,
+        });
+    }
+
+    return point_id;
 }
 
 std::optional<unsigned int> DiskQalshHashTable::LeftFindNext(double bound) {
