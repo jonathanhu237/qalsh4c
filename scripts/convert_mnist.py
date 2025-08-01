@@ -36,17 +36,16 @@ def main():
         help="Number of processes for parallel computation (default: auto-detect)",
     )
     parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
+        default="WARN",
+        help="Set the logging level (default: WARN)",
     )
 
     args = parser.parse_args()
 
     # Setup logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    setup_logging(log_level)
+    setup_logging(logging.getLevelNamesMapping()[args.log_level])
 
     logging.info("Starting MNIST to Chamfer distance conversion")
     total_start_time = time.time()
