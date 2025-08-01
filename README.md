@@ -29,24 +29,6 @@ or in relWithDebInfo mode:
 cmake --preset relWithDebInfo && cmake --build --preset relWithDebInfo-build
 ```
 
-## Generate Dataset
-
-The executable `qalsh_chamfer` can be used to generate the dataset for Chamfer distance estimation by running the following command:
-
-```bash
-./build/qalsh_chamfer generate_dataset -o ./data/toy --in-memory
-```
-
-The command above will generate a dataset in the `./data/toy` directory, containing two point sets. Each point set consists of 1000 points, with each point having 256 dimensions. The components of each point are sampled from a uniform distribution in the range of `[-1024, 1024]`.
-
-The `--in-memory` flag will make the data to be generated in memory first and then written to a file. If your device has insufficient memory and you need to generate a large dataset, please remove the `--in-memory` flag.
-
-To check other options for dataset generation, run:
-
-```bash
-./build/qalsh_chamfer generate_dataset -h
-```
-
 ## Index
 
 To use the disk version of QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset:
