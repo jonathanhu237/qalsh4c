@@ -30,48 +30,54 @@ def main():
 
     parser.add_argument(
         "-a",
-        "--num_points_a",
+        "--num-points-a",
         type=int,
         default=1000,
         help="Number of points in the first point set (A) (default: 1000)",
     )
     parser.add_argument(
         "-b",
-        "--num_points_b",
+        "--num-points-b",
         type=int,
         default=1000,
         help="Number of points in the second point set (B) (default: 1000)",
     )
     parser.add_argument(
         "-d",
-        "--num_dimensions",
+        "--num-dimensions",
         type=int,
         default=256,
         help="Number of dimensions for the point sets (default: 256)",
     )
     parser.add_argument(
         "-l",
-        "--left_boundary",
+        "--left-boundary",
         type=float,
         default=-1024.0,
         help="The left boundary of uniform distribution used in dataset generation (default: -1024)",
     )
     parser.add_argument(
         "-r",
-        "--right_boundary",
+        "--right-boundary",
         type=float,
         default=1024.0,
         help="The right boundary of uniform distribution used in dataset generation (default: 1024)",
     )
     parser.add_argument(
         "-o",
-        "--output_directory",
+        "--output-directory",
         type=str,
         required=True,
         help="The directory to save dataset",
     )
     parser.add_argument(
-        "--log_level",
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Batch size for Chamfer distance calculation",
+    )
+    parser.add_argument(
+        "--log-level",
         choices=["DEBUG", "INFO", "WARN", "ERROR"],
         default="INFO",
         help="Set the logging level (default: INFO)",
@@ -107,7 +113,11 @@ def main():
     save_binary_data(B, output_dir / "B.bin")
 
     # Calculate the Chamfer distance between two sets
-    chamfer_dist = chamfer_distance(A, B)
+    if args.batch_size is None:
+        batch_size = 1024
+    else:
+        batch_size = args.batch_size
+    chamfer_dist = chamfer_distance(A, B, batch_size)
 
     # Create metadata
     create_metadata(

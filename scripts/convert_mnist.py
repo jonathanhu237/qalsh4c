@@ -35,14 +35,20 @@ def main():
     )
     parser.add_argument(
         "-a",
-        "--num_points_a",
+        "--num-points-a",
         type=int,
         default=None,
         help="Number of points in set A (set B will contain remaining points)",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Batch size for Chamfer distance calculation",
+    )
+    parser.add_argument(
         "-l",
-        "--log_level",
+        "--log-level",
         choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
         default="WARN",
         help="Set the logging level (default: WARN)",
@@ -98,7 +104,7 @@ def main():
     save_binary_data(B, output_dir / "B.bin")
 
     # Calculate Chamfer distance
-    chamfer_dist = chamfer_distance(A, B)
+    chamfer_dist = chamfer_distance(A, B, args.batch_size)
 
     # Create metadata
     create_metadata(

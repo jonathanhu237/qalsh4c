@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 
-def chamfer_distance(A: np.ndarray, B: np.ndarray) -> np.double:
+def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double:
     """
     Calculate Chamfer distance using PyTorch on a GPU.
     """
@@ -18,23 +18,30 @@ def chamfer_distance(A: np.ndarray, B: np.ndarray) -> np.double:
 
     logging.info("Calculating Chamfer distance using GPU (PyTorch)...")
     start_time = time.time()
+    dtype = torch.double
 
     # Move data
-    p1 = torch.from_numpy(A).to(device, dtype=torch.float32)
-    p2 = torch.from_numpy(B).to(device, dtype=torch.float32)
-
-    # Calculate pairwise distances (p=1 for Manhattan/L1 distance)
-    # p1 is (N, D), p2 is (M, D) -> dists is (N, M)
-    dists = torch.cdist(p1, p2, p=1)
+    tensor_A = torch.from_numpy(A).to(device, dtype=dtype)
+    tensor_B = torch.from_numpy(B).to(device, dtype=dtype)
 
     # For each point in p1, find the closest in p2
-    min_dist_p1_to_p2, _ = torch.min(dists, dim=1)
+    min_dists_A_to_B = torch.zeros(len(tensor_A), device=device, dtype=dtype)
+    for i in range(0, len(tensor_A), batch_size):
+        p1_batch = tensor_A[i : i + batch_size]
+        dists = torch.cdist(p1_batch, tensor_B, p=1)
+        min_dists, _ = torch.min(dists, dim=1)
+        min_dists_A_to_B[i : i + batch_size] = min_dists
 
     # For each point in p2, find the closest in p1
-    min_dist_p2_to_p1, _ = torch.min(dists, dim=0)
+    min_dists_B_to_A = torch.zeros(len(tensor_B), device=device, dtype=dtype)
+    for i in range(0, len(tensor_B), batch_size):
+        p2_batch = tensor_B[i : i + batch_size]
+        dists = torch.cdist(p2_batch, tensor_A, p=1)
+        min_dists, _ = torch.min(dists, dim=1)
+        min_dists_B_to_A[i : i + batch_size] = min_dists
 
     # Sum the distances
-    chamfer_dist = torch.sum(min_dist_p1_to_p2) + torch.sum(min_dist_p2_to_p1)
+    chamfer_dist = torch.sum(min_dists_A_to_B) + torch.sum(min_dists_B_to_A)
 
     elapsed_time = time.time() - start_time
     logging.info(
