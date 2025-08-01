@@ -1,5 +1,6 @@
 import json
 import logging
+import subprocess
 import time
 from pathlib import Path
 
@@ -96,3 +97,21 @@ def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double
     )
 
     return np.double(chamfer_dist.item())
+
+
+def build_project():
+    """Build the project using cmake."""
+    # Configure the project
+    subprocess.run(
+        ["cmake", "--preset", "release"],
+        cwd=Path(__file__).parent.parent,
+        capture_output=True,
+        check=True,
+    )
+
+    # Build the project
+    subprocess.run(
+        ["cmake", "--build", "--preset", "release-build"],
+        capture_output=True,
+        check=True,
+    )
