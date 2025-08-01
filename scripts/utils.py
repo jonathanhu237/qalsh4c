@@ -76,13 +76,13 @@ def compute_min_distances_chunk(
     from_set = np.ndarray(from_shape, dtype=np.double, buffer=shm_from.buf)
     to_set = np.ndarray(to_shape, dtype=np.double, buffer=shm_to.buf)
 
-    # Extract the chunk from A
+    # Extract the chunk
     start_idx, end_idx = chunk_indices
     from_chunk = from_set[start_idx:end_idx]
 
     logging.debug(f"Processing chunk {chunk_idx} with {len(from_chunk)} points")
 
-    # Calculate distances from this chunk of A to all points in B
+    # Calculate distances from this chunk to all points in to_set
     distances = cdist(from_chunk, to_set, metric="cityblock")
 
     # Find minimum distances for each point in the chunk
