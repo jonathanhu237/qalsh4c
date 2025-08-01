@@ -59,11 +59,11 @@ def compute_min_distances_chunk(args: Tuple[np.ndarray, np.ndarray, int]) -> np.
     Compute minimum distances for a chunk of points from set A to all points in set B.
     This function is designed to be used with multiprocessing.
     """
-    A_chunk, B, chunk_idx = args
-    logging.debug(f"Processing chunk {chunk_idx} with {len(A_chunk)} points")
+    from_chunk, to, chunk_idx = args
+    logging.debug(f"Processing chunk {chunk_idx} with {len(from_chunk)} points")
 
     # Calculate distances from this chunk of A to all points in B
-    distances = cdist(A_chunk, B, metric="cityblock")
+    distances = cdist(from_chunk, to, metric="cityblock")
 
     # Find minimum distances for each point in the chunk
     min_distances = np.min(distances, axis=1)
