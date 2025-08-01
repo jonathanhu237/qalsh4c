@@ -132,17 +132,24 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         for (unsigned int j = 0; !shouldTerminate(candidates, search_radius) && j < qalsh_config_.num_hash_tables;
              j++) {
             while (!shouldTerminate(candidates, search_radius)) {
+                // Find the point in the left direction first.
                 std::optional<unsigned int> point_id = hash_tables[j]->LeftFindNext(bound);
                 if (!point_id.has_value()) {
+                    // If there doesn't exist any point in the left direction, find
+                    // the point in the right direction.
                     point_id = hash_tables[j]->RightFindNext(bound);
                 }
 
+                // If there doesn't exist any point in both direction, we should break.
                 if (!point_id.has_value()) {
                     break;
                 }
+
+                // Check whether the point is checked.
                 if (visited[point_id.value()]) {
                     continue;
                 }
+
                 if (++collision_count[point_id.value()] >= qalsh_config_.collision_threshold) {
                     Point point = base_set_->GetPoint(point_id.value());
                     double distance = Utils::L1Distance(point, query_point);
