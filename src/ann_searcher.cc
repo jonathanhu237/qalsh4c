@@ -113,7 +113,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
 }
 
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
-    std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
+    std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
     std::vector<bool> visited(base_set_->get_num_points(), false);
     std::vector<unsigned int> collision_count(base_set_->get_num_points(), 0);
     std::vector<double> keys(qalsh_config_.num_hash_tables);
@@ -132,8 +132,13 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         for (unsigned int j = 0; !shouldTerminate(candidates, search_radius) && j < qalsh_config_.num_hash_tables;
              j++) {
             while (!shouldTerminate(candidates, search_radius)) {
-                // Find the point in the both directions.
-                std::optional<unsigned int> point_id = hash_tables[j]->FindNext(bound);
+                // Find the point in the left direction first.
+                std::optional<unsigned int> point_id = hash_tables[j]->LeftFindNext(bound);
+                if (!point_id.has_value()) {
+                    // If there doesn't exist any point in the left direction, find
+                    // the point in the right direction.
+                    point_id = hash_tables[j]->RightFindNext(bound);
+                }
 
                 // If there doesn't exist any point in both direction, we should break.
                 if (!point_id.has_value()) {
@@ -173,9 +178,8 @@ void QalshAnnSearcher::Reset() {
     hash_tables.clear();
 }
 
-bool QalshAnnSearcher::shouldTerminate(
-    const std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult>& candidates,
-    double search_radius) const {
+bool QalshAnnSearcher::shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
+                                       double search_radius) const {
     return (!candidates.empty() && candidates.top().distance <= qalsh_config_.approximation_ratio * search_radius) ||
            candidates.size() >= Global::kNumCandidates;
 }
