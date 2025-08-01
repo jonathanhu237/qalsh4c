@@ -67,43 +67,4 @@ class DiskPointSetReader : public PointSetReader {
     std::ifstream ifs_;
 };
 
-// ---------------------------------------------
-// PointSetWriter Definition
-// ---------------------------------------------
-class PointSetWriter {
-   public:
-    virtual ~PointSetWriter() = default;
-    virtual void AddPoint(const Point& point) = 0;
-    virtual void Flush() = 0;
-};
-
-// ---------------------------------------------
-// InMemoryPointSetWriter Definition
-// ---------------------------------------------
-class InMemoryPointSetWriter : public PointSetWriter {
-   public:
-    InMemoryPointSetWriter(std::filesystem::path file_path);
-
-    void AddPoint(const Point& point) override;
-    void Flush() override;
-
-   private:
-    std::filesystem::path file_path_;
-    std::vector<Point> points_;
-};
-
-// ---------------------------------------------
-// DiskPointSetWriter Definition
-// ---------------------------------------------
-class DiskPointSetWriter : public PointSetWriter {
-   public:
-    DiskPointSetWriter(const std::filesystem::path& file_path);
-
-    void AddPoint(const Point& point) override;
-    void Flush() override;
-
-   private:
-    std::ofstream ofs_;
-};
-
 #endif

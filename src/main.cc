@@ -7,7 +7,6 @@
 
 #include "ann_searcher.h"
 #include "command.h"
-#include "dataset_metadata.h"
 #include "estimator.h"
 #include "global.h"
 #include "sink.h"
@@ -39,54 +38,6 @@ int main(int argc, char** argv) {
     });
 
     // ------------------------------
-    // generate dataset
-    // ------------------------------
-    CLI::App* generate_dataset =
-        app.add_subcommand("generate_dataset", "Generate a dataset for Chamfer distance estimation.");
-
-    unsigned int num_points_a{0};
-    generate_dataset->add_option("-a,--num_points_a", num_points_a, "Number of points in the first point set (A).")
-        ->default_val(Global::kDefaultNumPointsA);
-
-    unsigned int num_points_b{0};
-    generate_dataset->add_option("-b,--num_points_b", num_points_b, "Number of points in the second point set (B).")
-        ->default_val(Global::kDefaultNumPointsB);
-
-    unsigned int num_dimensions{0};
-    generate_dataset->add_option("-d,--num_dimensions", num_dimensions, "Number of dimension for the point sets.")
-        ->default_val(Global::kDefaultNumDimensions);
-
-    double left_boundary{0.0};
-    generate_dataset
-        ->add_option("-l,--left_boundary", left_boundary,
-                     "The left boundary of uniform distribution used in dataset generation.")
-        ->default_val(Global::kDefaultLeftBoundary);
-
-    double right_boundary{0.0};
-    generate_dataset
-        ->add_option("-r,--right_boundary", right_boundary,
-                     "The right boundary of uniform distribution used in dataset generation")
-        ->default_val(Global::kDefaultRightBoundary);
-
-    std::filesystem::path output_directory;
-    generate_dataset->add_option("-o,--output_directory", output_directory, "The directory to save dataset.")
-        ->required();
-
-    bool in_memory{false};
-    generate_dataset->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
-        ->default_str(in_memory ? "True" : "False");
-
-    generate_dataset->callback([&]() {
-        DatasetMetadata dataset_metadata = {
-            .num_points_a = num_points_a,
-            .num_points_b = num_points_b,
-            .num_dimensions = num_dimensions,
-        };
-        command = std::make_unique<GenerateDatasetCommand>(dataset_metadata, left_boundary, right_boundary,
-                                                           output_directory, in_memory);
-    });
-
-    // ------------------------------
     // index
     // ------------------------------
     CLI::App* index = app.add_subcommand("index", "Index a dataset using QALSH algorithm");
@@ -114,6 +65,7 @@ int main(int argc, char** argv) {
 
     estimate->add_option("-d,--dataset_directory", dataset_directory, "Directory for the dataset")->required();
 
+    bool in_memory{false};
     estimate->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
         ->default_str(in_memory ? "True" : "False");
 
