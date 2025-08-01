@@ -12,7 +12,7 @@
 // NOLINTBEGIN: readability-magic-numbers
 void QalshConfig::Regularize(unsigned int num_points) {
     bucket_width = 2.0 * std::sqrt(approximation_ratio);
-    beta = 100.0 / static_cast<double>(num_points);
+    double beta = Global::kNumCandidates / static_cast<double>(num_points);
     error_probability = Global::kDefaultErrorProbability;
 
     double term1 = std::sqrt(std::log(2.0 / beta));
@@ -33,7 +33,6 @@ void QalshConfig::Save(const std::filesystem::path& file_path) {
     nlohmann::json metadata;
     metadata["approximation_ratio"] = approximation_ratio;
     metadata["bucket_width"] = bucket_width;
-    metadata["beta"] = beta;
     metadata["error_probability"] = error_probability;
     metadata["num_hash_tables"] = num_hash_tables;
     metadata["collision_threshold"] = collision_threshold;
@@ -59,7 +58,6 @@ void QalshConfig::Load(const std::filesystem::path& file_path) {
     try {
         metadata.at("approximation_ratio").get_to(approximation_ratio);
         metadata.at("bucket_width").get_to(bucket_width);
-        metadata.at("beta").get_to(beta);
         metadata.at("error_probability").get_to(error_probability);
         metadata.at("num_hash_tables").get_to(num_hash_tables);
         metadata.at("collision_threshold").get_to(collision_threshold);

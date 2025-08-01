@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "global.h"
 #include "point_set.h"
 #include "qalsh_config.h"
 #include "qalsh_hash_table.h"
@@ -172,7 +173,7 @@ void QalshAnnSearcher::Reset() {
 }
 
 bool QalshAnnSearcher::shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
-                                       double search_radius) {
+                                       double search_radius) const {
     return (!candidates.empty() && candidates.top().distance <= qalsh_config_.approximation_ratio * search_radius) ||
-           candidates.size() >= static_cast<unsigned int>(std::ceil(qalsh_config_.beta * base_set_->get_num_points()));
+           candidates.size() >= Global::kNumCandidates;
 }

@@ -46,8 +46,8 @@ class QalshAnnSearcher : public AnnSearcher {
     void Reset() override;
 
    private:
-    bool shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
-                         double search_radius);
+    [[nodiscard]] bool shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
+                                       double search_radius) const;
 
     std::unique_ptr<PointSet> base_set_;
 

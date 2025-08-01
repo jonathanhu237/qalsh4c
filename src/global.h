@@ -11,6 +11,7 @@ class Global {
     static constexpr unsigned int kDefaultPageSize = 4096;
     static constexpr double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
     static constexpr double kDefaultApproximationRatio = 2.0;
+    static constexpr unsigned int kNumCandidates = 100;
 
     // For dataset generation
     static constexpr unsigned int kDefaultNumPointsA = 1000;
