@@ -71,12 +71,6 @@ def main():
         help="The directory to save dataset",
     )
     parser.add_argument(
-        "--processes",
-        type=int,
-        default=None,
-        help="Number of processes for parallel computation (default: auto-detect)",
-    )
-    parser.add_argument(
         "--log_level",
         choices=["DEBUG", "INFO", "WARN", "ERROR"],
         default="INFO",
@@ -113,7 +107,7 @@ def main():
     save_binary_data(B, output_dir / "B.bin")
 
     # Calculate the Chamfer distance between two sets
-    chamfer_dist = chamfer_distance(A, B, args.processes)
+    chamfer_dist = chamfer_distance(A, B)
 
     # Create metadata
     create_metadata(

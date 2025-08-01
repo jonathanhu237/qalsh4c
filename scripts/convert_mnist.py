@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from chamfer_distance import chamfer_distance, chamfer_distance_gpu
+from chamfer_distance import chamfer_distance
 from sklearn.datasets import fetch_openml
 from utils import create_metadata, save_binary_data, setup_logging
 
@@ -34,13 +34,6 @@ def main():
         help="Output directory for the dataset",
     )
     parser.add_argument(
-        "-p",
-        "--processes",
-        type=int,
-        default=None,
-        help="Number of processes for parallel computation (default: auto-detect)",
-    )
-    parser.add_argument(
         "-a",
         "--num_points_a",
         type=int,
@@ -53,11 +46,6 @@ def main():
         choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
         default="WARN",
         help="Set the logging level (default: WARN)",
-    )
-    parser.add_argument(
-        "--gpu",
-        action="store_true",
-        help="Use GPU for Chamfer distance calculation",
     )
 
     args = parser.parse_args()
@@ -110,10 +98,7 @@ def main():
     save_binary_data(B, output_dir / "B.bin")
 
     # Calculate Chamfer distance
-    if args.gpu:
-        chamfer_dist = np.double(chamfer_distance_gpu(A, B))
-    else:
-        chamfer_dist = chamfer_distance(A, B, args.processes)
+    chamfer_dist = chamfer_distance(A, B)
 
     # Create metadata
     create_metadata(
