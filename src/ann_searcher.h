@@ -12,8 +12,10 @@
 struct AnnResult {
     unsigned int point_id{0};
     double distance{0.0};
+};
 
-    bool operator<(const AnnResult& rhs) const { return distance < rhs.distance; }
+struct CompareAnnResult {
+    bool operator()(const AnnResult& a, const AnnResult& b) const { return a.distance > b.distance; }
 };
 
 class AnnSearcher {
@@ -46,8 +48,9 @@ class QalshAnnSearcher : public AnnSearcher {
     void Reset() override;
 
    private:
-    [[nodiscard]] bool shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
-                                       double search_radius) const;
+    [[nodiscard]] bool shouldTerminate(
+        const std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult>& candidates,
+        double search_radius) const;
 
     std::unique_ptr<PointSet> base_set_;
 

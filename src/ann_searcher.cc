@@ -113,7 +113,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
 }
 
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
-    std::priority_queue<AnnResult, std::vector<AnnResult>> candidates;
+    std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
     std::vector<bool> visited(base_set_->get_num_points(), false);
     std::vector<unsigned int> collision_count(base_set_->get_num_points(), 0);
     std::vector<double> keys(qalsh_config_.num_hash_tables);
@@ -178,8 +178,9 @@ void QalshAnnSearcher::Reset() {
     hash_tables.clear();
 }
 
-bool QalshAnnSearcher::shouldTerminate(const std::priority_queue<AnnResult, std::vector<AnnResult>>& candidates,
-                                       double search_radius) const {
+bool QalshAnnSearcher::shouldTerminate(
+    const std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult>& candidates,
+    double search_radius) const {
     return (!candidates.empty() && candidates.top().distance <= qalsh_config_.approximation_ratio * search_radius) ||
            candidates.size() >= Global::kNumCandidates;
 }
