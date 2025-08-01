@@ -4,8 +4,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+from chamfer_distance import chamfer_distance
 from sklearn.datasets import fetch_openml
-from utils import chamfer_distance, create_metadata, save_binary_data, setup_logging
+from utils import create_metadata, save_binary_data, setup_logging
 
 
 def load_mnist() -> np.ndarray:
