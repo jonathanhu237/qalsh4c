@@ -6,26 +6,53 @@ from pathlib import Path
 import numpy as np
 from chamfer_distance import chamfer_distance
 from utils import create_metadata, save_binary_data, setup_logging
+from sklearn.mixture import GaussianMixture
 
 
 def generate_point_set(
-    num_points: int, num_dimensions: int, left_boundary: float, right_boundary: float
+    num_points: int, num_dimensions: int, num_components: int
 ) -> np.ndarray:
-    """Generate a point set with specified parameters using uniform distribution."""
+    """Generate a point set with specified parameters using Gaussian Mixture Model."""
     logging.info(
-        f"Generating point set with {num_points} points and {num_dimensions} dimensions"
+        f"Generating point set with {num_points} points and {num_dimensions} dimensions using GMM with {num_components} components"
     )
     np.random.seed()
-    points = np.random.uniform(
-        left_boundary, right_boundary, (num_points, num_dimensions)
+
+    # Create a Gaussian Mixture Model
+    gmm = GaussianMixture(
+        n_components=num_components, random_state=np.random.randint(0, 10000)
     )
+
+    # Generate random means for each component within a reasonable range
+    means = np.random.uniform(-512, 512, (num_components, num_dimensions))
+
+    # Generate random covariances for each component
+    covariances = []
+    for _ in range(num_components):
+        # Create a random positive definite matrix for covariance
+        A = np.random.randn(num_dimensions, num_dimensions)
+        cov = np.dot(A, A.T) + np.eye(num_dimensions)  # Ensure it's positive definite
+        covariances.append(cov)
+
+    # Set the parameters of the GMM
+    gmm.means_ = means
+    gmm.covariances_ = np.array(covariances)
+    gmm.weights_ = np.ones(num_components) / num_components  # Equal weights
+
+    # Since we're manually setting parameters, we need to set these as well
+    gmm.precisions_cholesky_ = np.array(
+        [np.linalg.cholesky(np.linalg.inv(cov)).T for cov in covariances]
+    )
+
+    # Generate samples
+    points, _ = gmm.sample(num_points)
     points = points.astype(np.double)
     return points
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate a dataset for Chamfer distance estimation."
+        description="Generate a dataset for Chamfer distance estimation using Gaussian Mixture Models."
     )
 
     parser.add_argument(
@@ -50,18 +77,11 @@ def main():
         help="Number of dimensions for the point sets (default: 256)",
     )
     parser.add_argument(
-        "-l",
-        "--left-boundary",
-        type=float,
-        default=-1024.0,
-        help="The left boundary of uniform distribution used in dataset generation (default: -1024)",
-    )
-    parser.add_argument(
-        "-r",
-        "--right-boundary",
-        type=float,
-        default=1024.0,
-        help="The right boundary of uniform distribution used in dataset generation (default: 1024)",
+        "-c",
+        "--num-components",
+        type=int,
+        default=5,
+        help="Number of components in the Gaussian Mixture Model (default: 5)",
     )
     parser.add_argument(
         "-o",
@@ -99,14 +119,10 @@ def main():
 
     # Generate the point sets
     logging.info("Generating point set A...")
-    A = generate_point_set(
-        args.num_points_a, args.num_dimensions, args.left_boundary, args.right_boundary
-    )
+    A = generate_point_set(args.num_points_a, args.num_dimensions, args.num_components)
 
     logging.info("Generating point set B...")
-    B = generate_point_set(
-        args.num_points_b, args.num_dimensions, args.left_boundary, args.right_boundary
-    )
+    B = generate_point_set(args.num_points_b, args.num_dimensions, args.num_components)
 
     # Save binary files
     save_binary_data(A, output_dir / "A.bin")
@@ -135,7 +151,8 @@ def main():
     logging.info(f"""Files saved to: {output_dir}
     A.bin: {A.shape[0]} points x {A.shape[1]} dimensions
     B.bin: {B.shape[0]} points x {B.shape[1]} dimensions
-    metadata.json: Chamfer distance = {chamfer_dist:.6f}""")
+    metadata.json: Chamfer distance = {chamfer_dist:.6f}
+    GMM components: {args.num_components}""")
 
 
 if __name__ == "__main__":
