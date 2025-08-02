@@ -10,36 +10,48 @@ from sklearn.mixture import GaussianMixture
 
 
 def generate_point_set(
-    num_points: int, num_dimensions: int, num_components: int
+    num_points: int,
+    num_dimensions: int,
+    num_components: int,
+    outlier_fraction: float,
+    outlier_scale: float,
 ) -> np.ndarray:
     """Generate a point set with specified parameters using Gaussian Mixture Model."""
+    total_components = num_components + 1  # Including outlier component
     logging.info(
-        f"Generating point set with {num_points} points and {num_dimensions} dimensions using GMM with {num_components} components"
+        f"Generating {num_points} points with {num_components} core components and {outlier_fraction * 100}% outliers."
     )
     np.random.seed()
 
     # Create a Gaussian Mixture Model
     gmm = GaussianMixture(
-        n_components=num_components, random_state=np.random.randint(0, 10000)
+        n_components=total_components, random_state=np.random.randint(0, 10000)
     )
 
     # Generate random means for each component within a reasonable range
-    means = np.random.uniform(-512, 512, (num_components, num_dimensions))
+    means = np.random.uniform(-512, 512, (total_components, num_dimensions))
 
     # Generate random covariances for each component
     covariances = []
     for _ in range(num_components):
-        # Create a random positive definite matrix for covariance
         A = np.random.randn(num_dimensions, num_dimensions)
-        cov = np.dot(A, A.T) + np.eye(num_dimensions)  # Ensure it's positive definite
+        cov = np.dot(A, A.T) + np.eye(num_dimensions)
         covariances.append(cov)
 
-    # Set the parameters of the GMM
+    # Create a scaled-up covariance for the outlier component
+    outlier_cov = covariances[0] * outlier_scale
+    covariances.append(outlier_cov)
+    covariances = np.array(covariances)
+
+    # Generate weights based on outlier fraction
+    core_weight = (1 - outlier_fraction) / num_components
+    weights = np.full(num_components, core_weight)
+    weights = np.append(weights, outlier_fraction)
+
+    # Set the GMM parameters
     gmm.means_ = means
     gmm.covariances_ = np.array(covariances)
-    gmm.weights_ = np.ones(num_components) / num_components  # Equal weights
-
-    # Since we're manually setting parameters, we need to set these as well
+    gmm.weights_ = weights
     gmm.precisions_cholesky_ = np.array(
         [np.linalg.cholesky(np.linalg.inv(cov)).T for cov in covariances]
     )
@@ -84,6 +96,20 @@ def main():
         help="Number of components in the Gaussian Mixture Model (default: 5)",
     )
     parser.add_argument(
+        "-f",
+        "--outlier_fraction",
+        type=float,
+        default=0.2,
+        help="Fraction of outliers in the dataset (default: 0.2)",
+    )
+    parser.add_argument(
+        "-s",
+        "--outlier-scale",
+        type=float,
+        default=20.0,
+        help="Scale factor for the outlier covariance (default: 20.0)",
+    )
+    parser.add_argument(
         "-o",
         "--output-directory",
         type=str,
@@ -119,10 +145,22 @@ def main():
 
     # Generate the point sets
     logging.info("Generating point set A...")
-    A = generate_point_set(args.num_points_a, args.num_dimensions, args.num_components)
+    A = generate_point_set(
+        args.num_points_a,
+        args.num_dimensions,
+        args.num_components,
+        args.outlier_fraction,
+        args.outlier_scale,
+    )
 
     logging.info("Generating point set B...")
-    B = generate_point_set(args.num_points_b, args.num_dimensions, args.num_components)
+    B = generate_point_set(
+        args.num_points_b,
+        args.num_dimensions,
+        args.num_components,
+        args.outlier_fraction,
+        args.outlier_scale,
+    )
 
     # Save binary files
     save_binary_data(A, output_dir / "A.bin")
