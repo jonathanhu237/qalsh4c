@@ -25,12 +25,11 @@ std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // --------------------------------------------------
 // QalshWeightsGenerator Implementation
 // --------------------------------------------------
-ModernQalshWeightsGenerator::ModernQalshWeightsGenerator(double approximation_ratio)
-    : approximation_ratio_(approximation_ratio) {}
+QalshWeightsGenerator::QalshWeightsGenerator(double approximation_ratio) : approximation_ratio_(approximation_ratio) {}
 
-std::vector<double> ModernQalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
-                                                          const PointSetMetadata& to_metadata, bool in_memory,
-                                                          bool use_cache) {
+std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
+                                                    const PointSetMetadata& to_metadata, bool in_memory,
+                                                    bool use_cache) {
     std::vector<double> weights(from_metadata.num_points);
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
