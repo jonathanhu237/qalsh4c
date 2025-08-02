@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <queue>
 #include <unordered_map>
 #include <vector>
 
@@ -44,7 +43,6 @@ class InMemoryQalshHashTable : public QalshHashTable {
 
     std::optional<unsigned int> left_;
     std::optional<unsigned int> right_;
-    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq_;
 };
 
 class DiskQalshHashTable : public QalshHashTable {
@@ -71,7 +69,6 @@ class DiskQalshHashTable : public QalshHashTable {
     double key_{0.0};
     std::optional<SearchLocation> left_;
     std::optional<SearchLocation> right_;
-    std::priority_queue<SearchRecord, std::vector<SearchRecord>, CompareSearchRecord> pq_;
 
     // Header
     unsigned int root_page_num_{0};
