@@ -19,9 +19,9 @@ class UniformWeightsGenerator : public WeightsGenerator {
                                  bool in_memory, bool use_cache) override;
 };
 
-class QalshWeightsGenerator : public WeightsGenerator {
+class ModernQalshWeightsGenerator : public WeightsGenerator {
    public:
-    QalshWeightsGenerator(double approximation_ratio);
+    ModernQalshWeightsGenerator(double approximation_ratio);
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  bool in_memory, bool use_cache) override;
 

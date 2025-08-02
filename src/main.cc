@@ -144,13 +144,14 @@ int main(int argc, char** argv) {
     // ------------------------------
     // qalsh sampling estimate
     // ------------------------------
-    CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
+    CLI::App* modern_qalsh =
+        sampling->add_subcommand("modern-qalsh", "Generate samples using modern QALSH (reimplemented for C++20).");
 
-    qalsh_sampling->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
+    modern_qalsh->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_sampling->callback(
-        [&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(approximation_ratio); });
+    modern_qalsh->callback(
+        [&]() { weights_generator = std::make_unique<ModernQalshWeightsGenerator>(approximation_ratio); });
 
     CLI11_PARSE(app, argc, argv);
 
