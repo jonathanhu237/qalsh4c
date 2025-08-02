@@ -104,7 +104,11 @@ def main():
     save_binary_data(B, output_dir / "B.bin")
 
     # Calculate Chamfer distance
-    chamfer_dist = chamfer_distance(A, B, args.batch_size)
+    if args.batch_size is None:
+        batch_size = 1024
+    else:
+        batch_size = args.batch_size
+    chamfer_dist = chamfer_distance(A, B, batch_size)
 
     # Create metadata
     create_metadata(
