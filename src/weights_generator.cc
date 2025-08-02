@@ -48,8 +48,9 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH...");
-    QalshAnnSearcher qalsh_ann_searcher(approximation_ratio_);
-    qalsh_ann_searcher.Init(to_metadata, in_memory);
+
+    std::unique_ptr<AnnSearcher> ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio_);
+    ann_searcher->Init(to_metadata, in_memory);
 
     std::unique_ptr<PointSet> from_set;
     if (in_memory) {
@@ -60,7 +61,7 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 
     for (unsigned int i = 0; i < from_metadata.num_points; i++) {
         Point query_point = from_set->GetPoint(i);
-        AnnResult result = qalsh_ann_searcher.Search(query_point);
+        AnnResult result = ann_searcher->Search(query_point);
         weights[i] = result.distance;  // Use the distance as the weight
     }
 
