@@ -34,7 +34,7 @@ std::vector<double> ModernQalshWeightsGenerator::Generate(const PointSetMetadata
     std::vector<double> weights(from_metadata.num_points);
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
-    std::filesystem::path weights_path = parent_directory / std::format("qalsh_weights_{}.bin", stem);
+    std::filesystem::path weights_path = parent_directory / std::format("modern_qalsh_weights_{}.bin", stem);
 
     if (use_cache) {
         if (std::filesystem::exists(weights_path)) {
