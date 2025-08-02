@@ -19,6 +19,24 @@
             ],
             "env": [],
             "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Debug QALSH Sampling Estimator (In Memory)",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "args": [
+                "-l",
+                "debug",
+                "estimate",
+                "-d",
+                "./data/toy",
+                "--in-memory",
+                "sampling",
+                "qalsh"
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
         }
     ]
 }
