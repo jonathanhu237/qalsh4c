@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <format>
@@ -18,6 +19,7 @@
 #include "point_set.h"
 #include "qalsh_config.h"
 #include "qalsh_hash_table.h"
+#include "types.h"
 #include "utils.h"
 
 // ---------------------------------------------
@@ -82,6 +84,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
             for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
                 data[j] = {.dot_product = Utils::DotProduct(base_set_->GetPoint(j), dot_vectors_[i]), .point_id = j};
             }
+            std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
             hash_tables.emplace_back(std::make_unique<InMemoryQalshHashTable>(data));
         }
     } else {
