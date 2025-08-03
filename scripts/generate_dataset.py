@@ -21,7 +21,6 @@ def generate_point_set(
     logging.info(
         f"Generating {num_points} points with {num_components} core components and {outlier_fraction * 100}% outliers."
     )
-    np.random.seed()
 
     # Create a Gaussian Mixture Model
     gmm = GaussianMixture(
