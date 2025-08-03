@@ -12,14 +12,13 @@ from sklearn.mixture import GaussianMixture
 def generate_point_set(
     num_points: int,
     num_dimensions: int,
-    num_components: int,
     outlier_fraction: float,
     outlier_scale: float,
 ) -> np.ndarray:
     """Generate a point set with specified parameters using Gaussian Mixture Model."""
-    total_components = num_components + 1  # Including outlier component
+    total_components = 2  # 1 core component + 1 outlier component
     logging.info(
-        f"Generating {num_points} points with {num_components} core components and {outlier_fraction * 100}% outliers."
+        f"Generating {num_points} points with 1 core component and {outlier_fraction * 100}% outliers."
     )
 
     # Create a Gaussian Mixture Model
@@ -30,22 +29,20 @@ def generate_point_set(
     # Generate random means for each component within a reasonable range
     means = np.random.uniform(-512, 512, (total_components, num_dimensions))
 
-    # Generate random covariances for each component
+    # Generate one core component covariance
     covariances = []
-    for _ in range(num_components):
-        A = np.random.randn(num_dimensions, num_dimensions)
-        cov = np.dot(A, A.T) + np.eye(num_dimensions)
-        covariances.append(cov)
+    A = np.random.randn(num_dimensions, num_dimensions)
+    core_cov = np.dot(A, A.T) + np.eye(num_dimensions)
+    covariances.append(core_cov)
 
     # Create a scaled-up covariance for the outlier component
-    outlier_cov = covariances[0] * outlier_scale
+    outlier_cov = core_cov * outlier_scale
     covariances.append(outlier_cov)
     covariances = np.array(covariances)
 
     # Generate weights based on outlier fraction
-    core_weight = (1 - outlier_fraction) / num_components
-    weights = np.full(num_components, core_weight)
-    weights = np.append(weights, outlier_fraction)
+    core_weight = 1 - outlier_fraction  # Weight for the single core component
+    weights = np.array([core_weight, outlier_fraction])  # [core_weight, outlier_weight]
 
     # Set the GMM parameters
     gmm.means_ = means
@@ -88,25 +85,18 @@ def main():
         help="Number of dimensions for the point sets (default: 256)",
     )
     parser.add_argument(
-        "-c",
-        "--num-components",
-        type=int,
-        default=5,
-        help="Number of components in the Gaussian Mixture Model (default: 5)",
-    )
-    parser.add_argument(
         "-f",
         "--outlier_fraction",
         type=float,
-        default=0.2,
-        help="Fraction of outliers in the dataset (default: 0.2)",
+        default=0.1,
+        help="Fraction of outliers in the dataset (default: 0.1)",
     )
     parser.add_argument(
         "-s",
         "--outlier-scale",
         type=float,
-        default=20.0,
-        help="Scale factor for the outlier covariance (default: 20.0)",
+        default=4096,
+        help="Scale factor for the outlier covariance (default: 4096)",
     )
     parser.add_argument(
         "-o",
@@ -147,7 +137,6 @@ def main():
     A = generate_point_set(
         args.num_points_a,
         args.num_dimensions,
-        args.num_components,
         args.outlier_fraction,
         args.outlier_scale,
     )
@@ -156,7 +145,6 @@ def main():
     B = generate_point_set(
         args.num_points_b,
         args.num_dimensions,
-        args.num_components,
         args.outlier_fraction,
         args.outlier_scale,
     )
@@ -189,7 +177,7 @@ def main():
     A.bin: {A.shape[0]} points x {A.shape[1]} dimensions
     B.bin: {B.shape[0]} points x {B.shape[1]} dimensions
     metadata.json: Chamfer distance = {chamfer_dist:.6f}
-    GMM components: {args.num_components}""")
+    GMM components: 1 core + 1 outlier""")
 
 
 if __name__ == "__main__":
