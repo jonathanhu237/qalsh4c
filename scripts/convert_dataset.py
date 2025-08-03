@@ -5,62 +5,10 @@ from pathlib import Path
 
 import numpy as np
 from chamfer_distance import chamfer_distance
-from sklearn.datasets import fetch_openml
+from mnist import load_mnist
+from p53 import load_p53
+from trevi import load_trevi
 from utils import create_metadata, save_binary_data, setup_logging
-
-
-def load_mnist() -> np.ndarray:
-    """Load MNIST dataset (70,000 images total)."""
-    logging.info("Loading MNIST dataset...")
-    X, _ = fetch_openml(
-        "mnist_784", version=1, as_frame=False, parser="auto", return_X_y=True
-    )
-
-    # Convert to double
-    X = X.astype(np.double)
-
-    logging.info(f"Loaded {X.shape[0]} images with {X.shape[1]} features each")
-    return X
-
-
-def load_p53(file_path: Path) -> np.ndarray:
-    """Load p53 dataset."""
-    logging.info("Loading p53 dataset...")
-
-    data = []
-
-    with open(file_path, "r") as file:
-        for line_num, line in enumerate(file, 1):
-            # Skip empty lines
-            if not line.strip():
-                continue
-
-            # Skip lines containing "?"
-            if "?" in line:
-                continue
-
-            # Split the line by comma
-            entries = line.strip().split(",")
-
-            # Convert all entries except the last one to double
-            try:
-                # All entries except the last two (label and empty value)
-                point = [float(entry) for entry in entries[:-2]]
-                data.append(point)
-            except ValueError as e:
-                logging.warning(
-                    f"Skipping line {line_num}: Error converting to float - {e}"
-                )
-                continue
-
-    # Convert to numpy array
-    if data:
-        X = np.array(data, dtype=np.double)
-        logging.info(f"Loaded {X.shape[0]} points with {X.shape[1]} features each")
-        return X
-    else:
-        logging.error("No valid data found in the file")
-        raise ValueError("No valid data found in the file")
 
 
 def main():
@@ -72,7 +20,7 @@ def main():
         "--dataset-name",
         required=True,
         type=str,
-        choices=["mnist", "p53"],
+        choices=["mnist", "p53", "trevi"],
         help="Name of the dataset to convert",
     )
     parser.add_argument(
@@ -108,13 +56,19 @@ def main():
         default=None,
         help="Path to the p53 dataset file",
     )
+    parser.add_argument(
+        "--trevi-dir",
+        type=str,
+        default=None,
+        help="Path to the Trevi dataset directory containing .bmp files",
+    )
 
     args = parser.parse_args()
 
     # Setup logging
     setup_logging(logging.getLevelNamesMapping()[args.log_level])
 
-    logging.info("Starting MNIST to Chamfer distance conversion")
+    logging.info("Starting dataset to Chamfer distance conversion")
     total_start_time = time.time()
 
     # Create output directory
@@ -131,6 +85,13 @@ def main():
                 "Path to p53 dataset file must be provided for p53 dataset"
             )
         X = load_p53(args.p53_file)
+    elif args.dataset_name == "trevi":
+        # For Trevi dataset, we need a directory containing .bmp files
+        if not args.trevi_dir:
+            raise ValueError(
+                "Path to Trevi dataset directory must be provided for trevi dataset (use --trevi-dir argument)"
+            )
+        X = load_trevi(Path(args.trevi_dir))
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset_name}")
 
