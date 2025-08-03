@@ -41,6 +41,21 @@
         {
             "type": "lldb-dap",
             "request": "launch",
+            "name": "Debug QALSH Index",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "args": [
+                "-l",
+                "debug",
+                "index",
+                "-d",
+                "./data/federalist",
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
             "name": "Debug QALSH Sampling Estimator (Disk)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
