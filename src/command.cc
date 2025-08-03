@@ -71,8 +71,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     // Generate the dot vectors.
     spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
-    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables,
-                                                 std::vector<double>(point_set->get_num_dimensions()));
+    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables, Point(point_set->get_num_dimensions()));
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         std::ranges::generate(dot_vectors[i], [&]() { return standard_cauchy_dist(gen_); });
     }
@@ -107,8 +106,9 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
         spdlog::error(
             std::format("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string()));
     }
-    for (const auto& vec : dot_vectors) {
-        ofs.write(reinterpret_cast<const char*>(vec.data()), static_cast<std::streamsize>(vec.size() * sizeof(double)));
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        ofs.write(reinterpret_cast<const char*>(dot_vectors[i].data()),
+                  static_cast<std::streamsize>(dot_vectors[i].size() * sizeof(Coordinate)));
     }
 }
 
