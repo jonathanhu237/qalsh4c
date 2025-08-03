@@ -81,24 +81,23 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     spdlog::info("Indexing the pooint set...");
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
-        std::vector<DotProductPointIdPair> dot_products_with_id(point_set->get_num_points());
+        std::vector<DotProductPointIdPair> data(point_set->get_num_points());
         for (unsigned int j = 0; j < point_set->get_num_points(); j++) {
             // Calculate the dot product for each point in the base set
             Point point = point_set->GetPoint(j);
             double dot_product = Utils::DotProduct(point, dot_vectors[i]);
-            dot_products_with_id[j] = {
+            data[j] = {
                 .dot_product = dot_product,
                 .point_id = j,
             };
         }
 
         // Sort the dot products
-        std::ranges::sort(dot_products_with_id,
-                          [](const auto& a, const auto& b) { return a.dot_product < b.dot_product; });
+        std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
 
         // Bulk load the B+ tree with sorted dot products
         BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), qalsh_config_.page_size);
-        bulk_loader.Build(dot_products_with_id);
+        bulk_loader.Build(data);
     }
 
     // Save the dot product vectors
