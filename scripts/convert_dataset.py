@@ -25,13 +25,15 @@ def load_mnist() -> np.ndarray:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert MNIST to Chamfer distance format"
+        description="Convert known datasets to unified format"
     )
     parser.add_argument(
-        "-o",
-        "--output-dir",
-        default="data/mnist",
-        help="Output directory for the dataset",
+        "-n",
+        "--dataset-name",
+        required=True,
+        type=str,
+        choices=["mnist"],
+        help="Name of the dataset to convert",
     )
     parser.add_argument(
         "-a",
@@ -39,6 +41,13 @@ def main():
         type=int,
         default=None,
         help="Number of points in set A (set B will contain remaining points)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        required=True,
+        type=str,
+        help="Output directory for the dataset",
     )
     parser.add_argument(
         "--batch-size",
@@ -67,8 +76,11 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"Output directory: {output_dir}")
 
-    # Load MNIST dataset
-    X = load_mnist()
+    # Load dataset
+    if args.dataset_name == "mnist":
+        X = load_mnist()
+    else:
+        raise ValueError(f"Unsupported dataset: {args.dataset_name}")
 
     # Split data into sets A and B
     n_total = len(X)
