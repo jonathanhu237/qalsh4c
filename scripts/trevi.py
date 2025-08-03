@@ -6,14 +6,7 @@ import numpy as np
 
 
 def load_trevi(dir: Path) -> np.ndarray:
-    """Load Trevi dataset from .bmp files and convert to patches.
-
-    Args:
-        dir: Path to directory containing .bmp files
-
-    Returns:
-        np.ndarray: Array of flattened 64x64 patches as double points
-    """
+    """Load Trevi dataset from .bmp files and convert to patches."""
     logging.info(f"Loading Trevi dataset from {dir}")
 
     # Get all .bmp files in the directory
