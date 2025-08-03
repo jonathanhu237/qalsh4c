@@ -33,9 +33,9 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     std::vector<double> distances(from.num_points, 0.0);
 
     if (use_cache_) {
-        if (auto* linear_searcher = dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get())) {
+        if ([[maybe_unused]] auto* linear_searcher = dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get())) {
             spdlog::warn("Use cache is not supported for Linear Scan, the setting will be ignored.");
-        } else if (auto* qalsh_searcher = dynamic_cast<QalshAnnSearcher*>(ann_searcher_.get())) {
+        } else if ([[maybe_unused]] auto* qalsh_searcher = dynamic_cast<QalshAnnSearcher*>(ann_searcher_.get())) {
             // Read the cache files
             std::ifstream ifs(cache_file, std::ios::binary);
             if (ifs.is_open()) {
