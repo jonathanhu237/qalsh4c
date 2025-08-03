@@ -53,7 +53,6 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 
     ann_searcher_->Reset();
     ann_searcher_->Init(to, in_memory);
-    double distance = 0;
 
     std::unique_ptr<PointSet> query_set;
     if (in_memory) {
