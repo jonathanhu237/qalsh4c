@@ -103,7 +103,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
             dot_vectors_[i].resize(base_set_->get_num_dimensions());
             ifs.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
-                     static_cast<std::streamoff>(sizeof(Coordinate) * dot_vectors_.size()));
+                     static_cast<std::streamoff>(sizeof(Coordinate) * dot_vectors_[i].size()));
         }
 
         // Initialize QALSH hash tables.
