@@ -11,6 +11,11 @@ data/gmm/*
 !data/gmm/A.bin
 !data/gmm/B.bin
 !data/gmm/metadata.json
+!data/federalist/
+data/federalist/*
+!data/federalist/A.bin
+!data/federalist/B.bin
+!data/federalist/metadata.json
 
 # local files
 *local*
