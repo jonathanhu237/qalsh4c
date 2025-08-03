@@ -30,8 +30,25 @@
                 "debug",
                 "estimate",
                 "-d",
-                "./data/toy",
+                "./data/federalist",
                 "--in-memory",
+                "sampling",
+                "qalsh"
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Debug QALSH Sampling Estimator (Disk)",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "args": [
+                "-l",
+                "debug",
+                "estimate",
+                "-d",
+                "./data/federalist",
                 "sampling",
                 "qalsh"
             ],
