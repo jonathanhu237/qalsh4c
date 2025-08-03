@@ -6,11 +6,11 @@ build/*
 
 # data
 data/*
-!data/toy/
-data/toy/*
-!data/toy/A.bin
-!data/toy/B.bin
-!data/toy/metadata.json
+!data/gmm/
+data/gmm/*
+!data/gmm/A.bin
+!data/gmm/B.bin
+!data/gmm/metadata.json
 
 # local files
 *local*
