@@ -2,9 +2,14 @@
 
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
 #include <memory>
 #include <numeric>
 #include <utility>
+#include <vector>
 
 #include "ann_searcher.h"
 #include "point_set.h"
@@ -13,12 +18,37 @@
 // --------------------------------------------------
 // AnnEstimator Implementation
 // --------------------------------------------------
-AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
+AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool use_cache)
+    : ann_searcher_(std::move(ann_searcher)), use_cache_(use_cache) {}
 
 double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
     // Check the ANN searcher
     if (!ann_searcher_) {
         spdlog::error("The ANN searcher is not set.");
+    }
+
+    std::filesystem::path dataset_directory = from.file_path.parent_path();
+    std::string stem = from.file_path.stem();
+    std::filesystem::path cache_file = dataset_directory / std::format("qalsh_weights_{}.bin", stem);
+    std::vector<double> distances(from.num_points, 0.0);
+
+    if (use_cache_) {
+        if (auto* linear_searcher = dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get())) {
+            spdlog::warn("Use cache is not supported for Linear Scan, the setting will be ignored.");
+        } else if (auto* qalsh_searcher = dynamic_cast<QalshAnnSearcher*>(ann_searcher_.get())) {
+            // Read the cache files
+            std::ifstream ifs(cache_file, std::ios::binary);
+            if (ifs.is_open()) {
+                spdlog::info("Loading cached weights from {}", cache_file.string());
+                ifs.read(reinterpret_cast<char*>(distances.data()),
+                         static_cast<std::streamoff>(distances.size() * sizeof(Coordinate)));
+
+                return std::accumulate(distances.begin(), distances.end(), 0.0);
+            }
+            spdlog::warn("Cache file {} does not exist, generating new ones", cache_file.string());
+        } else {
+            spdlog::error("Unknown ANN searcher type.");
+        }
     }
 
     ann_searcher_->Reset();
@@ -34,10 +64,22 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 
     for (unsigned int point_id = 0; point_id < query_set->get_num_points(); point_id++) {
         Point query_point = query_set->GetPoint(point_id);
-        distance += ann_searcher_->Search(query_point).distance;
+        distances[point_id] = ann_searcher_->Search(query_point).distance;
     }
 
-    return distance;
+    if (use_cache_) {
+        // Write the distances to the cache file
+        std::ofstream ofs(cache_file, std::ios::binary);
+        if (ofs.is_open()) {
+            spdlog::info("Saving cached weights to {}", cache_file.string());
+            ofs.write(reinterpret_cast<const char*>(distances.data()),
+                      static_cast<std::streamoff>(distances.size() * sizeof(Coordinate)));
+        } else {
+            spdlog::error("Failed to open cache file for writing: {}", cache_file.string());
+        }
+    }
+
+    return std::accumulate(distances.begin(), distances.end(), 0.0);
 }
 
 // --------------------------------------------------

@@ -83,13 +83,18 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* ann = estimate->add_subcommand("ann", "Estimate Chamfer distance using ANN.");
 
+    bool use_cache{false};
+    ann->add_flag("--use-cache", use_cache, "Use cached files if available")
+        ->default_val(false)
+        ->default_str(use_cache ? "True" : "False");
+
     std::unique_ptr<AnnSearcher> ann_searcher;
     ann->require_subcommand(1);
     ann->callback([&]() {
         if (!ann_searcher) {
             spdlog::error("Ann searcher is not set. Please specify a Ann searcher.");
         }
-        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
+        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher), use_cache);
     });
 
     // ------------------------------
@@ -119,10 +124,7 @@ int main(int argc, char** argv) {
     sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation")
         ->default_str("log(n)");  // Will be updated later if num_samples is set to 0.
 
-    bool use_cache{false};
-    sampling
-        ->add_flag("--use-cache", use_cache,
-                   "Use cached weights files (qalsh_weights.bin, quadtree_weights.bin) if available")
+    sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
         ->default_val(false)
         ->default_str(use_cache ? "True" : "False");
 
