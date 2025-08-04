@@ -24,7 +24,6 @@ class AnnSearcher {
 
     virtual void Init(PointSetMetadata point_set_metadata, bool in_memory) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
-    virtual void Reset() = 0;
 };
 
 class LinearScanAnnSearcher : public AnnSearcher {
@@ -33,7 +32,6 @@ class LinearScanAnnSearcher : public AnnSearcher {
 
     void Init(PointSetMetadata point_set_metadata, bool in_memory) override;
     AnnResult Search(const Point& query_point) override;
-    void Reset() override;
 
    private:
     std::unique_ptr<PointSet> base_set_;
@@ -45,7 +43,6 @@ class QalshAnnSearcher : public AnnSearcher {
 
     void Init(PointSetMetadata point_set_metadata, bool in_memory) override;
     AnnResult Search(const Point& query_point) override;
-    void Reset() override;
 
    private:
     [[nodiscard]] bool shouldTerminate(

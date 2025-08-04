@@ -26,6 +26,7 @@
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
 void LinearScanAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
+    base_set_.reset();
     if (in_memory) {
         base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
     } else {
@@ -50,8 +51,6 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
     return result;
 }
 
-void LinearScanAnnSearcher::Reset() { base_set_.reset(); }
-
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
@@ -60,6 +59,10 @@ QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio) {
 }
 
 void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory) {
+    base_set_.reset();
+    dot_vectors_.clear();
+    hash_tables.clear();
+
     if (in_memory) {
         // Initialize base set.
         base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
@@ -173,12 +176,6 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     // Defense programming
     return {.point_id = static_cast<unsigned int>(std::numeric_limits<double>::max()),
             .distance = std::numeric_limits<unsigned int>::max()};
-}
-
-void QalshAnnSearcher::Reset() {
-    base_set_.reset();
-    dot_vectors_.clear();
-    hash_tables.clear();
 }
 
 bool QalshAnnSearcher::shouldTerminate(
