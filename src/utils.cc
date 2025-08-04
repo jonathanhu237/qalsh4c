@@ -64,5 +64,5 @@ double Utils::GetMemoryUsage() {
     }
 
     // Convert from KB to MB
-    return memory_usage / 1024.0;  // NOLINT: readability-magic-numbers
+    return static_cast<double>(memory_usage) / 1024.0;  // NOLINT: readability-magic-numbers
 }
