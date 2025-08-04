@@ -30,6 +30,9 @@ void IndexCommand::Execute() {
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory_ / "metadata.json");
 
+    // Begin to record the time.
+    auto start = std::chrono::high_resolution_clock::now();
+
     // Build index for point set A.
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
                                 .num_points = dataset_metadata.num_points_a,
@@ -41,6 +44,13 @@ void IndexCommand::Execute() {
                                 .num_points = dataset_metadata.num_points_b,
                                 .num_dimensions = dataset_metadata.num_dimensions},
                dataset_directory_ / "index" / "B");
+
+    // End to record the time.
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // Output the result.
+    std::cout << std::format("Time Consumed: {:.2f} ms\n",
+                             std::chrono::duration<double, std::milli>(end - start).count());
 }
 
 void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
