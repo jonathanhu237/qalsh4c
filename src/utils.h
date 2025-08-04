@@ -12,6 +12,7 @@ class Utils {
     static double L1Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
+    static double GetMemoryUsage();
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);

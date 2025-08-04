@@ -1,7 +1,10 @@
 #include "utils.h"
 
+#include <fstream>
 #include <numeric>
 #include <random>
+#include <sstream>
+#include <string>
 
 double Utils::L1Distance(const Point &pt1, const Point &pt2) {
     if (pt1.size() != pt2.size()) {
@@ -43,4 +46,23 @@ unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {
     auto it = std::ranges::upper_bound(cumulative_weights, random_value);
 
     return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
+}
+
+double Utils::GetMemoryUsage() {
+    std::ifstream status_file("/proc/self/status");
+    std::string line;
+    size_t memory_usage = 0;
+
+    while (std::getline(status_file, line)) {
+        // NOLINTNEXTLINE: readability-magic-numbers
+        if (line.substr(0, 6) == "VmHWM:") {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key >> memory_usage;
+            break;
+        }
+    }
+
+    // Convert from KB to MB
+    return memory_usage / 1024.0;  // NOLINT: readability-magic-numbers
 }

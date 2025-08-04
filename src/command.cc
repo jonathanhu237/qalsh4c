@@ -30,8 +30,9 @@ void IndexCommand::Execute() {
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory_ / "metadata.json");
 
-    // Begin to record the time.
+    // Begin to record the time and memory.
     auto start = std::chrono::high_resolution_clock::now();
+    double memory_before = Utils::GetMemoryUsage();
 
     // Build index for point set A.
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
@@ -45,12 +46,15 @@ void IndexCommand::Execute() {
                                 .num_dimensions = dataset_metadata.num_dimensions},
                dataset_directory_ / "index" / "B");
 
-    // End to record the time.
+    // End to record the time and memory.
     auto end = std::chrono::high_resolution_clock::now();
+    double memory_after = Utils::GetMemoryUsage();
 
     // Output the result.
-    std::cout << std::format("Time Consumed: {:.2f} ms\n",
-                             std::chrono::duration<double, std::milli>(end - start).count());
+    std::cout << std::format(
+        "Time Consumed: {:.2f} ms\n"
+        "Memory Usage: {:.2f} MB\n",
+        std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before);
 }
 
 void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
@@ -149,6 +153,7 @@ void EstimateCommand::Execute() {
 
     // Calculate the distance from A to B
     auto start = std::chrono::high_resolution_clock::now();
+    double memory_before = Utils::GetMemoryUsage();
     spdlog::info("Calculating the distance from A to B...");
     double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, in_memory_);
 
@@ -156,14 +161,16 @@ void EstimateCommand::Execute() {
     spdlog::info("Calculating the distance from B to A...");
     double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, in_memory_);
     auto end = std::chrono::high_resolution_clock::now();
+    double memory_after = Utils::GetMemoryUsage();
 
     // Output the result.
     double estimation = distance_ab + distance_ba;
     std::cout << std::format(
         "Time Consumed: {:.2f} ms\n"
+        "Memory Usage: {:.2f} MB\n"
         "Estimated Chamfer distance: {}\n"
         "Relative Error: {:.2f}%\n",
-        std::chrono::duration<double, std::milli>(end - start).count(), estimation,
+        std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before, estimation,
         std::fabs(estimation - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance *
             100);  // NOLINT: readability-magic-numbers
 }
