@@ -8,6 +8,7 @@ from chamfer_distance import chamfer_distance
 from mnist import load_mnist
 from p53 import load_p53
 from trevi import load_trevi
+from gist import load_gist
 from utils import create_metadata, save_binary_data, setup_logging
 
 
@@ -20,7 +21,7 @@ def main():
         "--dataset-name",
         required=True,
         type=str,
-        choices=["mnist", "p53", "trevi"],
+        choices=["mnist", "p53", "trevi", "gist"],
         help="Name of the dataset to convert",
     )
     parser.add_argument(
@@ -62,6 +63,12 @@ def main():
         default=None,
         help="Path to the Trevi dataset directory containing .bmp files",
     )
+    parser.add_argument(
+        "--gist-dir",
+        type=str,
+        default=None,
+        help="Path to the GIST dataset directory containing gist_base.fvecs file",
+    )
 
     args = parser.parse_args()
 
@@ -92,6 +99,13 @@ def main():
                 "Path to Trevi dataset directory must be provided for trevi dataset (use --trevi-dir argument)"
             )
         X = load_trevi(Path(args.trevi_dir))
+    elif args.dataset_name == "gist":
+        # For GIST dataset, we need a directory containing gist_base.fvecs file
+        if not args.gist_dir:
+            raise ValueError(
+                "Path to GIST dataset directory must be provided for gist dataset (use --gist-dir argument)"
+            )
+        X = load_gist(Path(args.gist_dir))
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset_name}")
 
