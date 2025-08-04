@@ -114,19 +114,21 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         from_set = std::make_unique<DiskPointSet>(from);
     }
 
-    if (num_samples_ == 0) {
-        num_samples_ = static_cast<unsigned int>(std::log(from_set->get_num_points()));
-        spdlog::info("Number of samples set to log(n): {}", num_samples_);
+    unsigned int num_samples = num_samples_;
+    if (num_samples == 0) {
+        // If num_samples is 0, set it to log(n)
+        num_samples = static_cast<unsigned int>(std::log(from_set->get_num_points()));
+        spdlog::info("Number of samples set to log(n): {}", num_samples);
     }
 
     LinearScanAnnSearcher linear_scan_ann_searcher;
     linear_scan_ann_searcher.Init(to, in_memory);
-    for (unsigned int i = 0; i < num_samples_; i++) {
+    for (unsigned int i = 0; i < num_samples; i++) {
         unsigned int point_id = Utils::SampleFromWeights(weights);
         Point query = from_set->GetPoint(point_id);
         AnnResult result = linear_scan_ann_searcher.Search(query);
         approximation += sum * result.distance / weights[point_id];
     }
 
-    return approximation / num_samples_;
+    return approximation / num_samples;
 }
