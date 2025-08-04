@@ -150,10 +150,9 @@ void EstimateCommand::Execute() {
     // Output the result.
     double estimation = distance_ab + distance_ba;
     std::cout << std::format(
-        "The result is as follows:\n"
-        "    Time Consumed: {:.2f} ms\n"
-        "    Estimated Chamfer distance: {}\n"
-        "    Relative error: {:.2f}%\n",
+        "Time Consumed: {:.2f} ms\n"
+        "Estimated Chamfer distance: {}\n"
+        "Relative Error: {:.2f}%\n",
         std::chrono::duration<double, std::milli>(end - start).count(), estimation,
         std::fabs(estimation - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance *
             100);  // NOLINT: readability-magic-numbers
