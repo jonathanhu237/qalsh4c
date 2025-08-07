@@ -15,8 +15,8 @@ struct DotProductPointIdPair {
 };
 
 struct AnnResult {
-    unsigned int point_id{0};
     double distance{0.0};
+    unsigned int point_id{0};
 };
 
 struct CompareAnnResult {
