@@ -256,7 +256,8 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     num_dimensions_ = base_metadata.num_dimensions;
 
     // Load QALSH configuration.
-    std::filesystem::path index_directory = base_metadata.file_path.parent_path() / "index";
+    std::string stem = base_metadata.file_path.stem();
+    std::filesystem::path index_directory = base_metadata.file_path.parent_path() / "index" / stem;
     qalsh_config_ = Utils::LoadQalshConfig(index_directory / "config.json");
 
     // Print the QalshConfig parameters.
