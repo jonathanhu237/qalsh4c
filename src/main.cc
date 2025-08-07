@@ -130,8 +130,8 @@ int main(int argc, char** argv) {
     unsigned int num_samples{0};
     sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation");
 
-    double delta_threshold{0.0};
-    sampling->add_option("-d,--delta-threshold", delta_threshold, "Delta threshold for sampling")
+    double delta_tolerance{0.0};
+    sampling->add_option("-d,--delta-tolerance", delta_tolerance, "Delta tolerance for sampling")
         ->default_val(Global::kDefaultDeltaTolerance);
 
     bool use_cache{false};
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator =
-            std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, delta_threshold, use_cache);
+            std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, delta_tolerance, use_cache);
     });
 
     // ------------------------------
