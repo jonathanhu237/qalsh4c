@@ -302,6 +302,9 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
         dot_vector_file.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
                              static_cast<std::streamsize>(num_dimensions_ * sizeof(double)));
     }
+
+    // Clean the leaf nodes cache.
+    leaf_nodes_cache_.clear();
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
