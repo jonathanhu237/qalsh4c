@@ -78,7 +78,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Sample the points using the generated weights.
-    double approximation = 0.0;
+    double estimation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
 
     std::unique_ptr<AnnSearcher> ann_searcher;
@@ -91,14 +91,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         while (true) {
             cnt++;
             unsigned int point_id = Utils::SampleFromWeights(weights);
-            double prev_approximation = approximation;
-            approximation = ((prev_approximation * cnt - 1) +
-                             (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
-                            cnt;
-            double approximation_delta = prev_approximation <= Global::kEpsilon
+            double prev_estimation = estimation;
+            estimation = ((prev_estimation * cnt - 1) +
+                          (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
+                         cnt;
+            double approximation_delta = prev_estimation <= Global::kEpsilon
                                              ? std::numeric_limits<double>::max()
-                                             : std::abs(approximation - prev_approximation) / prev_approximation;
-            double relative_error = (approximation - metadata.chamfer_distance) / metadata.chamfer_distance * 100.0;
+                                             : std::abs(estimation - prev_estimation) / prev_estimation;
+            double relative_error = (estimation - metadata.chamfer_distance) / metadata.chamfer_distance * 100.0;
 
             if (cnt == 1) {
                 spdlog::debug("Number of samples: {}, Relative Error: {:.2f}%", cnt, relative_error);
@@ -134,5 +134,5 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
     }
 
-    return approximation;
+    return estimation;
 }
