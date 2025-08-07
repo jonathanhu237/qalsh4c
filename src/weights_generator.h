@@ -3,30 +3,49 @@
 
 #include <vector>
 
-#include "point_set.h"
+#include "types.h"
 
+// --------------------------------------------------
+// WeightsGenerator Definition
+// --------------------------------------------------
 class WeightsGenerator {
    public:
     virtual ~WeightsGenerator() = default;
     virtual std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                         bool in_memory, bool use_cache) = 0;
+                                         bool use_cache) = 0;
 };
 
+// --------------------------------------------------
+// UniformWeightsGenerator Definition
+// --------------------------------------------------
 class UniformWeightsGenerator : public WeightsGenerator {
    public:
     UniformWeightsGenerator() = default;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 bool in_memory, bool use_cache) override;
+                                 bool use_cache) override;
 };
 
-class QalshWeightsGenerator : public WeightsGenerator {
+// --------------------------------------------------
+// InMemoryQalshWeightsGenerator Definition
+// --------------------------------------------------
+class InMemoryQalshWeightsGenerator : public WeightsGenerator {
    public:
-    QalshWeightsGenerator(double approximation_ratio);
+    InMemoryQalshWeightsGenerator(double approximation_ratio);
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 bool in_memory, bool use_cache) override;
+                                 bool use_cache) override;
 
    private:
     double approximation_ratio_;
+};
+
+// --------------------------------------------------
+// DiskQalshWeightsGenerator Definition
+// --------------------------------------------------
+class DiskQalshWeightsGenerator : public WeightsGenerator {
+   public:
+    DiskQalshWeightsGenerator() = default;
+    std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                                 bool use_cache) override;
 };
 
 #endif

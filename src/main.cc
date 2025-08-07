@@ -11,6 +11,7 @@
 #include "global.h"
 #include "sink.h"
 #include "weights_generator.h"
+// #include "weights_generator.h"
 
 int main(int argc, char** argv) {
     // Setup logger.
@@ -83,18 +84,13 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* ann = estimate->add_subcommand("ann", "Estimate Chamfer distance using ANN.");
 
-    bool use_cache{false};
-    ann->add_flag("--use-cache", use_cache, "Use cached files if available")
-        ->default_val(false)
-        ->default_str(use_cache ? "True" : "False");
-
     std::unique_ptr<AnnSearcher> ann_searcher;
     ann->require_subcommand(1);
     ann->callback([&]() {
         if (!ann_searcher) {
             spdlog::error("Ann searcher is not set. Please specify a Ann searcher.");
         }
-        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher), use_cache);
+        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
     });
 
     // ------------------------------
@@ -102,7 +98,13 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* linear_scan = ann->add_subcommand("linear_scan", "Use linear scan for ANN.");
 
-    linear_scan->callback([&] { ann_searcher = std::make_unique<LinearScanAnnSearcher>(); });
+    linear_scan->callback([&] {
+        if (in_memory) {
+            ann_searcher = std::make_unique<InMemoryLinearScanAnnSearcher>();
+        } else {
+            ann_searcher = std::make_unique<DiskLinearScanAnnSearcher>();
+        }
+    });
 
     // ------------------------------
     // qalsh ann estimate
@@ -113,7 +115,13 @@ int main(int argc, char** argv) {
         ->default_val(Global::kDefaultApproximationRatio);
 
     // If in_memory = false, the setting of approximation_ratio would not have any effect.
-    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(approximation_ratio); });
+    qalsh_ann->callback([&] {
+        if (in_memory) {
+            ann_searcher = std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio);
+        } else {
+            ann_searcher = std::make_unique<DiskQalshAnnSearcher>();
+        }
+    });
 
     // ------------------------------
     // sampling estimate
@@ -124,6 +132,7 @@ int main(int argc, char** argv) {
     sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation")
         ->default_str("log(n)");  // Will be updated later if num_samples is set to 0.
 
+    bool use_cache{false};
     sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
         ->default_val(false)
         ->default_str(use_cache ? "True" : "False");
@@ -151,8 +160,13 @@ int main(int argc, char** argv) {
     qalsh_sampling->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_sampling->callback(
-        [&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(approximation_ratio); });
+    qalsh_sampling->callback([&]() {
+        if (in_memory) {
+            weights_generator = std::make_unique<InMemoryQalshWeightsGenerator>(approximation_ratio);
+        } else {
+            weights_generator = std::make_unique<DiskQalshWeightsGenerator>();
+        }
+    });
 
     CLI11_PARSE(app, argc, argv);
 

@@ -6,7 +6,6 @@
 #include <random>
 
 #include "estimator.h"
-#include "point_set.h"
 
 class Command {
    public:

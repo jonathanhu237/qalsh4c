@@ -12,7 +12,6 @@
 
 #include "b_plus_tree.h"
 #include "estimator.h"
-#include "point_set.h"
 #include "utils.h"
 
 // --------------------------------------------------
@@ -50,7 +49,7 @@ void IndexCommand::Execute() {
 
     // Output the result.
     std::cout << std::format(
-        "Time Consumed: {:.2f} ms\n"
+        "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n",
         std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before);
 }
@@ -59,9 +58,6 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
     Utils::RegularizeQalshConfig(qalsh_config_, point_set_metadata.num_points);
-
-    // Initialize the point set reader.
-    auto point_set = std::make_unique<DiskPointSet>(point_set_metadata);
 
     // Create the index directory if it does not exist.
     if (!std::filesystem::exists(index_directory)) {
@@ -83,32 +79,12 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     // Generate the dot vectors.
     spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
-    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables, Point(point_set->get_num_dimensions()));
+    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables);
+    std::mt19937 gen(std::random_device{}());
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        std::ranges::generate(dot_vectors[i], [&]() { return standard_cauchy_dist(gen_); });
-    }
-
-    // Index the point set.
-    spdlog::info("Indexing the pooint set...");
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
-        std::vector<DotProductPointIdPair> data(point_set->get_num_points());
-        for (unsigned int j = 0; j < point_set->get_num_points(); j++) {
-            // Calculate the dot product for each point in the base set
-            Point point = point_set->GetPoint(j);
-            double dot_product = Utils::DotProduct(point, dot_vectors[i]);
-            data[j] = {
-                .dot_product = dot_product,
-                .point_id = j,
-            };
-        }
-
-        // Sort the dot products
-        std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
-
-        // Bulk load the B+ tree with sorted dot products
-        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), qalsh_config_.page_size);
-        bulk_loader.Build(data);
+        dot_vectors[i].reserve(point_set_metadata.num_dimensions);
+        std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions,
+                                [&]() { return standard_cauchy_dist(gen); });
     }
 
     // Save the dot product vectors
@@ -121,6 +97,31 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         ofs.write(reinterpret_cast<const char*>(dot_vectors[i].data()),
                   static_cast<std::streamsize>(dot_vectors[i].size() * sizeof(Coordinate)));
+    }
+
+    // Open the point set file
+    std::ifstream base_file(point_set_metadata.file_path, std::ios::binary);
+    if (!base_file.is_open()) {
+        spdlog::error("Failed to open base file: {}", point_set_metadata.file_path.string());
+        return;
+    }
+
+    // Build the B+ trees for each hash table.
+    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
+        std::vector<DotProductPointIdPair> data;
+        for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
+            Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, j);
+            data.emplace_back(
+                DotProductPointIdPair{.dot_product = Utils::DotProduct(point, dot_vectors[i]), .point_id = j});
+        }
+
+        // Sort the dot products.
+        std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
+
+        // Bulk load the B+ tree.
+        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), qalsh_config_.page_size);
+        bulk_loader.Build(data);
     }
 }
 

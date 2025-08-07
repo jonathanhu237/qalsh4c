@@ -4,7 +4,6 @@
 #include <memory>
 
 #include "ann_searcher.h"
-#include "point_set.h"
 #include "weights_generator.h"
 
 class Estimator {
@@ -15,12 +14,11 @@ class Estimator {
 
 class AnnEstimator : public Estimator {
    public:
-    AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool use_cache);
+    AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher);
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) override;
 
    private:
     std::unique_ptr<AnnSearcher> ann_searcher_;
-    bool use_cache_;
 };
 
 class SamplingEstimator : public Estimator {
