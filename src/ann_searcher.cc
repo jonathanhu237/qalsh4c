@@ -94,6 +94,7 @@ void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
         qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold);
 
     // Generate dot vectors.
+    dot_vectors_.clear();
     dot_vectors_.resize(qalsh_config_.num_hash_tables);
     std::mt19937 gen(std::random_device{}());
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
@@ -106,6 +107,7 @@ void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     }
 
     // Initialize QALSH hash tables.
+    hash_tables_.clear();
     hash_tables_.resize(qalsh_config_.num_hash_tables);
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         hash_tables_[i].reserve(base_metadata.num_points);
@@ -269,9 +271,11 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
         qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold);
 
     // Initialize the buffer.
+    buffer_.clear();
     buffer_.resize(qalsh_config_.page_size);
 
     // Open the hash tables.
+    hash_tables_.clear();
     hash_tables_.reserve(qalsh_config_.num_hash_tables);
     std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
@@ -290,6 +294,7 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
         spdlog::error("Failed to open dot vectors file: {}", (index_directory / "dot_vectors.bin").string());
         return;
     }
+    dot_vectors_.clear();
     dot_vectors_.resize(qalsh_config_.num_hash_tables);
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         dot_vectors_[i].resize(num_dimensions_);
