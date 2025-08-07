@@ -11,7 +11,6 @@
 #include "global.h"
 #include "sink.h"
 #include "weights_generator.h"
-// #include "weights_generator.h"
 
 int main(int argc, char** argv) {
     // Setup logger.
@@ -129,8 +128,11 @@ int main(int argc, char** argv) {
     CLI::App* sampling = estimate->add_subcommand("sampling", "Estimate Chamfer distance using sampling.");
 
     unsigned int num_samples{0};
-    sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation")
-        ->default_str("log(n)");  // Will be updated later if num_samples is set to 0.
+    sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation");
+
+    double delta_threshold{0.0};
+    sampling->add_option("-d,--delta-threshold", delta_threshold, "Delta threshold for sampling")
+        ->default_val(Global::kDefaultDeltaTolerance);
 
     bool use_cache{false};
     sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
@@ -143,7 +145,8 @@ int main(int argc, char** argv) {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
-        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, use_cache);
+        estimator =
+            std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, delta_threshold, use_cache);
     });
 
     // ------------------------------

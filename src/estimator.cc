@@ -2,15 +2,19 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <utility>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "global.h"
 #include "types.h"
 #include "utils.h"
 
@@ -52,8 +56,11 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // SamplingEstimator Implementation
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     bool use_cache)
-    : weights_generator_(std::move(weights_generator)), num_samples_(num_samples), use_cache_(use_cache) {}
+                                     double delta_threshold, bool use_cache)
+    : weights_generator_(std::move(weights_generator)),
+      num_samples_(num_samples),
+      delta_threshold_(delta_threshold),
+      use_cache_(use_cache) {}
 
 double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
     // Check the ANN searcher
@@ -70,13 +77,6 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         spdlog::error("Weights size does not match the number of query points in the dataset");
     }
 
-    unsigned int num_samples = num_samples_;
-    if (num_samples == 0) {
-        // If num_samples is 0, set it to log(n)
-        num_samples = static_cast<unsigned int>(std::log(from.num_points));
-        spdlog::info("Number of samples set to log(n): {}", num_samples);
-    }
-
     // Sample the points using the generated weights.
     double approximation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
@@ -84,9 +84,26 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::unique_ptr<AnnSearcher> ann_searcher;
 
     auto processing_loop = [&](auto&& get_point_by_id) {
-        for (unsigned int i = 0; i < num_samples; i++) {
+        unsigned int cnt = 0;
+        while (true) {
+            cnt++;
             unsigned int point_id = Utils::SampleFromWeights(weights);
-            approximation += sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id];
+            double prev_approximation = approximation;
+            approximation = ((prev_approximation * cnt - 1) +
+                             (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
+                            cnt;
+            double delta = prev_approximation <= Global::kEpsilon
+                               ? std::numeric_limits<double>::max()
+                               : std::abs(approximation - prev_approximation) / prev_approximation;
+            if (cnt > 1) {
+                spdlog::debug("Number of samples: {}, Delta: {:.4f}", cnt, delta);
+            }
+            if (num_samples_ != 0 && cnt >= num_samples_) {
+                break;
+            }
+            if (num_samples_ == 0 && delta <= delta_threshold_) {
+                break;
+            }
         }
     };
 
@@ -106,5 +123,5 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
     }
 
-    return approximation / num_samples;
+    return approximation;
 }
