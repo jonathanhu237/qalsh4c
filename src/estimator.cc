@@ -56,10 +56,10 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // SamplingEstimator Implementation
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     double delta_threshold, bool use_cache)
+                                     double delta_tolerance, bool use_cache)
     : weights_generator_(std::move(weights_generator)),
       num_samples_(num_samples),
-      delta_threshold_(delta_threshold),
+      delta_threshold_(delta_tolerance),
       use_cache_(use_cache) {}
 
 double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
@@ -83,6 +83,9 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     std::unique_ptr<AnnSearcher> ann_searcher;
 
+    // Read the ground truth here since we want to output the relative error in debug mode.
+    DatasetMetadata metadata = Utils::LoadDatasetMetadata(from.file_path.parent_path() / "metadata.json");
+
     auto processing_loop = [&](auto&& get_point_by_id) {
         unsigned int cnt = 0;
         while (true) {
@@ -92,16 +95,24 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             approximation = ((prev_approximation * cnt - 1) +
                              (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
                             cnt;
-            double delta = prev_approximation <= Global::kEpsilon
-                               ? std::numeric_limits<double>::max()
-                               : std::abs(approximation - prev_approximation) / prev_approximation;
-            if (cnt > 1) {
-                spdlog::debug("Number of samples: {}, Delta: {:.4f}", cnt, delta);
+            double approximation_delta = prev_approximation <= Global::kEpsilon
+                                             ? std::numeric_limits<double>::max()
+                                             : std::abs(approximation - prev_approximation) / prev_approximation;
+            double relative_error = (approximation - metadata.chamfer_distance) / metadata.chamfer_distance * 100.0;
+
+            if (cnt == 1) {
+                spdlog::debug("Number of samples: {}, Relative Error: {:.2f}%", cnt, relative_error);
             }
+            if (cnt > 1) {
+                spdlog::debug("Number of samples: {}, Relative Error: {:.2f}%, Approximation Delta: {:.4f}, ", cnt,
+                              relative_error, approximation_delta);
+            }
+
+            // Terminate conditions
             if (num_samples_ != 0 && cnt >= num_samples_) {
                 break;
             }
-            if (num_samples_ == 0 && delta <= delta_threshold_) {
+            if (num_samples_ == 0 && approximation_delta <= delta_threshold_) {
                 break;
             }
         }
