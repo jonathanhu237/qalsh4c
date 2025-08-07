@@ -21,9 +21,9 @@ class IndexCommand : public Command {
    private:
     void BuildIndex(const PointSetMetadata& point_set_metadata, const std::filesystem::path& index_directory);
 
-    QalshConfig qalsh_config_;
+    double approximation_ratio_;
+    unsigned int page_size_;
     std::filesystem::path dataset_directory_;
-
     std::mt19937 gen_;
 };
 

@@ -18,10 +18,10 @@
 // IndexCommand Implementation
 // --------------------------------------------------
 IndexCommand::IndexCommand(double approximation_ratio, unsigned int page_size, std::filesystem::path dataset_directory)
-    : dataset_directory_(std::move(dataset_directory)), gen_(std::random_device{}()) {
-    qalsh_config_.approximation_ratio = approximation_ratio;
-    qalsh_config_.page_size = page_size;
-}
+    : approximation_ratio_(approximation_ratio),
+      page_size_(page_size),
+      dataset_directory_(std::move(dataset_directory)),
+      gen_(std::random_device{}()) {}
 
 void IndexCommand::Execute() {
     // Read dataset metadata.
@@ -57,7 +57,8 @@ void IndexCommand::Execute() {
 void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
-    Utils::RegularizeQalshConfig(qalsh_config_, point_set_metadata.num_points);
+    QalshConfig config{.approximation_ratio = approximation_ratio_, .page_size = page_size_};
+    Utils::RegularizeQalshConfig(config, point_set_metadata.num_points);
 
     // Create the index directory if it does not exist.
     if (!std::filesystem::exists(index_directory)) {
@@ -67,7 +68,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Save the QALSH configuration.
     spdlog::info("Saving QALSH configuration...");
-    Utils::SaveQalshConfig(qalsh_config_, index_directory / "config.json");
+    Utils::SaveQalshConfig(config, index_directory / "config.json");
 
     // Create the B+ tree directory.
     std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";
@@ -77,11 +78,11 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     }
 
     // Generate the dot vectors.
-    spdlog::info("Generating dot vectors for {} hash tables...", qalsh_config_.num_hash_tables);
+    spdlog::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
-    std::vector<std::vector<double>> dot_vectors(qalsh_config_.num_hash_tables);
+    std::vector<std::vector<double>> dot_vectors(config.num_hash_tables);
     std::mt19937 gen(std::random_device{}());
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         dot_vectors[i].reserve(point_set_metadata.num_dimensions);
         std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions,
                                 [&]() { return standard_cauchy_dist(gen); });
@@ -94,7 +95,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
         spdlog::error(
             std::format("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string()));
     }
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         ofs.write(reinterpret_cast<const char*>(dot_vectors[i].data()),
                   static_cast<std::streamsize>(dot_vectors[i].size() * sizeof(Coordinate)));
     }
@@ -107,8 +108,8 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     }
 
     // Build the B+ trees for each hash table.
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        spdlog::debug("Indexing hash table {}/{}", i + 1, qalsh_config_.num_hash_tables);
+    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
+        spdlog::debug("Indexing hash table {}/{}", i + 1, config.num_hash_tables);
         std::vector<DotProductPointIdPair> data;
         for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
             Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, j);
@@ -120,7 +121,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
         std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
 
         // Bulk load the B+ tree.
-        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), qalsh_config_.page_size);
+        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), config.page_size);
         bulk_loader.Build(data);
     }
 }
