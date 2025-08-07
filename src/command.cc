@@ -108,6 +108,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     }
 
     // Build the B+ trees for each hash table.
+    spdlog::info("Building B+ trees for each hash table...");
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         spdlog::debug("Indexing hash table {}/{}", i + 1, config.num_hash_tables);
         std::vector<DotProductPointIdPair> data;
