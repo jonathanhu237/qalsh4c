@@ -62,7 +62,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     // Generate weights.
     spdlog::info("Generating weights...");
-    std::vector<double> weights = weights_generator_->Generate(from, to, in_memory);
+    std::vector<double> weights = weights_generator_->Generate(from, to, use_cache_);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
