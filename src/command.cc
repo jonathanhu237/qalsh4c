@@ -120,21 +120,21 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Build the B+ trees for each hash table.
     spdlog::info("Building B+ trees for each hash table...");
-    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
-        spdlog::debug("Indexing hash table {}/{}", i + 1, config.num_hash_tables);
-        std::vector<DotProductPointIdPair> data;
-        for (unsigned int j = 0; j < point_set_metadata.num_points; j++) {
-            Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, j);
-            data.emplace_back(
-                DotProductPointIdPair{.dot_product = Utils::DotProduct(point, dot_vectors[i]), .point_id = j});
+    std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
+    for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
+        Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, i);
+        for (unsigned int j = 0; j < config.num_hash_tables; j++) {
+            double dot_product = Utils::DotProduct(point, dot_vectors[j]);
+            data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});
         }
-
+    }
+    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         // Sort the dot products.
-        std::ranges::sort(data, {}, &DotProductPointIdPair::dot_product);
+        std::ranges::sort(data[i], {}, &DotProductPointIdPair::dot_product);
 
         // Bulk load the B+ tree.
         BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), config.page_size);
-        bulk_loader.Build(data);
+        bulk_loader.Build(data[i]);
     }
 }
 
