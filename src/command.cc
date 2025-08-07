@@ -60,6 +60,18 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     QalshConfig config{.approximation_ratio = approximation_ratio_, .page_size = page_size_};
     Utils::RegularizeQalshConfig(config, point_set_metadata.num_points);
 
+    // Print the QalshConfig parameters.
+    spdlog::info(
+        "QALSH Configuration:\n"
+        "\tApproximation Ratio: {}\n"
+        "\tBucket Width: {}\n"
+        "\tError Probability: {}\n"
+        "\tNumber of Hash Tables: {}\n"
+        "\tCollision Threshold: {}\n"
+        "\tPage Size: {}",
+        config.approximation_ratio, config.bucket_width, config.error_probability, config.num_hash_tables,
+        config.collision_threshold, config.page_size);
+
     // Create the index directory if it does not exist.
     if (!std::filesystem::exists(index_directory)) {
         spdlog::info("Creating index directory: {}", index_directory.string());
@@ -81,11 +93,10 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     spdlog::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     std::vector<std::vector<double>> dot_vectors(config.num_hash_tables);
-    std::mt19937 gen(std::random_device{}());
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         dot_vectors[i].reserve(point_set_metadata.num_dimensions);
         std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions,
-                                [&]() { return standard_cauchy_dist(gen); });
+                                [&]() { return standard_cauchy_dist(gen_); });
     }
 
     // Save the dot product vectors
