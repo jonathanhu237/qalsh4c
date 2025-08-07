@@ -89,7 +89,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             cnt++;
             unsigned int point_id = Utils::SampleFromWeights(weights);
             double prev_estimation = estimation;
-            estimation = ((prev_estimation * cnt - 1) +
+            estimation = ((prev_estimation * (cnt - 1)) +
                           (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
                          cnt;
             double estimation_delta = prev_estimation <= Global::kEpsilon
