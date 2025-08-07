@@ -83,9 +83,6 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     std::unique_ptr<AnnSearcher> ann_searcher;
 
-    // Read the ground truth here since we want to output the relative error in debug mode.
-    DatasetMetadata metadata = Utils::LoadDatasetMetadata(from.file_path.parent_path() / "metadata.json");
-
     auto processing_loop = [&](auto&& get_point_by_id) {
         unsigned int cnt = 0;
         while (true) {
@@ -95,24 +92,22 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             estimation = ((prev_estimation * cnt - 1) +
                           (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
                          cnt;
-            double approximation_delta = prev_estimation <= Global::kEpsilon
-                                             ? std::numeric_limits<double>::max()
-                                             : std::abs(estimation - prev_estimation) / prev_estimation;
-            double relative_error = (estimation - metadata.chamfer_distance) / metadata.chamfer_distance * 100.0;
+            double estimation_delta = prev_estimation <= Global::kEpsilon
+                                          ? std::numeric_limits<double>::max()
+                                          : std::abs(estimation - prev_estimation) / prev_estimation;
 
             if (cnt == 1) {
-                spdlog::debug("Number of samples: {}, Relative Error: {:.2f}%", cnt, relative_error);
+                spdlog::debug("Number of samples: {}", cnt);
             }
             if (cnt > 1) {
-                spdlog::debug("Number of samples: {}, Relative Error: {:.2f}%, Approximation Delta: {:.4f}, ", cnt,
-                              relative_error, approximation_delta);
+                spdlog::debug("Number of samples: {}, Estimation Delta: {:.4f}, ", cnt, estimation_delta);
             }
 
             // Terminate conditions
             if (num_samples_ != 0 && cnt >= num_samples_) {
                 break;
             }
-            if (num_samples_ == 0 && approximation_delta <= delta_threshold_) {
+            if (num_samples_ == 0 && estimation_delta <= delta_threshold_) {
                 break;
             }
         }
