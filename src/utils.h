@@ -5,7 +5,6 @@
 
 #include <Eigen/Eigen>
 
-#include "point_set.h"
 #include "types.h"
 
 class Utils {
@@ -13,6 +12,9 @@ class Utils {
     static double L1Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
     static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
+    static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
+                                                 unsigned int num_dimensions);
+    static Point ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id);
     static void RegularizeQalshConfig(QalshConfig &config, unsigned int num_points);
     static void SaveQalshConfig(QalshConfig &config, const std::filesystem::path &file_path);
     static QalshConfig LoadQalshConfig(const std::filesystem::path &file_path);

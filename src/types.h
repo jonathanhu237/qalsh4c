@@ -1,6 +1,9 @@
 #ifndef TYPES_H_
 #define TYPES_H_
 
+#include <filesystem>
+#include <vector>
+
 struct KeyPageNumPair {
     double key;
     unsigned int page_num;
@@ -25,6 +28,15 @@ struct DatasetMetadata {
     unsigned int num_points_b{0};
     unsigned int num_dimensions{0};
     double chamfer_distance{0.0};
+};
+
+using Coordinate = double;
+using Point = std::vector<Coordinate>;
+
+struct PointSetMetadata {
+    std::filesystem::path file_path;
+    unsigned int num_points{0};
+    unsigned int num_dimensions{0};
 };
 
 struct QalshConfig {
