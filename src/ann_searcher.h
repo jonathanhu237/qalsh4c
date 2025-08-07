@@ -9,15 +9,6 @@
 #include "qalsh_config.h"
 #include "qalsh_hash_table.h"
 
-struct AnnResult {
-    unsigned int point_id{0};
-    double distance{0.0};
-};
-
-struct CompareAnnResult {
-    bool operator()(const AnnResult& a, const AnnResult& b) const { return a.distance > b.distance; }
-};
-
 class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;
