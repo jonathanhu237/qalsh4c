@@ -35,6 +35,7 @@ std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetada
     std::filesystem::path weights_path = parent_directory / std::format("qalsh_weights_{}.bin", stem);
 
     if (use_cache) {
+        spdlog::warn("The weights will be read from the cache file if it exists.");
         if (std::filesystem::exists(weights_path)) {
             spdlog::info("The cache file exist, reading the weights from the file.");
             std::ifstream ifs(weights_path);
