@@ -20,15 +20,9 @@ InternalNode::InternalNode(const std::vector<char>& buffer) {
     size_t offset = 0;
 
     num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    keys_.reserve(num_children_ - 1);
-    pointers_.reserve(num_children_);
 
-    for (unsigned int i = 0; i < num_children_ - 1; ++i) {
-        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
-    }
-    for (unsigned int i = 0; i < num_children_; ++i) {
-        pointers_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
-    }
+    keys_ = Utils::ReadVectorFromBuffer<double>(buffer, offset, num_children_ - 1);
+    pointers_ = Utils::ReadVectorFromBuffer<unsigned int>(buffer, offset, num_children_);
 };
 
 size_t InternalNode::GetHeaderSize() { return sizeof(num_children_); }
@@ -55,17 +49,11 @@ LeafNode::LeafNode(const std::vector<char>& buffer) {
     size_t offset = 0;
 
     num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    keys_.reserve(num_entries_);
-    values_.reserve(num_entries_);
     prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
     next_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
 
-    for (unsigned int i = 0; i < num_entries_; ++i) {
-        keys_.push_back(Utils::ReadFromBuffer<double>(buffer, offset));
-    }
-    for (unsigned int i = 0; i < num_entries_; ++i) {
-        values_.push_back(Utils::ReadFromBuffer<unsigned int>(buffer, offset));
-    }
+    keys_ = Utils::ReadVectorFromBuffer<double>(buffer, offset, num_entries_);
+    values_ = Utils::ReadVectorFromBuffer<unsigned int>(buffer, offset, num_entries_);
 }
 
 size_t LeafNode::GetHeaderSize() {

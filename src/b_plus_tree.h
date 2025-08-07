@@ -10,14 +10,12 @@
 
 class InternalNode {
    public:
-    friend class BPlusTree;
     friend class BPlusTreeBulkLoader;
-    friend class DiskQalshHashTable;
-
-   private:
+    friend class DiskQalshAnnSearcher;
     InternalNode(unsigned int order);
     InternalNode(const std::vector<char>& buffer);
 
+   private:
     static size_t GetHeaderSize();
     void Serialize(std::vector<char>& buffer) const;
 
@@ -31,14 +29,12 @@ class InternalNode {
 
 class LeafNode {
    public:
-    friend class BPlusTree;
     friend class BPlusTreeBulkLoader;
-    friend class DiskQalshHashTable;
-
-   private:
+    friend class DiskQalshAnnSearcher;
     LeafNode(unsigned int order);
     LeafNode(const std::vector<char>& buffer);
 
+   private:
     static size_t GetHeaderSize();
     void Serialize(std::vector<char>& buffer) const;
 
