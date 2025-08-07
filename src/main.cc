@@ -24,8 +24,8 @@ int main(int argc, char** argv) {
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
     std::string log_level;
-    app.add_option("-l,--log-level", log_level, "Set the logging level (default: warn)")
-        ->default_val("warn")
+    app.add_option("-l,--log-level", log_level, "Set the logging level")
+        ->default_val("info")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
     std::unique_ptr<Command> command;
