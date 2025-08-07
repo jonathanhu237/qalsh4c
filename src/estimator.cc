@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ann_searcher.h"
+#include "types.h"
 #include "utils.h"
 
 // --------------------------------------------------
@@ -80,28 +81,29 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     double approximation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
 
-    if (in_memory) {
-        std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-        InMemoryLinearScanAnnSearcher ann_searcher;
-        ann_searcher.Init(to);
+    std::unique_ptr<AnnSearcher> ann_searcher;
+
+    auto processing_loop = [&](auto&& get_point_by_id) {
         for (unsigned int i = 0; i < num_samples; i++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
-            AnnResult result = ann_searcher.Search(query_set[point_id]);
-            approximation += sum * result.distance / weights[point_id];
+            approximation += sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id];
         }
+    };
+
+    if (in_memory) {
+        ann_searcher = std::make_unique<InMemoryLinearScanAnnSearcher>();
+        ann_searcher->Init(to);
+        std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+        processing_loop([&](unsigned int id) { return query_set[id]; });
     } else {
+        ann_searcher = std::make_unique<DiskLinearScanAnnSearcher>();
+        ann_searcher->Init(to);
         std::ifstream query_file(from.file_path, std::ios::binary);
         if (!query_file.is_open()) {
             spdlog::error("Failed to open query file: {}", from.file_path.string());
             return 0.0;
         }
-        DiskLinearScanAnnSearcher ann_searcher;
-        ann_searcher.Init(to);
-        for (unsigned int i = 0; i < num_samples; i++) {
-            unsigned int point_id = Utils::SampleFromWeights(weights);
-            AnnResult result = ann_searcher.Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id));
-            approximation += sum * result.distance / weights[point_id];
-        }
+        processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
     }
 
     return approximation / num_samples;
