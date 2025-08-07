@@ -177,9 +177,8 @@ void EstimateCommand::Execute() {
     // Output the result.
     double estimation = distance_ab + distance_ba;
     std::cout << std::format(
-        "Time Consumed: {:.2f} ms\n"
+        "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n"
-        "Estimated Chamfer distance: {}\n"
         "Relative Error: {:.2f}%\n",
         std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before, estimation,
         std::fabs(estimation - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance *
