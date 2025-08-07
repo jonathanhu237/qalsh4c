@@ -12,7 +12,7 @@
             "args": [
                 "estimate",
                 "-d",
-                "./data/toy",
+                "./data/gmm",
                 "--in-memory",
                 "ann",
                 "qalsh"
