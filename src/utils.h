@@ -25,6 +25,9 @@ class Utils {
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
 
     template <typename T>
+    static std::vector<T> ReadVectorFromBuffer(const std::vector<char> &buffer, size_t &offset, size_t count);
+
+    template <typename T>
     static void WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
 };
 
@@ -39,6 +42,16 @@ T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
     offset += sizeof(T);
 
     return data;
+}
+
+template <typename T>
+std::vector<T> Utils::ReadVectorFromBuffer(const std::vector<char> &buffer, size_t &offset, size_t count) {
+    const size_t num_bytes_to_read = count * sizeof(T);
+    std::vector<T> result(count);
+    std::memcpy(result.data(), &buffer[offset], num_bytes_to_read);
+
+    offset += num_bytes_to_read;
+    return result;
 }
 
 template <typename T>
