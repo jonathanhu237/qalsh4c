@@ -180,7 +180,7 @@ void EstimateCommand::Execute() {
         "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n"
         "Relative Error: {:.2f}%\n",
-        std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before, estimation,
+        std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before,
         std::fabs(estimation - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance *
             100);  // NOLINT: readability-magic-numbers
 }
