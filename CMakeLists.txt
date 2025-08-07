@@ -14,7 +14,6 @@ add_executable(qalsh_chamfer
     src/ann_searcher.cc
     src/b_plus_tree.cc
     src/command.cc
-    src/dataset_metadata.cc
     src/estimator.cc
     src/main.cc
     src/point_set.cc

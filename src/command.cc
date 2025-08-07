@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "b_plus_tree.h"
-#include "dataset_metadata.h"
 #include "estimator.h"
 #include "point_set.h"
 #include "utils.h"
@@ -27,8 +26,7 @@ IndexCommand::IndexCommand(double approximation_ratio, unsigned int page_size, s
 
 void IndexCommand::Execute() {
     // Read dataset metadata.
-    DatasetMetadata dataset_metadata;
-    dataset_metadata.Load(dataset_directory_ / "metadata.json");
+    DatasetMetadata dataset_metadata = Utils::LoadDatasetMetadata(dataset_directory_ / "metadata.json");
 
     // Begin to record the time and memory.
     auto start = std::chrono::high_resolution_clock::now();
@@ -136,8 +134,7 @@ EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, std::file
 void EstimateCommand::Execute() {
     // Load dataset metadata
     spdlog::info("Loading dataset metadata...");
-    DatasetMetadata dataset_metadata;
-    dataset_metadata.Load(dataset_directory_ / "metadata.json");
+    DatasetMetadata dataset_metadata = Utils::LoadDatasetMetadata(dataset_directory_ / "metadata.json");
 
     // Construct point set metadata
     PointSetMetadata point_set_metadata_a = {

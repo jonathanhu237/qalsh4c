@@ -1,6 +1,7 @@
 #include "utils.h"
 
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -27,6 +28,28 @@ double Utils::DotProduct(const Point &pt1, const Point &pt2) {
     Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
     return v1.dot(v2);
+}
+
+DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_path) {
+    DatasetMetadata metadata;
+
+    if (!std::filesystem::exists(file_path)) {
+        spdlog::error("The dataset metadata file does not exists, file path: {}", file_path.string());
+    }
+
+    std::ifstream ifs(file_path);
+    nlohmann::json json_metadata = nlohmann::json::parse(ifs);
+
+    try {
+        json_metadata.at("num_points_a").get_to(metadata.num_points_a);
+        json_metadata.at("num_points_b").get_to(metadata.num_points_b);
+        json_metadata.at("num_dimensions").get_to(metadata.num_dimensions);
+        json_metadata.at("chamfer_distance").get_to(metadata.chamfer_distance);
+    } catch (nlohmann::json::exception &e) {
+        spdlog::error("JSON format error: {}", e.what());
+    }
+
+    return metadata;
 }
 
 unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {

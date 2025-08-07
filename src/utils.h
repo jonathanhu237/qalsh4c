@@ -6,11 +6,13 @@
 #include <Eigen/Eigen>
 
 #include "point_set.h"
+#include "types.h"
 
 class Utils {
    public:
     static double L1Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
+    static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
     static double GetMemoryUsage();
 
