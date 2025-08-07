@@ -7,6 +7,8 @@
 #include <sstream>
 #include <string>
 
+#include "global.h"
+
 double Utils::L1Distance(const Point &pt1, const Point &pt2) {
     if (pt1.size() != pt2.size()) {
         spdlog::error("Vectors must be of the same size");
@@ -50,6 +52,67 @@ DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_pat
     }
 
     return metadata;
+}
+
+// NOLINTBEGIN(readability-magic-numbers)
+void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points) {
+    config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
+    double beta = Global::kNumCandidates / static_cast<double>(num_points);
+    config.error_probability = Global::kDefaultErrorProbability;
+
+    double term1 = std::sqrt(std::log(2.0 / beta));
+    double term2 = std::sqrt(std::log(1.0 / config.error_probability));
+    double p1 = 2.0 / std::numbers::pi_v<double> * atan(config.bucket_width / 2.0);
+    double p2 = 2.0 / std::numbers::pi_v<double> * atan(config.bucket_width / (2.0 * config.approximation_ratio));
+    double numerator = std::pow(term1 + term2, 2.0);
+    double denominator = 2.0 * std::pow(p1 - p2, 2.0);
+    config.num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
+
+    double eta = term1 / term2;
+    double alpha = (eta * p1 + p2) / (1 + eta);
+    config.collision_threshold = static_cast<unsigned int>(std::ceil(alpha * config.num_hash_tables));
+}
+// NOLINTEND(readability-magic-numbers)
+
+void Utils::SaveQalshConfig(QalshConfig &config, const std::filesystem::path &file_path) {
+    nlohmann::json metadata;
+    metadata["approximation_ratio"] = config.approximation_ratio;
+    metadata["bucket_width"] = config.bucket_width;
+    metadata["error_probability"] = config.error_probability;
+    metadata["num_hash_tables"] = config.num_hash_tables;
+    metadata["collision_threshold"] = config.collision_threshold;
+    metadata["page_size"] = config.page_size;
+
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open()) {
+        spdlog::error("Failed to open file for writing: {}", file_path.string());
+        return;
+    }
+
+    ofs << metadata.dump(4);
+}
+
+QalshConfig Utils::LoadQalshConfig(const std::filesystem::path &file_path) {
+    if (!std::filesystem::exists(file_path)) {
+        spdlog::error("The QALSH config file does not exists, file path: {}", file_path.string());
+    }
+
+    std::ifstream ifs(file_path);
+    nlohmann::json metadata = nlohmann::json::parse(ifs);
+    QalshConfig config;
+
+    try {
+        metadata.at("approximation_ratio").get_to(config.approximation_ratio);
+        metadata.at("bucket_width").get_to(config.bucket_width);
+        metadata.at("error_probability").get_to(config.error_probability);
+        metadata.at("num_hash_tables").get_to(config.num_hash_tables);
+        metadata.at("collision_threshold").get_to(config.collision_threshold);
+        metadata.at("page_size").get_to(config.page_size);
+    } catch (nlohmann::json::exception &e) {
+        spdlog::error("JSON format error: {}", e.what());
+    }
+
+    return config;
 }
 
 unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {

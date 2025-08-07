@@ -13,6 +13,9 @@ class Utils {
     static double L1Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
     static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
+    static void RegularizeQalshConfig(QalshConfig &config, unsigned int num_points);
+    static void SaveQalshConfig(QalshConfig &config, const std::filesystem::path &file_path);
+    static QalshConfig LoadQalshConfig(const std::filesystem::path &file_path);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
     static double GetMemoryUsage();
 

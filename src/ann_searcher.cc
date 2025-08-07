@@ -17,7 +17,6 @@
 
 #include "global.h"
 #include "point_set.h"
-#include "qalsh_config.h"
 #include "qalsh_hash_table.h"
 #include "types.h"
 #include "utils.h"
@@ -68,7 +67,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         base_set_ = std::make_unique<InMemoryPointSet>(point_set_metadata);
 
         // Regularize QALSH config.
-        qalsh_config_.Regularize(point_set_metadata.num_points);
+        Utils::RegularizeQalshConfig(qalsh_config_, point_set_metadata.num_points);
 
         // Generate dot vectors.
         dot_vectors_.resize(qalsh_config_.num_hash_tables);
@@ -98,7 +97,7 @@ void QalshAnnSearcher::Init(PointSetMetadata point_set_metadata, bool in_memory)
         std::filesystem::path parent_directory = point_set_metadata.file_path.parent_path();
         std::string stem = point_set_metadata.file_path.stem();
         std::filesystem::path index_directory = parent_directory / "index" / stem;
-        qalsh_config_.Load(index_directory / "config.json");
+        qalsh_config_ = Utils::LoadQalshConfig(index_directory / "config.json");
 
         // Load dot vectors.
         std::ifstream ifs(index_directory / "dot_vectors.bin");

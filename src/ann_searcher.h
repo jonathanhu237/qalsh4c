@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "point_set.h"
-#include "qalsh_config.h"
 #include "qalsh_hash_table.h"
 
 class AnnSearcher {

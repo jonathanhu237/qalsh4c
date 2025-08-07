@@ -7,7 +7,6 @@
 
 #include "estimator.h"
 #include "point_set.h"
-#include "qalsh_config.h"
 
 class Command {
    public:

@@ -58,7 +58,7 @@ void IndexCommand::Execute() {
 void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
-    qalsh_config_.Regularize(point_set_metadata.num_points);
+    Utils::RegularizeQalshConfig(qalsh_config_, point_set_metadata.num_points);
 
     // Initialize the point set reader.
     auto point_set = std::make_unique<DiskPointSet>(point_set_metadata);
@@ -71,7 +71,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Save the QALSH configuration.
     spdlog::info("Saving QALSH configuration...");
-    qalsh_config_.Save(index_directory / "config.json");
+    Utils::SaveQalshConfig(qalsh_config_, index_directory / "config.json");
 
     // Create the B+ tree directory.
     std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";
