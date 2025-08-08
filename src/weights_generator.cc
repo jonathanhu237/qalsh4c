@@ -24,8 +24,8 @@ std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // --------------------------------------------------
 // InMemoryQalshWeightsGenerator Implementation
 // --------------------------------------------------
-InMemoryQalshWeightsGenerator::InMemoryQalshWeightsGenerator(double approximation_ratio)
-    : approximation_ratio_(approximation_ratio) {}
+InMemoryQalshWeightsGenerator::InMemoryQalshWeightsGenerator(double approximation_ratio, double error_probability)
+    : approximation_ratio_(approximation_ratio), error_probability_(error_probability) {}
 
 std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                             const PointSetMetadata& to_metadata, bool use_cache) {
@@ -48,7 +48,8 @@ std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetada
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH (In Memory)...");
 
-    std::unique_ptr<AnnSearcher> ann_searcher = std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio_);
+    std::unique_ptr<AnnSearcher> ann_searcher =
+        std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio_, error_probability_);
     ann_searcher->Init(to_metadata);
 
     std::vector<Point> base_points =
