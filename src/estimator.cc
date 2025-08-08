@@ -56,11 +56,12 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // SamplingEstimator Implementation
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     double delta_tolerance, bool use_cache)
-    : weights_generator_(std::move(weights_generator)),
-      num_samples_(num_samples),
-      delta_threshold_(delta_tolerance),
-      use_cache_(use_cache) {}
+                                     double error_probability, double approximation_ratio, bool use_cache)
+    : weights_generator_(std::move(weights_generator)), num_samples_(num_samples), use_cache_(use_cache) {
+    if (num_samples_ == 0) {
+        num_samples_ = static_cast<unsigned int>(std::ceil(1 / (error_probability * (approximation_ratio - 1))));
+    }
+}
 
 double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
     // Check the ANN searcher
@@ -84,9 +85,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::unique_ptr<AnnSearcher> ann_searcher;
 
     auto processing_loop = [&](auto&& get_point_by_id) {
-        unsigned int cnt = 0;
-        while (true) {
-            cnt++;
+        for (unsigned int cnt = 0; cnt < num_samples_; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
             double prev_estimation = estimation;
             estimation = ((prev_estimation * (cnt - 1)) +
@@ -101,14 +100,6 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             }
             if (cnt > 1) {
                 spdlog::debug("Number of samples: {}, Estimation Delta: {:.4f}, ", cnt, estimation_delta);
-            }
-
-            // Terminate conditions
-            if (num_samples_ != 0 && cnt >= num_samples_) {
-                break;
-            }
-            if (num_samples_ == 0 && estimation_delta <= delta_threshold_) {
-                break;
             }
         }
     };

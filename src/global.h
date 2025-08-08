@@ -12,7 +12,6 @@ class Global {
     static constexpr double kDefaultApproximationRatio = 2.0;
     static constexpr unsigned int kNumCandidates = 100;
     static constexpr unsigned int kScanSize = 128;
-    static constexpr double kDefaultDeltaTolerance = 0.01;
 };
 
 #endif

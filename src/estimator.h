@@ -24,13 +24,12 @@ class AnnEstimator : public Estimator {
 class SamplingEstimator : public Estimator {
    public:
     SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                      double delta_tolerance, bool use_cache);
+                      double error_probability, double approximation_ratio, bool use_cache);
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) override;
 
    private:
     std::unique_ptr<WeightsGenerator> weights_generator_;
     unsigned int num_samples_;
-    double delta_threshold_;
     bool use_cache_;
 };
 
