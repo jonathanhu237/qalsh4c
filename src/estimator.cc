@@ -96,7 +96,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         }
 
         spdlog::info("Sampling {} points from the weights...", num_samples_);
-        for (unsigned int cnt = 0; cnt < num_samples_; cnt++) {
+        for (unsigned int cnt = 1; cnt <= num_samples_; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
             double prev_estimation = estimation;
             estimation = ((prev_estimation * (cnt - 1)) +
@@ -107,10 +107,11 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                                           : std::abs(estimation - prev_estimation) / prev_estimation;
 
             if (cnt == 1) {
-                spdlog::debug("Number of samples: {}", cnt);
+                spdlog::debug("Number of samples: {}, Estimation: {}", cnt, estimation);
             }
             if (cnt > 1) {
-                spdlog::debug("Number of samples: {}, Estimation Delta: {:.4f}, ", cnt, estimation_delta);
+                spdlog::debug("Number of samples: {}, Estimation: {}, Estimation Delta: {:.4f}, ", cnt, estimation,
+                              estimation_delta);
             }
         }
     };
