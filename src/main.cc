@@ -46,6 +46,10 @@ int main(int argc, char** argv) {
     index->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
+    double error_probability{0.0};
+    index->add_option("-e,--error-probability", error_probability, "Error probability")
+        ->default_val(Global::kDefaultErrorProbability);
+
     unsigned int page_size{0};
     index
         ->add_option("-B,--page-size", page_size,
@@ -55,8 +59,9 @@ int main(int argc, char** argv) {
     std::filesystem::path dataset_directory;
     index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
-    index->callback(
-        [&]() { command = std::make_unique<IndexCommand>(approximation_ratio, page_size, dataset_directory); });
+    index->callback([&]() {
+        command = std::make_unique<IndexCommand>(approximation_ratio, error_probability, page_size, dataset_directory);
+    });
 
     // ------------------------------
     // estimate
@@ -113,7 +118,6 @@ int main(int argc, char** argv) {
     qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    double error_probability{0.0};
     qalsh_ann->add_option("-e,--error-probability", error_probability, "Error probability")
         ->default_val(Global::kDefaultErrorProbability);
 

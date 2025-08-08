@@ -17,8 +17,10 @@
 // --------------------------------------------------
 // IndexCommand Implementation
 // --------------------------------------------------
-IndexCommand::IndexCommand(double approximation_ratio, unsigned int page_size, std::filesystem::path dataset_directory)
+IndexCommand::IndexCommand(double approximation_ratio, double error_probability, unsigned int page_size,
+                           std::filesystem::path dataset_directory)
     : approximation_ratio_(approximation_ratio),
+      error_probability_(error_probability),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
       gen_(std::random_device{}()) {}
@@ -57,7 +59,8 @@ void IndexCommand::Execute() {
 void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
-    QalshConfig config{.approximation_ratio = approximation_ratio_, .page_size = page_size_};
+    QalshConfig config{
+        .approximation_ratio = approximation_ratio_, .error_probability = error_probability_, .page_size = page_size_};
     Utils::RegularizeQalshConfig(config, point_set_metadata.num_points);
 
     // Print the QalshConfig parameters.
