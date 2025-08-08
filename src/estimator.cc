@@ -17,6 +17,7 @@
 #include "global.h"
 #include "types.h"
 #include "utils.h"
+#include "weights_generator.h"
 
 // --------------------------------------------------
 // AnnEstimator Implementation
@@ -85,6 +86,16 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::unique_ptr<AnnSearcher> ann_searcher;
 
     auto processing_loop = [&](auto&& get_point_by_id) {
+        // We should update the num_samples_ if the ann_searcher is DiskQalshWeightsGenerator
+        if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<DiskQalshWeightsGenerator*>(weights_generator_.get())) {
+            std::filesystem::path qalsh_config_path =
+                to.file_path.parent_path() / "index" / to.file_path.stem() / "config.json";
+            QalshConfig config = Utils::LoadQalshConfig(qalsh_config_path);
+            num_samples_ =
+                static_cast<unsigned int>(std::ceil(1 / (config.error_probability * (config.approximation_ratio - 1))));
+        }
+
+        spdlog::info("Sampling {} points from the weights...", num_samples_);
         for (unsigned int cnt = 0; cnt < num_samples_; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
             double prev_estimation = estimation;
