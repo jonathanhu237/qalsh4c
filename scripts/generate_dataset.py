@@ -4,9 +4,8 @@ import time
 from pathlib import Path
 
 import numpy as np
-from chamfer_distance import chamfer_distance
-from utils import create_metadata, save_binary_data, setup_logging
 from sklearn.mixture import GaussianMixture
+from utils import chamfer_distance, create_metadata, save_binary_data, setup_logging
 
 
 def generate_point_set(
