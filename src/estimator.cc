@@ -56,7 +56,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // SamplingEstimator Implementation
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     double error_probability, double approximation_ratio, bool use_cache)
+                                     double approximation_ratio, double error_probability, bool use_cache)
     : weights_generator_(std::move(weights_generator)), num_samples_(num_samples), use_cache_(use_cache) {
     if (num_samples_ == 0) {
         num_samples_ = static_cast<unsigned int>(std::ceil(1 / (error_probability * (approximation_ratio - 1))));

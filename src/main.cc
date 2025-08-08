@@ -130,13 +130,13 @@ int main(int argc, char** argv) {
     unsigned int num_samples{0};
     sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation");
 
-    double error_probability{0.0};
-    sampling->add_option("-e,--error-probability", error_probability, "Error probability for the algorithm")
-        ->default_val(Global::kDefaultErrorProbability);
-
     sampling
         ->add_option("-c,--approximation-ratio", approximation_ratio, "Approximation ratio for the Chamfer distance")
         ->default_val(Global::kDefaultApproximationRatio);
+
+    double error_probability{0.0};
+    sampling->add_option("-e,--error-probability", error_probability, "Error probability for the algorithm")
+        ->default_val(Global::kDefaultErrorProbability);
 
     bool use_cache{false};
     sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
@@ -149,8 +149,8 @@ int main(int argc, char** argv) {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
-        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, error_probability,
-                                                        approximation_ratio, use_cache);
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, approximation_ratio,
+                                                        error_probability, use_cache);
     });
 
     // ------------------------------

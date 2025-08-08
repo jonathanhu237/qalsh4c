@@ -24,7 +24,7 @@ class AnnEstimator : public Estimator {
 class SamplingEstimator : public Estimator {
    public:
     SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                      double error_probability, double approximation_ratio, bool use_cache);
+                      double approximation_ratio, double error_probability, bool use_cache);
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) override;
 
    private:
