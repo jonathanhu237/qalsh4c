@@ -30,6 +30,8 @@ class SamplingEstimator : public Estimator {
    private:
     std::unique_ptr<WeightsGenerator> weights_generator_;
     unsigned int num_samples_;
+    double approximation_ratio_;
+    double error_probability_;
     bool use_cache_;
 };
 
