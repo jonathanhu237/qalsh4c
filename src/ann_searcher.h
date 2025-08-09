@@ -53,7 +53,7 @@ class DiskLinearScanAnnSearcher : public AnnSearcher {
 // ---------------------------------------------
 class InMemoryQalshAnnSearcher : public AnnSearcher {
    public:
-    InMemoryQalshAnnSearcher(double approximation_ratio, double error_probability);
+    InMemoryQalshAnnSearcher(double approximation_ratio);
     void Init(const PointSetMetadata& base_metadata) override;
     AnnResult Search(const Point& query_point) override;
 

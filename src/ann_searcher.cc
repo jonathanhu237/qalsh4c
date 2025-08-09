@@ -70,9 +70,8 @@ AnnResult DiskLinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // InMemoryQalshAnnSearcher Implementation
 // ---------------------------------------------
-InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio, double error_probability) {
+InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio) {
     qalsh_config_.approximation_ratio = approximation_ratio;
-    qalsh_config_.error_probability = error_probability;
 }
 
 void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {

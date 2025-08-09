@@ -46,10 +46,6 @@ int main(int argc, char** argv) {
     index->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    double error_probability{0.0};
-    index->add_option("-e,--error-probability", error_probability, "Error probability")
-        ->default_val(Global::kDefaultErrorProbability);
-
     unsigned int page_size{0};
     index
         ->add_option("-B,--page-size", page_size,
@@ -59,9 +55,8 @@ int main(int argc, char** argv) {
     std::filesystem::path dataset_directory;
     index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
-    index->callback([&]() {
-        command = std::make_unique<IndexCommand>(approximation_ratio, error_probability, page_size, dataset_directory);
-    });
+    index->callback(
+        [&]() { command = std::make_unique<IndexCommand>(approximation_ratio, page_size, dataset_directory); });
 
     // ------------------------------
     // estimate
@@ -118,13 +113,10 @@ int main(int argc, char** argv) {
     qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_ann->add_option("-e,--error-probability", error_probability, "Error probability")
-        ->default_val(Global::kDefaultErrorProbability);
-
     // If in_memory = false, the setting of approximation_ratio would not have any effect.
     qalsh_ann->callback([&] {
         if (in_memory) {
-            ann_searcher = std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio, error_probability);
+            ann_searcher = std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio);
         } else {
             ann_searcher = std::make_unique<DiskQalshAnnSearcher>();
         }
@@ -142,6 +134,7 @@ int main(int argc, char** argv) {
         ->add_option("-c,--approximation-ratio", approximation_ratio, "Approximation ratio for the Chamfer distance")
         ->default_val(Global::kDefaultApproximationRatio);
 
+    double error_probability{0.0};
     sampling->add_option("-e,--error-probability", error_probability, "Error probability for the algorithm")
         ->default_val(Global::kDefaultErrorProbability);
 
@@ -171,14 +164,9 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
 
-    qalsh_sampling->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
-        ->default_val(Global::kDefaultApproximationRatio);
-
-    qalsh_sampling->add_option("-e,--error-probability", error_probability, "Error probability");
-
     qalsh_sampling->callback([&]() {
         if (in_memory) {
-            weights_generator = std::make_unique<InMemoryQalshWeightsGenerator>(approximation_ratio, error_probability);
+            weights_generator = std::make_unique<InMemoryQalshWeightsGenerator>(approximation_ratio);
         } else {
             weights_generator = std::make_unique<DiskQalshWeightsGenerator>();
         }

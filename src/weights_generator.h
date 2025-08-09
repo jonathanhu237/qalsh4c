@@ -30,13 +30,12 @@ class UniformWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 class InMemoryQalshWeightsGenerator : public WeightsGenerator {
    public:
-    InMemoryQalshWeightsGenerator(double approximation_ratio, double error_probability);
+    InMemoryQalshWeightsGenerator(double approximation_ratio);
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  bool use_cache) override;
 
    private:
     double approximation_ratio_;
-    double error_probability_;
 };
 
 // --------------------------------------------------

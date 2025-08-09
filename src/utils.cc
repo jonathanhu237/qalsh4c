@@ -82,6 +82,7 @@ Point Utils::ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned
 void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points) {
     config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
     double beta = Global::kNumCandidates / static_cast<double>(num_points);
+    config.error_probability = Global::kDefaultErrorProbability;
 
     double term1 = std::sqrt(std::log(2.0 / beta));
     double term2 = std::sqrt(std::log(1.0 / config.error_probability));
