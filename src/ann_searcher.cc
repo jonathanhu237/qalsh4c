@@ -267,9 +267,10 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
         "\tBucket Width: {}\n"
         "\tError Probability: {}\n"
         "\tNumber of Hash Tables: {}\n"
-        "\tCollision Threshold: {}",
+        "\tCollision Threshold: {}\n"
+        "\tPage Size: {}",
         qalsh_config_.approximation_ratio, qalsh_config_.bucket_width, qalsh_config_.error_probability,
-        qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold);
+        qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold, qalsh_config_.page_size);
 
     // Initialize the buffer.
     buffer_.clear();
