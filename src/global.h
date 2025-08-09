@@ -8,7 +8,8 @@ class Global {
    public:
     static constexpr double kEpsilon = 1e-6;
     static constexpr unsigned int kDefaultPageSize = 4096;
-    static constexpr double kDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
+    static constexpr double kQalshDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
+    static constexpr double kSamplingDefaultErrorProbability = 0.01;
     static constexpr double kDefaultApproximationRatio = 2.0;
     static constexpr unsigned int kNumCandidates = 100;
     static constexpr unsigned int kScanSize = 128;

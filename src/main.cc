@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
 
     double error_probability{0.0};
     sampling->add_option("-e,--error-probability", error_probability, "Error probability for the algorithm")
-        ->default_val(Global::kDefaultErrorProbability);
+        ->default_val(Global::kSamplingDefaultErrorProbability);
 
     bool use_cache{false};
     sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
