@@ -7,14 +7,12 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
-#include <limits>
 #include <memory>
 #include <numeric>
 #include <utility>
 #include <vector>
 
 #include "ann_searcher.h"
-#include "global.h"
 #include "types.h"
 #include "utils.h"
 #include "weights_generator.h"
@@ -102,21 +100,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         spdlog::info("Sampling {} points from the weights...", num_samples_);
         for (unsigned int cnt = 1; cnt <= num_samples_; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
-            double prev_estimation = estimation;
-            estimation = ((prev_estimation * (cnt - 1)) +
-                          (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id])) /
-                         cnt;
-            double estimation_delta = prev_estimation <= Global::kEpsilon
-                                          ? std::numeric_limits<double>::max()
-                                          : std::abs(estimation - prev_estimation) / prev_estimation;
-
-            if (cnt == 1) {
-                spdlog::debug("Number of samples: {}, Estimation: {}", cnt, estimation);
-            }
-            if (cnt > 1) {
-                spdlog::debug("Number of samples: {}, Estimation: {}, Estimation Delta: {:.4f}, ", cnt, estimation,
-                              estimation_delta);
-            }
+            estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
         }
     };
 
@@ -136,5 +120,5 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
     }
 
-    return estimation;
+    return estimation / num_samples_;
 }
