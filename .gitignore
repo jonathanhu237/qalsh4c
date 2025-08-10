@@ -6,11 +6,6 @@ build/*
 
 # data
 data/*
-!data/synthetics/
-data/synthetics/*
-!data/synthetics/A.bin
-!data/synthetics/B.bin
-!data/synthetics/metadata.json
 !data/federalist/
 data/federalist/*
 !data/federalist/A.bin
