@@ -4,49 +4,55 @@ import time
 from pathlib import Path
 
 import numpy as np
+from sklearn.mixture import GaussianMixture
 from utils import chamfer_distance, create_metadata, save_binary_data, setup_logging
 
 
 def generate_point_set(
     num_points: int,
-    num_dimension: int,
+    num_dimensions: int,
     outlier_fraction: float,
-    offset: float,
-    spread: float,
+    outlier_scale: float,
 ) -> np.ndarray:
-    """Generate a point set with specified parameters using two Gaussian distributions."""
+    """Generate a point set with specified parameters using Gaussian Mixture Model."""
+    total_components = 2  # 1 core component + 1 outlier component
     logging.info(
         f"Generating {num_points} points with 1 core component and {outlier_fraction * 100}% outliers."
     )
 
-    # Create two center points
-    # c1 should be located at the origin
-    c1 = np.zeros(num_dimension)
+    # Create a Gaussian Mixture Model
+    gmm = GaussianMixture(
+        n_components=total_components, random_state=np.random.randint(0, 10000)
+    )
 
-    # c2 should be located such that its L1 distance from c1 is exactly offset
-    # Generate a random direction vector, normalize to unit L1 norm, then scale by offset
-    c2_direction = np.random.randn(num_dimension)
-    c2_direction = np.abs(c2_direction)  # Make all components positive
-    l1_norm = np.sum(c2_direction)  # Calculate L1 norm
-    c2_direction = c2_direction / l1_norm  # Normalize to unit L1 norm
-    c2 = c2_direction * offset  # Scale to desired L1 distance
+    # Generate random means for each component within a reasonable range
+    means = np.random.uniform(-512, 512, (total_components, num_dimensions))
 
-    # Calculate number of points for each distribution
-    num_core_points = int((1 - outlier_fraction) * num_points)
-    num_outlier_points = num_points - num_core_points
+    # Generate one core component covariance
+    covariances = []
+    A = np.random.randn(num_dimensions, num_dimensions)
+    core_cov = np.dot(A, A.T) + np.eye(num_dimensions)
+    covariances.append(core_cov)
 
-    # Generate points sampled from a Gaussian distribution centered at c1
-    core_points = np.random.normal(c1, spread, (num_core_points, num_dimension))
+    # Create a scaled-up covariance for the outlier component
+    outlier_cov = core_cov * outlier_scale
+    covariances.append(outlier_cov)
+    covariances = np.array(covariances)
 
-    # Generate points sampled from a Gaussian distribution centered at c2
-    outlier_points = np.random.normal(c2, spread, (num_outlier_points, num_dimension))
+    # Generate weights based on outlier fraction
+    core_weight = 1 - outlier_fraction  # Weight for the single core component
+    weights = np.array([core_weight, outlier_fraction])  # [core_weight, outlier_weight]
 
-    # Combine the points
-    points = np.vstack([core_points, outlier_points])
+    # Set the GMM parameters
+    gmm.means_ = means
+    gmm.covariances_ = np.array(covariances)
+    gmm.weights_ = weights
+    gmm.precisions_cholesky_ = np.array(
+        [np.linalg.cholesky(np.linalg.inv(cov)).T for cov in covariances]
+    )
 
-    # Shuffle the points to mix core and outlier points
-    np.random.shuffle(points)
-
+    # Generate samples
+    points, _ = gmm.sample(num_points)
     points = points.astype(np.double)
     return points
 
@@ -61,40 +67,35 @@ def main():
         "--num-points-a",
         type=int,
         default=1000,
-        help="Number of points in the first point set (A)",
+        help="Number of points in the first point set (A) (default: 1000)",
     )
     parser.add_argument(
         "-b",
         "--num-points-b",
         type=int,
         default=1000,
-        help="Number of points in the second point set (B)",
+        help="Number of points in the second point set (B) (default: 1000)",
     )
     parser.add_argument(
         "-d",
         "--num-dimensions",
         type=int,
         default=256,
-        help="Number of dimensions for the point sets",
+        help="Number of dimensions for the point sets (default: 256)",
     )
     parser.add_argument(
         "-f",
-        "--outlier-fraction",
+        "--outlier_fraction",
         type=float,
         default=0.1,
-        help="Fraction of outliers in the dataset",
+        help="Fraction of outliers in the dataset (default: 0.1)",
     )
     parser.add_argument(
-        "--offset",
+        "-s",
+        "--outlier-scale",
         type=float,
-        default=1024.0,
-        help="L1 distance between the two center points",
-    )
-    parser.add_argument(
-        "--spread",
-        type=float,
-        default=16.0,
-        help="Standard deviation for the Gaussian distributions",
+        default=4096,
+        help="Scale factor for the outlier covariance (default: 4096)",
     )
     parser.add_argument(
         "-o",
@@ -136,8 +137,7 @@ def main():
         args.num_points_a,
         args.num_dimensions,
         args.outlier_fraction,
-        args.offset,
-        args.spread,
+        args.outlier_scale,
     )
 
     logging.info("Generating point set B...")
@@ -145,8 +145,7 @@ def main():
         args.num_points_b,
         args.num_dimensions,
         args.outlier_fraction,
-        args.offset,
-        args.spread,
+        args.outlier_scale,
     )
 
     # Save binary files
@@ -177,8 +176,7 @@ def main():
     A.bin: {A.shape[0]} points x {A.shape[1]} dimensions
     B.bin: {B.shape[0]} points x {B.shape[1]} dimensions
     metadata.json: Chamfer distance = {chamfer_dist:.6f}
-    Core component: {100 * (1 - args.outlier_fraction):.1f}% of points
-    Outlier component: {100 * args.outlier_fraction:.1f}% of points""")
+    GMM components: 1 core + 1 outlier""")
 
 
 if __name__ == "__main__":
