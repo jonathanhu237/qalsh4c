@@ -343,6 +343,8 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                     LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
                 lefts.emplace_back(
                     SearchRecord{.leaf_node = prev_leaf_node, .index = prev_leaf_node->num_entries_ - 1});
+            } else {
+                lefts.emplace_back(std::nullopt);
             }
         } else {
             lefts.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index - 1)});
@@ -354,6 +356,8 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                 std::shared_ptr<LeafNode> next_leaf_node =
                     LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
                 rights.emplace_back(SearchRecord{.leaf_node = next_leaf_node, .index = 0});
+            } else {
+                rights.emplace_back(std::nullopt);
             }
         } else {
             rights.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index)});
