@@ -69,15 +69,17 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Update the num_samples_
-    if (num_samples_ == 0) {
+    unsigned int updated_num_samples = num_samples_;
+    if (updated_num_samples == 0) {
         if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<DiskQalshWeightsGenerator*>(weights_generator_.get())) {
             std::filesystem::path qalsh_config_path =
                 to.file_path.parent_path() / "index" / to.file_path.stem() / "config.json";
             QalshConfig config = Utils::LoadQalshConfig(qalsh_config_path);
-            num_samples_ =
+            updated_num_samples =
                 static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (config.approximation_ratio - 1))));
         } else {
-            num_samples_ = static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (approximation_ratio_ - 1))));
+            updated_num_samples =
+                static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (approximation_ratio_ - 1))));
         }
     }
 
@@ -97,8 +99,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::unique_ptr<AnnSearcher> ann_searcher;
 
     auto processing_loop = [&](auto&& get_point_by_id) {
-        spdlog::info("Sampling {} points from the weights...", num_samples_);
-        for (unsigned int cnt = 1; cnt <= num_samples_; cnt++) {
+        spdlog::info("Sampling {} points from the weights...", updated_num_samples);
+        for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
             estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
         }
@@ -120,5 +122,5 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
     }
 
-    return estimation / num_samples_;
+    return estimation / updated_num_samples;
 }
