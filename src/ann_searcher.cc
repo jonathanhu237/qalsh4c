@@ -44,6 +44,9 @@ AnnResult InMemoryLinearScanAnnSearcher::Search(const Point& query_point) {
 // DiskLinearScanAnnSearcher Definition
 // ---------------------------------------------
 void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata) {
+    if (base_file_.is_open()) {
+        base_file_.close();
+    }
     base_file_.open(base_metadata.file_path, std::ios::binary);
     if (!base_file_.is_open()) {
         spdlog::error("Failed to open base file: {}", base_metadata.file_path.string());
@@ -247,6 +250,9 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     // Open the base file.
+    if (base_file_.is_open()) {
+        base_file_.close();
+    }
     base_file_.open(base_metadata.file_path, std::ios::binary);
     if (!base_file_.is_open()) {
         spdlog::error("Failed to open base file: {}", base_metadata.file_path.string());
