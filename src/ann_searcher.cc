@@ -507,8 +507,6 @@ std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifs
     size_t offset = 0;
     auto root_page_num = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
     auto level = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
-    [[maybe_unused]] auto internal_node_order = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
-    [[maybe_unused]] auto leaf_node_order = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
 
     unsigned int current_level = level;
     unsigned int next_page_num = root_page_num;

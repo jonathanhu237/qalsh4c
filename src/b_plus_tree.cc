@@ -176,8 +176,6 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
 
     Utils::WriteToBuffer(buffer, offset, root_page_num_);
     Utils::WriteToBuffer(buffer, offset, level_);
-    Utils::WriteToBuffer(buffer, offset, internal_node_order_);
-    Utils::WriteToBuffer(buffer, offset, leaf_node_order_);
 
     WritePage(0, buffer);
 }
