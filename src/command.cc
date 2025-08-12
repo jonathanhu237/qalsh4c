@@ -31,17 +31,17 @@ void IndexCommand::Execute() {
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Utils::GetMemoryUsage();
 
-    // Build index for point set A.
-    BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
-                                .num_points = dataset_metadata.num_points_a,
-                                .num_dimensions = dataset_metadata.num_dimensions},
-               dataset_directory_ / "index" / "A");
-
     // Build index for point set B.
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "B.bin",
                                 .num_points = dataset_metadata.num_points_b,
                                 .num_dimensions = dataset_metadata.num_dimensions},
                dataset_directory_ / "index" / "B");
+
+    // Build index for point set A.
+    BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
+                                .num_points = dataset_metadata.num_points_a,
+                                .num_dimensions = dataset_metadata.num_dimensions},
+               dataset_directory_ / "index" / "A");
 
     // End to record the time and memory.
     auto end = std::chrono::high_resolution_clock::now();
