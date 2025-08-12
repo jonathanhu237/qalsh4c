@@ -105,8 +105,8 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
 
         size_t chunk_end = std::min(data_idx + leaf_node_order_, data.size());
         for (size_t i = data_idx; i < chunk_end; i++) {
-            new_leaf_node.keys_.push_back(data[i].dot_product);
-            new_leaf_node.values_.push_back(data[i].point_id);
+            new_leaf_node.keys_.emplace_back(data[i].dot_product);
+            new_leaf_node.values_.emplace_back(data[i].point_id);
             new_leaf_node.num_entries_++;
         }
         data_idx = chunk_end;
