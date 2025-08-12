@@ -142,14 +142,14 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
             InternalNode new_internal_node(internal_node_order_);
 
             // First pointer in the node has no preceding key
-            new_internal_node.pointers_.push_back(parent_level_entries[entry_idx].page_num);
+            new_internal_node.pointers_.emplace_back(parent_level_entries[entry_idx].page_num);
             new_internal_node.num_children_++;
 
             size_t chunk_end = std::min(entry_idx + internal_node_order_, parent_level_entries.size());
 
             for (size_t i = entry_idx + 1; i < chunk_end; i++) {
-                new_internal_node.keys_.push_back(parent_level_entries[i].key);
-                new_internal_node.pointers_.push_back(parent_level_entries[i].page_num);
+                new_internal_node.keys_.emplace_back(parent_level_entries[i].key);
+                new_internal_node.pointers_.emplace_back(parent_level_entries[i].page_num);
                 new_internal_node.num_children_++;
             }
             entry_idx = chunk_end;
