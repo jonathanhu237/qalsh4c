@@ -86,6 +86,7 @@ BPlusTreeBulkLoader::BPlusTreeBulkLoader(const std::filesystem::path& file_path,
                                                      (sizeof(double) + sizeof(unsigned int)));
     leaf_node_order_ =
         static_cast<unsigned int>((page_size - LeafNode::GetHeaderSize()) / (sizeof(double) + sizeof(unsigned int)));
+    buffer_.resize(page_size_, 0);
 }
 
 void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) {
@@ -114,9 +115,8 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
         // Serialize the leaf node and write it to the file
         new_leaf_page_num = AllocatePage();
         new_leaf_node.next_leaf_page_num_ = (data_idx < data.size()) ? next_page_num_ : 0;
-        std::vector<char> buffer(page_size_, 0);
-        new_leaf_node.Serialize(buffer);
-        WritePage(new_leaf_page_num, buffer);
+        new_leaf_node.Serialize(buffer_);
+        WritePage(new_leaf_page_num);
 
         // Add entry to the parent level
         parent_level_entries.emplace_back(new_leaf_node.keys_.front(), new_leaf_page_num);
@@ -156,9 +156,8 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
 
             // Serialize the internal node and write it to the file
             new_internal_page_num = AllocatePage();
-            std::vector<char> buffer(page_size_, 0);
-            new_internal_node.Serialize(buffer);
-            WritePage(new_internal_page_num, buffer);
+            new_internal_node.Serialize(buffer_);
+            WritePage(new_internal_page_num);
 
             // Add entry to the next parent level
             next_parent_level_entries.emplace_back(separator_key_for_next_level, new_internal_page_num);
@@ -171,13 +170,12 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
     root_page_num_ = new_internal_page_num == 0 ? root_page_num_ : new_internal_page_num;
 
     // write the header
-    std::vector<char> buffer(page_size_, 0);
     size_t offset = 0;
 
-    Utils::WriteToBuffer(buffer, offset, root_page_num_);
-    Utils::WriteToBuffer(buffer, offset, level_);
+    Utils::WriteToBuffer(buffer_, offset, root_page_num_);
+    Utils::WriteToBuffer(buffer_, offset, level_);
 
-    WritePage(0, buffer);
+    WritePage(0);
 }
 
 unsigned int BPlusTreeBulkLoader::AllocatePage() {
@@ -191,7 +189,7 @@ unsigned int BPlusTreeBulkLoader::AllocatePage() {
     return new_page_num;
 }
 
-void BPlusTreeBulkLoader::WritePage(unsigned int page_num, const std::vector<char>& buffer) {
+void BPlusTreeBulkLoader::WritePage(unsigned int page_num) {
     ofs_.seekp(static_cast<std::streamoff>(page_num * page_size_));
-    ofs_.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    ofs_.write(buffer_.data(), static_cast<std::streamsize>(buffer_.size()));
 }

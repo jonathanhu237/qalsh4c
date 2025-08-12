@@ -56,7 +56,7 @@ class BPlusTreeBulkLoader {
 
    private:
     unsigned int AllocatePage();
-    void WritePage(unsigned int page_num, const std::vector<char>& buffer);
+    void WritePage(unsigned int page_num);
 
     std::ofstream ofs_;
     unsigned int page_size_{0};
@@ -68,6 +68,9 @@ class BPlusTreeBulkLoader {
     unsigned int level_{0};
     unsigned int internal_node_order_{0};
     unsigned int leaf_node_order_{0};
+
+    // utils
+    std::vector<char> buffer_;
 };
 
 #endif
