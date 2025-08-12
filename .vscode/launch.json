@@ -10,9 +10,10 @@
             "name": "Debug QALSH ANN Estimator (In Memory)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
+                "--use-fixed-seed",
                 "estimate",
                 "-d",
-                "./data/gmm",
+                "./data/federalist",
                 "--in-memory",
                 "ann",
                 "qalsh"
@@ -26,8 +27,7 @@
             "name": "Debug QALSH Sampling Estimator (In Memory)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
-                "-l",
-                "debug",
+                "--use-fixed-seed",
                 "estimate",
                 "-d",
                 "./data/federalist",
@@ -44,8 +44,7 @@
             "name": "Debug QALSH Index",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
-                "-l",
-                "debug",
+                "--use-fixed-seed",
                 "index",
                 "-d",
                 "./data/federalist",
@@ -56,11 +55,26 @@
         {
             "type": "lldb-dap",
             "request": "launch",
+            "name": "Debug QALSH Ann Estimator (Disk)",
+            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "args": [
+                "--use-fixed-seed",
+                "estimate",
+                "-d",
+                "./data/federalist",
+                "ann",
+                "qalsh"
+            ],
+            "env": [],
+            "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "launch",
             "name": "Debug QALSH Sampling Estimator (Disk)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
-                "-l",
-                "debug",
+                "--use-fixed-seed",
                 "estimate",
                 "-d",
                 "./data/federalist",
