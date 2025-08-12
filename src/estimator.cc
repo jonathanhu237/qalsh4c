@@ -28,13 +28,13 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         spdlog::error("The ANN searcher is not set.");
     }
 
-    std::vector<double> distances(from.num_points, 0.0);
+    std::vector<double> distances;
     ann_searcher_->Init(to);
 
     if (in_memory) {
         std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-        for (unsigned int point_id = 0; point_id < query_set.size(); point_id++) {
-            distances[point_id] = ann_searcher_->Search(query_set[point_id]).distance;
+        for (const auto& point : query_set) {
+            distances.emplace_back(ann_searcher_->Search(point).distance);
         }
     } else {
         std::ifstream query_file(from.file_path, std::ios::binary);
@@ -43,8 +43,8 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
             return 0.0;
         }
         for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
-            distances[point_id] =
-                ann_searcher_->Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id)).distance;
+            distances.emplace_back(
+                ann_searcher_->Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id)).distance);
         }
     }
 
