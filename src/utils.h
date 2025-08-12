@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 
 #include <Eigen/Eigen>
+#include <random>
 
 #include "types.h"
 
@@ -20,6 +21,7 @@ class Utils {
     static QalshConfig LoadQalshConfig(const std::filesystem::path &file_path);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
     static double GetMemoryUsage();
+    static std::mt19937 CreateSeededGenerator();
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);

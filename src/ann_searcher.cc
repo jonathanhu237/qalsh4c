@@ -99,7 +99,7 @@ void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     // Generate dot vectors.
     dot_vectors_.clear();
     dot_vectors_.resize(qalsh_config_.num_hash_tables);
-    std::mt19937 gen(std::random_device{}());
+    std::mt19937 gen = Utils::CreateSeededGenerator();
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     auto num_dimensions = static_cast<unsigned int>(base_points_[0].size());
 

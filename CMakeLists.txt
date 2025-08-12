@@ -15,6 +15,7 @@ add_executable(qalsh_chamfer
     src/b_plus_tree.cc
     src/command.cc
     src/estimator.cc
+    src/global.cc
     src/main.cc
     src/utils.cc
     src/weights_generator.cc

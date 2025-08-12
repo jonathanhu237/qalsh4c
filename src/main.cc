@@ -27,6 +27,9 @@ int main(int argc, char** argv) {
         ->default_val("info")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
+    app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
+        ->default_str(Global::kUseFixedSeed ? "True" : "False");
+
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
     app.callback([&]() {

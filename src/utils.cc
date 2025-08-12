@@ -149,7 +149,7 @@ unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {
     cumulative_weights.reserve(weights.size());
     std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights));
 
-    static std::mt19937 gen(std::random_device{}());
+    static std::mt19937 gen = CreateSeededGenerator();
     std::uniform_real_distribution<> dis(0.0, total_sum);
     double random_value = dis(gen);
 
@@ -175,4 +175,11 @@ double Utils::GetMemoryUsage() {
 
     // Convert from KB to MB
     return static_cast<double>(memory_usage) / 1024.0;  // NOLINT: readability-magic-numbers
+}
+
+std::mt19937 Utils::CreateSeededGenerator() {
+    if (Global::kUseFixedSeed) {
+        return std::mt19937(Global::kDefaultSeed);
+    }
+    return std::mt19937(std::random_device{}());
 }

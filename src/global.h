@@ -13,6 +13,9 @@ class Global {
     static constexpr double kDefaultApproximationRatio = 2.0;
     static constexpr unsigned int kNumCandidates = 100;
     static constexpr unsigned int kScanSize = 128;
+
+    static bool kUseFixedSeed;
+    static constexpr unsigned int kDefaultSeed = 42;
 };
 
 #endif

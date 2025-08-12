@@ -21,7 +21,7 @@ IndexCommand::IndexCommand(double approximation_ratio, unsigned int page_size, s
     : approximation_ratio_(approximation_ratio),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
-      gen_(std::random_device{}()) {}
+      gen_(Utils::CreateSeededGenerator()) {}
 
 void IndexCommand::Execute() {
     // Read dataset metadata.
