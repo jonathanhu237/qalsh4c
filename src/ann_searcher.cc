@@ -128,15 +128,20 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
     std::vector<bool> visited(base_points_.size(), false);
     std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
 
+    unsigned int num_hash_tables = qalsh_config_.num_hash_tables;
+    unsigned int collision_threshold = qalsh_config_.collision_threshold;
+    double bucket_width = qalsh_config_.bucket_width;
+    double approximation_ratio = qalsh_config_.approximation_ratio;
+
     std::vector<double> keys;
-    keys.reserve(qalsh_config_.num_hash_tables);
+    keys.reserve(num_hash_tables);
     std::vector<std::optional<unsigned int>> lefts;
-    lefts.reserve(qalsh_config_.num_hash_tables);
+    lefts.reserve(num_hash_tables);
     std::vector<std::optional<unsigned int>> rights;
-    rights.reserve(qalsh_config_.num_hash_tables);
+    rights.reserve(num_hash_tables);
 
     // Initialize the keys, lefts and rights.
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+    for (unsigned int i = 0; i < num_hash_tables; i++) {
         keys.emplace_back(Utils::DotProduct(query_point, dot_vectors_[i]));
         auto it = std::ranges::lower_bound(hash_tables_[i], keys[i], {}, &DotProductPointIdPair::dot_product);
         auto index = static_cast<size_t>(std::distance(hash_tables_[i].begin(), it));
@@ -147,13 +152,13 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
 
     // c-ANN search
     double radius = 1.0;
-    double width = qalsh_config_.bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
+    double width = bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
 
     while (true) {
         unsigned int num_finished = 0;
-        std::vector<bool> finish(qalsh_config_.num_hash_tables, false);
-        while (num_finished < qalsh_config_.num_hash_tables) {
-            for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
+        std::vector<bool> finish(num_hash_tables, false);
+        while (num_finished < num_hash_tables) {
+            for (unsigned int i = 0; i < num_hash_tables; i++) {
                 if (finish[i]) {
                     continue;
                 }
@@ -170,7 +175,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                         left_finished = true;
                         break;
                     }
-                    if (!visited[point_id] && ++collision_count[point_id] >= qalsh_config_.collision_threshold) {
+                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{.distance = Utils::L1Distance(base_points_[point_id], query_point),
                                                      .point_id = point_id});
@@ -201,7 +206,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                         right_finish = true;
                         break;
                     }
-                    if (!visited[point_id] && ++collision_count[point_id] >= qalsh_config_.collision_threshold) {
+                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{.distance = Utils::L1Distance(base_points_[point_id], query_point),
                                                      .point_id = point_id});
@@ -222,22 +227,22 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
 
                 if (left_finished && right_finish) {
                     finish[i] = true;
-                    if (++num_finished == qalsh_config_.num_hash_tables) {
+                    if (++num_finished == num_hash_tables) {
                         break;
                     }
                 }
             }
-            if (num_finished == qalsh_config_.num_hash_tables || candidates.size() >= Global::kNumCandidates) {
+            if (num_finished == num_hash_tables || candidates.size() >= Global::kNumCandidates) {
                 break;
             }
         }
-        if (!candidates.empty() && (candidates.top().distance <= qalsh_config_.approximation_ratio * radius ||
+        if (!candidates.empty() && (candidates.top().distance <= approximation_ratio * radius ||
                                     candidates.size() >= Global::kNumCandidates)) {
             break;
         }
 
-        radius *= qalsh_config_.approximation_ratio;
-        width = qalsh_config_.bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
+        radius *= approximation_ratio;
+        width = bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
     }
 
     return candidates.empty() ? AnnResult{.distance = std::numeric_limits<double>::max(), .point_id = 0}
