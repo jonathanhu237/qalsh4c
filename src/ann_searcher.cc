@@ -142,8 +142,9 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
 
     // Initialize the keys, lefts and rights.
     for (unsigned int i = 0; i < num_hash_tables; i++) {
-        keys.emplace_back(Utils::DotProduct(query_point, dot_vectors_[i]));
-        auto it = std::ranges::lower_bound(hash_tables_[i], keys[i], {}, &DotProductPointIdPair::dot_product);
+        double table_key = Utils::DotProduct(query_point, dot_vectors_[i]);
+        keys.emplace_back(table_key);
+        auto it = std::ranges::lower_bound(hash_tables_[i], table_key, {}, &DotProductPointIdPair::dot_product);
         auto index = static_cast<size_t>(std::distance(hash_tables_[i].begin(), it));
 
         lefts.emplace_back(index == 0 ? std::nullopt : std::make_optional(index - 1));
@@ -162,6 +163,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                 if (finish[i]) {
                     continue;
                 }
+                double table_key = keys[i];
 
                 // Scan the left side of hash table.
                 bool left_finished = !lefts[i].has_value();
@@ -171,7 +173,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                         break;
                     }
                     auto& [dot_product, point_id] = hash_tables_[i][lefts[i].value()];
-                    if (keys[i] - dot_product > width) {
+                    if (table_key - dot_product > width) {
                         left_finished = true;
                         break;
                     }
@@ -202,7 +204,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                         break;
                     }
                     auto& [dot_product, point_id] = hash_tables_[i][rights[i].value()];
-                    if (dot_product - keys[i] > width) {
+                    if (dot_product - table_key > width) {
                         right_finish = true;
                         break;
                     }
