@@ -314,7 +314,7 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         dot_vectors_[i].resize(num_dimensions_);
         dot_vector_file.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
-                             static_cast<std::streamsize>(num_dimensions_ * sizeof(double)));
+                             static_cast<std::streamsize>(num_dimensions_ * sizeof(Coordinate)));
     }
 
     // Clean the leaf nodes cache.
