@@ -185,12 +185,13 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                             break;
                         }
                     }
-                    if (lefts[i].value() == 0) {
+                    if (lefts[i].value() > 0) {
+                        lefts[i].value()--;
+                    } else {
                         lefts[i] = std::nullopt;
                         left_finished = true;
                         break;
                     }
-                    lefts[i].value()--;
                 }
                 if (candidates.size() >= Global::kNumCandidates) {
                     break;
@@ -216,12 +217,13 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                             break;
                         }
                     }
-                    if (rights[i].value() == hash_tables_[i].size() - 1) {
+                    if (rights[i].value() < hash_tables_[i].size() - 1) {
+                        rights[i].value()++;
+                    } else {
                         rights[i] = std::nullopt;
                         right_finish = true;
                         break;
                     }
-                    rights[i].value()++;
                 }
                 if (candidates.size() >= Global::kNumCandidates) {
                     break;
@@ -392,45 +394,45 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                 double table_key = keys[i];
 
                 // Scan the left side of hash table.
-                bool left_finished = false;
-                if (!lefts[i].has_value()) {
-                    left_finished = true;
-                } else {
+                bool left_finished = !lefts[i].has_value();
+                for (unsigned int j = 0; j < Global::kScanSize; j++) {
+                    if (!lefts[i].has_value()) {
+                        left_finished = true;
+                        break;
+                    }
                     auto& [leaf_node, index] = lefts[i].value();
-                    for (unsigned int j = 0; j < Global::kScanSize; j++) {
-                        if (!lefts[i].has_value()) {
+                    if (!lefts[i].has_value()) {
+                        left_finished = true;
+                        break;
+                    }
+
+                    double dot_product = leaf_node->keys_[index];
+                    unsigned int point_id = leaf_node->values_[index];
+
+                    if (table_key - dot_product > width) {
+                        left_finished = true;
+                        break;
+                    }
+                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
+                        visited[point_id] = true;
+                        candidates.emplace(AnnResult{
+                            .distance =
+                                Utils::L1Distance(Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
+                            .point_id = point_id});
+                        if (candidates.size() >= Global::kNumCandidates) {
+                            break;
+                        }
+                    }
+                    if (index > 0) {
+                        index--;
+                    } else {
+                        if (leaf_node->prev_leaf_page_num_ == 0) {
+                            lefts[i] = std::nullopt;
                             left_finished = true;
                             break;
                         }
-
-                        double dot_product = leaf_node->keys_[index];
-                        unsigned int point_id = leaf_node->values_[index];
-
-                        if (table_key - dot_product > width) {
-                            left_finished = true;
-                            break;
-                        }
-                        if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
-                            visited[point_id] = true;
-                            candidates.emplace(
-                                AnnResult{.distance = Utils::L1Distance(
-                                              Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
-                                          .point_id = point_id});
-                            if (candidates.size() >= Global::kNumCandidates) {
-                                break;
-                            }
-                        }
-                        if (index > 0) {
-                            index--;
-                        } else {
-                            if (leaf_node->prev_leaf_page_num_ == 0) {
-                                lefts[i] = std::nullopt;
-                                left_finished = true;
-                                break;
-                            }
-                            leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
-                            index = leaf_node->num_entries_ - 1;
-                        }
+                        leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
+                        index = leaf_node->num_entries_ - 1;
                     }
                 }
                 if (candidates.size() >= Global::kNumCandidates) {
@@ -438,45 +440,45 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                 }
 
                 // Scan the right side of hash table.
-                bool right_finish = false;
-                if (!rights[i].has_value()) {
-                    right_finish = true;
-                } else {
+                bool right_finish = !rights[i].has_value();
+                for (unsigned int j = 0; j < Global::kScanSize; j++) {
+                    if (!rights[i].has_value()) {
+                        right_finish = true;
+                        break;
+                    }
                     auto& [leaf_node, index] = rights[i].value();
-                    for (unsigned int j = 0; j < Global::kScanSize; j++) {
-                        if (!rights[i].has_value()) {
+                    if (!rights[i].has_value()) {
+                        right_finish = true;
+                        break;
+                    }
+
+                    double dot_product = leaf_node->keys_[index];
+                    unsigned int point_id = leaf_node->values_[index];
+
+                    if (dot_product - table_key > width) {
+                        right_finish = true;
+                        break;
+                    }
+                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
+                        visited[point_id] = true;
+                        candidates.emplace(AnnResult{
+                            .distance =
+                                Utils::L1Distance(Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
+                            .point_id = point_id});
+                        if (candidates.size() >= Global::kNumCandidates) {
+                            break;
+                        }
+                    }
+                    if (index < leaf_node->num_entries_ - 1) {
+                        index++;
+                    } else {
+                        if (leaf_node->next_leaf_page_num_ == 0) {
+                            rights[i] = std::nullopt;
                             right_finish = true;
                             break;
                         }
-
-                        double dot_product = leaf_node->keys_[index];
-                        unsigned int point_id = leaf_node->values_[index];
-
-                        if (dot_product - table_key > width) {
-                            right_finish = true;
-                            break;
-                        }
-                        if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
-                            visited[point_id] = true;
-                            candidates.emplace(
-                                AnnResult{.distance = Utils::L1Distance(
-                                              Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
-                                          .point_id = point_id});
-                            if (candidates.size() >= Global::kNumCandidates) {
-                                break;
-                            }
-                        }
-                        if (index < leaf_node->num_entries_ - 1) {
-                            index++;
-                        } else {
-                            if (leaf_node->next_leaf_page_num_ == 0) {
-                                rights[i] = std::nullopt;
-                                right_finish = true;
-                                break;
-                            }
-                            leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
-                            index = 0;
-                        }
+                        leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
+                        index = 0;
                     }
                 }
                 if (candidates.size() >= Global::kNumCandidates) {
