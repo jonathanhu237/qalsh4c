@@ -95,6 +95,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     // Sample the points using the generated weights.
     double estimation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+    spdlog::info("Total sum of weights: {}", sum);
 
     std::unique_ptr<AnnSearcher> ann_searcher;
 
@@ -102,6 +103,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         spdlog::info("Sampling {} points from the weights...", updated_num_samples);
         for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
+            spdlog::info("Sampled point ID: {}", point_id);
             estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
         }
     };

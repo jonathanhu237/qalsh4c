@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "ann_searcher.h"
 #include "types.h"
 
 // --------------------------------------------------
@@ -36,6 +37,7 @@ class InMemoryQalshWeightsGenerator : public WeightsGenerator {
 
    private:
     double approximation_ratio_;
+    std::unique_ptr<AnnSearcher> ann_searcher_;
 };
 
 // --------------------------------------------------
@@ -43,9 +45,12 @@ class InMemoryQalshWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 class DiskQalshWeightsGenerator : public WeightsGenerator {
    public:
-    DiskQalshWeightsGenerator() = default;
+    DiskQalshWeightsGenerator();
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  bool use_cache) override;
+
+   private:
+    std::unique_ptr<AnnSearcher> ann_searcher_;
 };
 
 #endif
