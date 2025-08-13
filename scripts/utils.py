@@ -1,9 +1,10 @@
 import json
 import logging
-from pathlib import Path
 import time
+from pathlib import Path
 
 import numpy as np
+import torch
 
 
 def setup_logging(level: int) -> None:
@@ -55,8 +56,6 @@ def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double
     """
     Calculate Chamfer distance using PyTorch on a GPU.
     """
-    import torch
-
     if torch.cuda.is_available():
         device = torch.device("cuda")
         logging.info("CUDA is available. Using GPU for computation.")
