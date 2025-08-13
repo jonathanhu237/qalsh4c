@@ -73,7 +73,7 @@ AnnResult DiskLinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // InMemoryQalshAnnSearcher Implementation
 // ---------------------------------------------
-InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio) {
+InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio) : gen_(Utils::CreateSeededGenerator()) {
     qalsh_config_.approximation_ratio = approximation_ratio;
 }
 
@@ -99,14 +99,13 @@ void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     // Generate dot vectors.
     dot_vectors_.clear();
     dot_vectors_.resize(qalsh_config_.num_hash_tables);
-    std::mt19937 gen = Utils::CreateSeededGenerator();
     std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     auto num_dimensions = static_cast<unsigned int>(base_points_[0].size());
 
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         dot_vectors_[i].reserve(num_dimensions);
         std::ranges::generate_n(std::back_inserter(dot_vectors_[i]), num_dimensions,
-                                [&]() { return standard_cauchy_dist(gen); });
+                                [&]() { return standard_cauchy_dist(gen_); });
     }
 
     // Initialize QALSH hash tables.

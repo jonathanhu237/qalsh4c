@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +59,7 @@ class InMemoryQalshAnnSearcher : public AnnSearcher {
     AnnResult Search(const Point& query_point) override;
 
    private:
+    std::mt19937 gen_;
     std::vector<Point> base_points_;
     QalshConfig qalsh_config_;
     std::vector<Point> dot_vectors_;
