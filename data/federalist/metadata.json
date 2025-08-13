@@ -2,5 +2,8 @@
   "num_dimensions": 300,
   "num_points_a": 1880,
   "num_points_b": 1178,
-  "chamfer_distance": 59591.92942665145
+  "chamfer_distance": {
+    "l1": 59591.92942665145,
+    "l2": 4316.598216582601
+  }
 }
