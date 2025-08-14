@@ -16,7 +16,8 @@
 // --------------------------------------------------
 std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                       [[maybe_unused]] const PointSetMetadata& to_metadata,
-                                                      double norm_order, [[maybe_unused]] bool use_cache) {
+                                                      [[maybe_unused]] double norm_order,
+                                                      [[maybe_unused]] bool use_cache) {
     std::vector<double> weights(from_metadata.num_points, 1.0);
     return weights;
 }
