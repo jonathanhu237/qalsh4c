@@ -13,18 +13,19 @@
 
 #include "global.h"
 
-double Utils::L1Distance(const Point &pt1, const Point &pt2) {
+double Utils::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
     Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
     Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
-    return static_cast<double>((v1 - v2).lpNorm<1>());
-}
-
-double Utils::L2Distance(const Point &pt1, const Point &pt2) {
-    Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
-    Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
-
-    return static_cast<double>((v1 - v2).lpNorm<2>());
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
+        return static_cast<double>((v1 - v2).lpNorm<1>());
+    }
+    // NOLINTNEXTLINE(readability-magic-numbers)
+    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
+        return static_cast<double>((v1 - v2).lpNorm<2>());
+    }
+    spdlog::error("Unsupported norm order: {}", norm_order);
+    return 0.0;
 }
 
 double Utils::DotProduct(const Point &pt1, const Point &pt2) {
