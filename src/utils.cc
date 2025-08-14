@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <numeric>
@@ -79,7 +80,7 @@ Point Utils::ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned
 }
 
 // NOLINTBEGIN(readability-magic-numbers)
-void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, unsigned int norm_order) {
+void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, double norm_order) {
     double beta = Global::kNumCandidates / static_cast<double>(num_points);
     config.error_probability = Global::kQalshDefaultErrorProbability;
     double term1 = std::sqrt(std::log(2.0 / beta));
@@ -90,11 +91,11 @@ void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, 
     double p1{0.0};
     double p2{0.0};
 
-    if (norm_order == 1) {
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
         p1 = Utils::CalculateL1Probability(config.bucket_width / 2.0);
         p2 = Utils::CalculateL1Probability(config.bucket_width / (2.0 * config.approximation_ratio));
-    } else if (norm_order == 2) {
+    } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         config.bucket_width =
             std::sqrt((8.0 * std::pow(config.approximation_ratio, 2.0) * std::log(config.approximation_ratio)) /
                       (std::pow(config.approximation_ratio, 2.0) - 1));
