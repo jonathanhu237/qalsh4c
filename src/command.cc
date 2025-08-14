@@ -102,13 +102,13 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     std::function<double()> generator;
 
     if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
-        std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
-        generator = [&]() { return standard_cauchy_dist(gen_); };
+        std::cauchy_distribution<double> dist(0.0, 1.0);
+        generator = [dist, this]() mutable { return dist(gen_); };
     }
     // NOLINTNEXTLINE(readability-magic-numbers)
     else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
-        std::normal_distribution<double> standard_normal_dist(0.0, 1.0);
-        generator = [&]() { return standard_normal_dist(gen_); };
+        std::normal_distribution<double> dist(0.0, 1.0);
+        generator = [dist, this]() mutable { return dist(gen_); };
     } else {
         spdlog::error("Unsupported norm order: {}", norm_order_);
     }
