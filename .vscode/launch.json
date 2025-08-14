@@ -7,11 +7,13 @@
         {
             "type": "lldb-dap",
             "request": "launch",
-            "name": "Debug QALSH ANN Estimator (In Memory)",
+            "name": "Debug L1 QALSH ANN Estimator (In Memory)",
             "program": "${workspaceRoot}/build/qalsh_chamfer",
             "args": [
                 "--use-fixed-seed",
                 "estimate",
+                "-p",
+                "1",
                 "-d",
                 "./data/federalist",
                 "--in-memory",
