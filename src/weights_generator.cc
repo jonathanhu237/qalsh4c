@@ -16,7 +16,7 @@
 // --------------------------------------------------
 std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                       [[maybe_unused]] const PointSetMetadata& to_metadata,
-                                                      [[maybe_unused]] bool use_cache) {
+                                                      double norm_order, [[maybe_unused]] bool use_cache) {
     std::vector<double> weights(from_metadata.num_points, 1.0);
     return weights;
 }
@@ -29,11 +29,12 @@ InMemoryQalshWeightsGenerator::InMemoryQalshWeightsGenerator(double approximatio
       ann_searcher_(std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio_)) {}
 
 std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
-                                                            const PointSetMetadata& to_metadata, bool use_cache) {
+                                                            const PointSetMetadata& to_metadata, double norm_order,
+                                                            bool use_cache) {
     std::vector<double> weights(from_metadata.num_points);
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
-    std::filesystem::path weights_path = parent_directory / std::format("qalsh_weights_{}.bin", stem);
+    std::filesystem::path weights_path = parent_directory / std::format("l{}_qalsh_weights_{}.bin", norm_order, stem);
 
     if (use_cache) {
         spdlog::warn("The weights will be read from the cache file if it exists.");
@@ -48,7 +49,7 @@ std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetada
 
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH (In Memory)...");
-    ann_searcher_->Init(to_metadata);
+    ann_searcher_->Init(to_metadata, norm_order);
 
     std::vector<Point> base_points =
         Utils::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
@@ -72,11 +73,12 @@ std::vector<double> InMemoryQalshWeightsGenerator::Generate(const PointSetMetada
 DiskQalshWeightsGenerator::DiskQalshWeightsGenerator() : ann_searcher_(std::make_unique<DiskQalshAnnSearcher>()) {}
 
 std::vector<double> DiskQalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
-                                                        const PointSetMetadata& to_metadata, bool use_cache) {
+                                                        const PointSetMetadata& to_metadata, double norm_order,
+                                                        bool use_cache) {
     std::vector<double> weights(from_metadata.num_points);
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
-    std::filesystem::path weights_path = parent_directory / std::format("qalsh_weights_{}.bin", stem);
+    std::filesystem::path weights_path = parent_directory / std::format("l{}_qalsh_weights_{}.bin", norm_order, stem);
 
     if (use_cache) {
         spdlog::warn("The weights will be read from the cache file if it exists.");
@@ -92,7 +94,7 @@ std::vector<double> DiskQalshWeightsGenerator::Generate(const PointSetMetadata& 
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH (Disk)...");
 
-    ann_searcher_->Init(to_metadata);
+    ann_searcher_->Init(to_metadata, norm_order);
 
     std::ifstream base_file(from_metadata.file_path, std::ios::binary);
     if (!base_file.is_open()) {

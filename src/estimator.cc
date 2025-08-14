@@ -22,14 +22,15 @@
 // --------------------------------------------------
 AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
 
-double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
+double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
+                                      bool in_memory) {
     // Check the ANN searcher
     if (!ann_searcher_) {
         spdlog::error("The ANN searcher is not set.");
     }
 
     std::vector<double> distances;
-    ann_searcher_->Init(to);
+    ann_searcher_->Init(to, norm_order);
 
     if (in_memory) {
         std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
@@ -62,7 +63,8 @@ SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_g
       error_probability_(error_probability),
       use_cache_(use_cache) {}
 
-double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, bool in_memory) {
+double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
+                                           bool in_memory) {
     // Check the ANN searcher
     if (!weights_generator_) {
         spdlog::error("The ANN searcher is not set.");
@@ -85,7 +87,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     // Generate weights.
     spdlog::info("Generating weights...");
-    std::vector<double> weights = weights_generator_->Generate(from, to, use_cache_);
+    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
@@ -100,22 +102,20 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::unique_ptr<AnnSearcher> ann_searcher;
 
     auto processing_loop = [&](auto&& get_point_by_id) {
-        spdlog::info("Sampling {} points from the weights...", updated_num_samples);
         for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
             unsigned int point_id = Utils::SampleFromWeights(weights);
-            spdlog::info("Sampled point ID: {}", point_id);
             estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
         }
     };
 
     if (in_memory) {
         ann_searcher = std::make_unique<InMemoryLinearScanAnnSearcher>();
-        ann_searcher->Init(to);
+        ann_searcher->Init(to, norm_order);
         std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
         processing_loop([&](unsigned int id) { return query_set[id]; });
     } else {
         ann_searcher = std::make_unique<DiskLinearScanAnnSearcher>();
-        ann_searcher->Init(to);
+        ann_searcher->Init(to, norm_order);
         std::ifstream query_file(from.file_path, std::ios::binary);
         if (!query_file.is_open()) {
             spdlog::error("Failed to open query file: {}", from.file_path.string());

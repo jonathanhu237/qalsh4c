@@ -13,7 +13,7 @@ class WeightsGenerator {
    public:
     virtual ~WeightsGenerator() = default;
     virtual std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                         bool use_cache) = 0;
+                                         double norm_order, bool use_cache) = 0;
 };
 
 // --------------------------------------------------
@@ -23,7 +23,7 @@ class UniformWeightsGenerator : public WeightsGenerator {
    public:
     UniformWeightsGenerator() = default;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 bool use_cache) override;
+                                 double norm_order, bool use_cache) override;
 };
 
 // --------------------------------------------------
@@ -33,7 +33,7 @@ class InMemoryQalshWeightsGenerator : public WeightsGenerator {
    public:
     InMemoryQalshWeightsGenerator(double approximation_ratio);
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 bool use_cache) override;
+                                 double norm_order, bool use_cache) override;
 
    private:
     double approximation_ratio_;
@@ -47,7 +47,7 @@ class DiskQalshWeightsGenerator : public WeightsGenerator {
    public:
     DiskQalshWeightsGenerator();
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 bool use_cache) override;
+                                 double norm_order, bool use_cache) override;
 
    private:
     std::unique_ptr<AnnSearcher> ann_searcher_;

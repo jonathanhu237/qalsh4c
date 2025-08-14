@@ -17,7 +17,7 @@
 class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;
-    virtual void Init(const PointSetMetadata& base_metadata) = 0;
+    virtual void Init(const PointSetMetadata& base_metadata, double norm_order) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
 };
 
@@ -27,11 +27,12 @@ class AnnSearcher {
 class InMemoryLinearScanAnnSearcher : public AnnSearcher {
    public:
     InMemoryLinearScanAnnSearcher() = default;
-    void Init(const PointSetMetadata& base_metadata) override;
+    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
     std::vector<Point> base_points_;
+    double norm_order_{0.0};
 };
 
 // ---------------------------------------------
@@ -40,13 +41,14 @@ class InMemoryLinearScanAnnSearcher : public AnnSearcher {
 class DiskLinearScanAnnSearcher : public AnnSearcher {
    public:
     DiskLinearScanAnnSearcher() = default;
-    void Init(const PointSetMetadata& base_metadata) override;
+    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
     std::ifstream base_file_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    double norm_order_{0.0};
 };
 
 // ---------------------------------------------
@@ -55,12 +57,13 @@ class DiskLinearScanAnnSearcher : public AnnSearcher {
 class InMemoryQalshAnnSearcher : public AnnSearcher {
    public:
     InMemoryQalshAnnSearcher(double approximation_ratio);
-    void Init(const PointSetMetadata& base_metadata) override;
+    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
     std::mt19937 gen_;
     std::vector<Point> base_points_;
+    double norm_order_{0.0};
     QalshConfig qalsh_config_;
     std::vector<Point> dot_vectors_;
     std::vector<std::vector<DotProductPointIdPair>> hash_tables_;
@@ -77,7 +80,7 @@ class DiskQalshAnnSearcher : public AnnSearcher {
     };
 
     DiskQalshAnnSearcher() = default;
-    void Init(const PointSetMetadata& base_metadata) override;
+    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
@@ -88,6 +91,7 @@ class DiskQalshAnnSearcher : public AnnSearcher {
     std::ifstream base_file_;
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
+    double norm_order_{0.0};
     QalshConfig qalsh_config_;
     std::vector<Point> dot_vectors_;
     std::vector<std::ifstream> hash_tables_;

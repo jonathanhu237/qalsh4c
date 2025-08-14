@@ -21,16 +21,17 @@
 // ---------------------------------------------
 // InMemoryLinearScanAnnSearcher Definition
 // ---------------------------------------------
-void InMemoryLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata) {
+void InMemoryLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     base_points_ =
         Utils::LoadPointsFromFile(base_metadata.file_path, base_metadata.num_points, base_metadata.num_dimensions);
+    norm_order_ = norm_order;
 }
 
 AnnResult InMemoryLinearScanAnnSearcher::Search(const Point& query_point) {
     AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
 
     for (unsigned int i = 0; i < base_points_.size(); i++) {
-        double distance = Utils::L1Distance(base_points_[i], query_point);
+        double distance = Utils::LpDistance(base_points_[i], query_point, norm_order_);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -43,7 +44,7 @@ AnnResult InMemoryLinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // DiskLinearScanAnnSearcher Definition
 // ---------------------------------------------
-void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata) {
+void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     if (base_file_.is_open()) {
         base_file_.close();
     }
@@ -54,13 +55,14 @@ void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     }
     num_points_ = base_metadata.num_points;
     num_dimensions_ = base_metadata.num_dimensions;
+    norm_order_ = norm_order;
 }
 
 AnnResult DiskLinearScanAnnSearcher::Search(const Point& query_point) {
     AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
 
     for (unsigned int i = 0; i < num_points_; i++) {
-        double distance = Utils::L1Distance(Utils::ReadPoint(base_file_, num_dimensions_, i), query_point);
+        double distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, i), query_point, norm_order_);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -77,13 +79,14 @@ InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio) :
     qalsh_config_.approximation_ratio = approximation_ratio;
 }
 
-void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
+void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     // Load the base points from the file.
     base_points_ =
         Utils::LoadPointsFromFile(base_metadata.file_path, base_metadata.num_points, base_metadata.num_dimensions);
+    norm_order_ = norm_order;
 
     // Regularize the QalshConfig parameters based on the number of points.
-    Utils::RegularizeQalshConfig(qalsh_config_, base_metadata.num_points);
+    Utils::RegularizeQalshConfig(qalsh_config_, base_metadata.num_points, norm_order_);
 
     // Print the QalshConfig parameters.
     spdlog::info(
@@ -99,13 +102,24 @@ void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     // Generate dot vectors.
     dot_vectors_.clear();
     dot_vectors_.resize(qalsh_config_.num_hash_tables);
-    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+    std::function<double()> generator;
     auto num_dimensions = static_cast<unsigned int>(base_points_[0].size());
+
+    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
+        std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+        generator = [&]() { return standard_cauchy_dist(gen_); };
+    }
+    // NOLINTNEXTLINE(readability-magic-numbers)
+    else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
+        std::normal_distribution<double> standard_normal_dist(0.0, 1.0);
+        generator = [&]() { return standard_normal_dist(gen_); };
+    } else {
+        spdlog::error("Unsupported norm order: {}", norm_order_);
+    }
 
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         dot_vectors_[i].reserve(num_dimensions);
-        std::ranges::generate_n(std::back_inserter(dot_vectors_[i]), num_dimensions,
-                                [&]() { return standard_cauchy_dist(gen_); });
+        std::ranges::generate_n(std::back_inserter(dot_vectors_[i]), num_dimensions, [&]() { return generator(); });
     }
 
     // Initialize QALSH hash tables.
@@ -178,8 +192,9 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                     }
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
-                        candidates.emplace(AnnResult{.distance = Utils::L1Distance(base_points_[point_id], query_point),
-                                                     .point_id = point_id});
+                        candidates.emplace(
+                            AnnResult{.distance = Utils::LpDistance(base_points_[point_id], query_point, norm_order_),
+                                      .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;
                         }
@@ -210,8 +225,9 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
                     }
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
-                        candidates.emplace(AnnResult{.distance = Utils::L1Distance(base_points_[point_id], query_point),
-                                                     .point_id = point_id});
+                        candidates.emplace(
+                            AnnResult{.distance = Utils::LpDistance(base_points_[point_id], query_point, norm_order_),
+                                      .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;
                         }
@@ -256,7 +272,7 @@ AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // DiskQalshAnnSearcher Implementation
 // ---------------------------------------------
-void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
+void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     // Open the base file.
     if (base_file_.is_open()) {
         base_file_.close();
@@ -268,10 +284,12 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata) {
     }
     num_points_ = base_metadata.num_points;
     num_dimensions_ = base_metadata.num_dimensions;
+    norm_order_ = norm_order;
 
     // Load QALSH configuration.
     std::string stem = base_metadata.file_path.stem();
-    std::filesystem::path index_directory = base_metadata.file_path.parent_path() / "index" / stem;
+    std::filesystem::path index_directory =
+        base_metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_) / stem;
     qalsh_config_ = Utils::LoadQalshConfig(index_directory / "config.json");
 
     // Print the QalshConfig parameters.
@@ -415,8 +433,8 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{
-                            .distance =
-                                Utils::L1Distance(Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
+                            .distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
+                                                          query_point, norm_order_),
                             .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;
@@ -461,8 +479,8 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{
-                            .distance =
-                                Utils::L1Distance(Utils::ReadPoint(base_file_, num_dimensions_, point_id), query_point),
+                            .distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
+                                                          query_point, norm_order_),
                             .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;

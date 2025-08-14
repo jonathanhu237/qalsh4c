@@ -188,11 +188,13 @@ void EstimateCommand::Execute() {
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Utils::GetMemoryUsage();
     spdlog::info("Calculating the distance from A to B...");
-    double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, in_memory_);
+    double distance_ab =
+        estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_, in_memory_);
 
     // Calculate the distance from B to A
     spdlog::info("Calculating the distance from B to A...");
-    double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, in_memory_);
+    double distance_ba =
+        estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_, in_memory_);
     auto end = std::chrono::high_resolution_clock::now();
     double memory_after = Utils::GetMemoryUsage();
 
