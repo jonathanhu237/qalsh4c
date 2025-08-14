@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -98,11 +99,23 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     // Generate the dot vectors.
     spdlog::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
     std::vector<std::vector<double>> dot_vectors(config.num_hash_tables);
-    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+    std::function<double()> generator;
+
+    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
+        std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
+        generator = [&]() { return standard_cauchy_dist(gen_); };
+    }
+    // NOLINTNEXTLINE(readability-magic-numbers)
+    else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
+        std::normal_distribution<double> standard_normal_dist(0.0, 1.0);
+        generator = [&]() { return standard_normal_dist(gen_); };
+    } else {
+        spdlog::error("Unsupported norm order: {}", norm_order_);
+    }
+
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         dot_vectors[i].reserve(point_set_metadata.num_dimensions);
-        std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions,
-                                [&]() { return standard_cauchy_dist(gen_); });
+        std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions, generator);
     }
 
     // Save the dot product vectors
