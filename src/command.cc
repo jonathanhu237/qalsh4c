@@ -1,8 +1,11 @@
 #include "command.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <iostream>
 #include <memory>
@@ -12,13 +15,16 @@
 
 #include "b_plus_tree.h"
 #include "estimator.h"
+#include "global.h"
 #include "utils.h"
 
 // --------------------------------------------------
 // IndexCommand Implementation
 // --------------------------------------------------
-IndexCommand::IndexCommand(double approximation_ratio, unsigned int page_size, std::filesystem::path dataset_directory)
-    : approximation_ratio_(approximation_ratio),
+IndexCommand::IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
+                           std::filesystem::path dataset_directory)
+    : norm_order_(norm_order),
+      approximation_ratio_(approximation_ratio),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
       gen_(Utils::CreateSeededGenerator()) {}
@@ -35,13 +41,13 @@ void IndexCommand::Execute() {
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "B.bin",
                                 .num_points = dataset_metadata.num_points_b,
                                 .num_dimensions = dataset_metadata.num_dimensions},
-               dataset_directory_ / "index" / "B");
+               dataset_directory_ / "index" / std::format("l{}", norm_order_) / "B");
 
     // Build index for point set A.
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
                                 .num_points = dataset_metadata.num_points_a,
                                 .num_dimensions = dataset_metadata.num_dimensions},
-               dataset_directory_ / "index" / "A");
+               dataset_directory_ / "index" / std::format("l{}", norm_order_) / "A");
 
     // End to record the time and memory.
     auto end = std::chrono::high_resolution_clock::now();
@@ -58,7 +64,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
     QalshConfig config{.approximation_ratio = approximation_ratio_, .page_size = page_size_};
-    Utils::RegularizeQalshConfig(config, point_set_metadata.num_points);
+    Utils::RegularizeQalshConfig(config, point_set_metadata.num_points, norm_order_);
 
     // Print the QalshConfig parameters.
     spdlog::info(
@@ -91,8 +97,8 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Generate the dot vectors.
     spdlog::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
-    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     std::vector<std::vector<double>> dot_vectors(config.num_hash_tables);
+    std::cauchy_distribution<double> standard_cauchy_dist(0.0, 1.0);
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         dot_vectors[i].reserve(point_set_metadata.num_dimensions);
         std::ranges::generate_n(std::back_inserter(dot_vectors[i]), point_set_metadata.num_dimensions,
@@ -141,9 +147,12 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 // --------------------------------------------------
 // EstimateCommand Implementation
 // --------------------------------------------------
-EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, std::filesystem::path dataset_directory,
-                                 bool in_memory)
-    : estimator_(std::move(estimator)), dataset_directory_(std::move(dataset_directory)), in_memory_(in_memory) {}
+EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order,
+                                 std::filesystem::path dataset_directory, bool in_memory)
+    : estimator_(std::move(estimator)),
+      norm_order_(norm_order),
+      dataset_directory_(std::move(dataset_directory)),
+      in_memory_(in_memory) {}
 
 void EstimateCommand::Execute() {
     // Load dataset metadata
@@ -176,11 +185,26 @@ void EstimateCommand::Execute() {
 
     // Output the result.
     double estimation = distance_ab + distance_ba;
+    double ground_truth{0.0};
+
+    // NOLINTBEGIN(readability-magic-numbers)
+    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
+        ground_truth = dataset_metadata.chamfer_distance_l1;
+    } else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
+        ground_truth = dataset_metadata.chamfer_distance_l2;
+    } else {
+        spdlog::error("Unsupported norm order: {}", norm_order_);
+    }
+    // NOLINTEND(readability-magic-numbers)
+
+    double relative_error_percentage =
+        std::fabs(estimation - ground_truth) / ground_truth * 100;  // NOLINT: readability-magic-numbers
+    double elapsed_time = std::chrono::duration<double, std::milli>(end - start).count();
+    double memory_usage = memory_after - memory_before;
+
     std::cout << std::format(
         "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n"
         "Relative Error: {:.2f}%\n",
-        std::chrono::duration<double, std::milli>(end - start).count(), memory_after - memory_before,
-        std::fabs(estimation - dataset_metadata.chamfer_distance) / dataset_metadata.chamfer_distance *
-            100);  // NOLINT: readability-magic-numbers
+        elapsed_time, memory_usage, relative_error_percentage);
 }

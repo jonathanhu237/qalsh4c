@@ -15,12 +15,14 @@ class Command {
 
 class IndexCommand : public Command {
    public:
-    IndexCommand(double approximation_ratio, unsigned int page_size, std::filesystem::path dataset_directory);
+    IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
+                 std::filesystem::path dataset_directory);
     void Execute() override;
 
    private:
     void BuildIndex(const PointSetMetadata& point_set_metadata, const std::filesystem::path& index_directory);
 
+    double norm_order_;
     double approximation_ratio_;
     unsigned int page_size_;
     std::filesystem::path dataset_directory_;
@@ -29,11 +31,13 @@ class IndexCommand : public Command {
 
 class EstimateCommand : public Command {
    public:
-    EstimateCommand(std::unique_ptr<Estimator> estimator, std::filesystem::path dataset_directory, bool in_memory);
+    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory,
+                    bool in_memory);
     void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;
+    double norm_order_;
     std::filesystem::path dataset_directory_;
     bool in_memory_;
 };

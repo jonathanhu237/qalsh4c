@@ -45,6 +45,11 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* index = app.add_subcommand("index", "Index a dataset using QALSH algorithm");
 
+    double norm_order{0.0};
+    index->add_option("-p, --norm-order", norm_order, "Norm order")
+        ->required()
+        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
+
     double approximation_ratio{0.0};
     index->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
@@ -58,13 +63,18 @@ int main(int argc, char** argv) {
     std::filesystem::path dataset_directory;
     index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
-    index->callback(
-        [&]() { command = std::make_unique<IndexCommand>(approximation_ratio, page_size, dataset_directory); });
+    index->callback([&]() {
+        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory);
+    });
 
     // ------------------------------
     // estimate
     // ------------------------------
     CLI::App* estimate = app.add_subcommand("estimate", "Estimate Chamfer distance.");
+
+    estimate->add_option("-p, --norm-order", norm_order, "Norm order")
+        ->required()
+        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
 
     estimate->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
@@ -78,7 +88,7 @@ int main(int argc, char** argv) {
         if (!estimator) {
             spdlog::error("Estimator is not set. Please specify a estimator.");
         }
-        command = std::make_unique<EstimateCommand>(std::move(estimator), dataset_directory, in_memory);
+        command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory, in_memory);
     });
 
     // ------------------------------
