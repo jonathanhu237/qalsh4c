@@ -16,12 +16,14 @@ class Utils {
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                                  unsigned int num_dimensions);
     static Point ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id);
-    static void RegularizeQalshConfig(QalshConfig &config, unsigned int num_points);
+    static void RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, unsigned int norm_order);
     static void SaveQalshConfig(QalshConfig &config, const std::filesystem::path &file_path);
     static QalshConfig LoadQalshConfig(const std::filesystem::path &file_path);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
     static double GetMemoryUsage();
     static std::mt19937 CreateSeededGenerator();
+    static double CalculateL1Probability(double x);
+    static double CalculateL2Probability(double x);
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);

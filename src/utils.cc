@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <numeric>
@@ -76,20 +77,32 @@ Point Utils::ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned
 }
 
 // NOLINTBEGIN(readability-magic-numbers)
-void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points) {
-    config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
+void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, unsigned int norm_order) {
     double beta = Global::kNumCandidates / static_cast<double>(num_points);
     config.error_probability = Global::kQalshDefaultErrorProbability;
-
     double term1 = std::sqrt(std::log(2.0 / beta));
     double term2 = std::sqrt(std::log(1.0 / config.error_probability));
-    double p1 = 2.0 / std::numbers::pi_v<double> * atan(config.bucket_width / 2.0);
-    double p2 = 2.0 / std::numbers::pi_v<double> * atan(config.bucket_width / (2.0 * config.approximation_ratio));
     double numerator = std::pow(term1 + term2, 2.0);
+    double eta = term1 / term2;
+
+    double p1{0.0};
+    double p2{0.0};
+
+    if (norm_order == 1) {
+        config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
+        p1 = Utils::CalculateL1Probability(config.bucket_width / 2.0);
+        p2 = Utils::CalculateL1Probability(config.bucket_width / (2.0 * config.approximation_ratio));
+    } else if (norm_order == 2) {
+        config.bucket_width =
+            std::sqrt((8.0 * std::pow(config.approximation_ratio, 2.0) * std::log(config.approximation_ratio)) /
+                      (std::pow(config.approximation_ratio, 2.0) - 1));
+        p1 = Utils::CalculateL2Probability(config.bucket_width / 2.0);
+        p2 = Utils::CalculateL2Probability(config.bucket_width / (2.0 * config.approximation_ratio));
+    }
+
     double denominator = 2.0 * std::pow(p1 - p2, 2.0);
     config.num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
 
-    double eta = term1 / term2;
     double alpha = (eta * p1 + p2) / (1 + eta);
     config.collision_threshold = static_cast<unsigned int>(std::ceil(alpha * config.num_hash_tables));
 }
@@ -176,3 +189,11 @@ std::mt19937 Utils::CreateSeededGenerator() {
     }
     return std::mt19937(std::random_device{}());
 }
+
+// NOLINTBEGIN(readability-magic-numbers)
+double Utils::CalculateL1Probability(double x) { return 2.0 / std::numbers::pi_v<double> * atan(x); }
+// NOLINTEND(readability-magic-numbers)
+
+// NOLINTBEGIN(readability-magic-numbers)
+double Utils::CalculateL2Probability(double x) { return 1 - (2 * (0.5 * std::erfc(x * M_SQRT1_2))); }
+// NOLINTEND(readability-magic-numbers)
