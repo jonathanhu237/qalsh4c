@@ -27,7 +27,8 @@ struct DatasetMetadata {
     unsigned int num_points_a{0};
     unsigned int num_points_b{0};
     unsigned int num_dimensions{0};
-    double chamfer_distance{0.0};
+    double chamfer_distance_l1{0.0};
+    double chamfer_distance_l2{0.0};
 };
 
 using Coordinate = double;
