@@ -33,14 +33,11 @@ DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_pat
     std::ifstream ifs(file_path);
     nlohmann::json json_metadata = nlohmann::json::parse(ifs);
 
-    try {
-        json_metadata.at("num_points_a").get_to(metadata.num_points_a);
-        json_metadata.at("num_points_b").get_to(metadata.num_points_b);
-        json_metadata.at("num_dimensions").get_to(metadata.num_dimensions);
-        json_metadata.at("chamfer_distance").get_to(metadata.chamfer_distance);
-    } catch (nlohmann::json::exception &e) {
-        spdlog::error("JSON format error: {}", e.what());
-    }
+    json_metadata.at("num_points_a").get_to(metadata.num_points_a);
+    json_metadata.at("num_points_b").get_to(metadata.num_points_b);
+    json_metadata.at("num_dimensions").get_to(metadata.num_dimensions);
+    json_metadata.at("chamfer_distance_l1").get_to(metadata.chamfer_distance_l1);
+    json_metadata.at("chamfer_distance_l2").get_to(metadata.chamfer_distance_l2);
 
     return metadata;
 }
@@ -125,16 +122,12 @@ QalshConfig Utils::LoadQalshConfig(const std::filesystem::path &file_path) {
     nlohmann::json metadata = nlohmann::json::parse(ifs);
     QalshConfig config;
 
-    try {
-        metadata.at("approximation_ratio").get_to(config.approximation_ratio);
-        metadata.at("bucket_width").get_to(config.bucket_width);
-        metadata.at("error_probability").get_to(config.error_probability);
-        metadata.at("num_hash_tables").get_to(config.num_hash_tables);
-        metadata.at("collision_threshold").get_to(config.collision_threshold);
-        metadata.at("page_size").get_to(config.page_size);
-    } catch (nlohmann::json::exception &e) {
-        spdlog::error("JSON format error: {}", e.what());
-    }
+    metadata.at("approximation_ratio").get_to(config.approximation_ratio);
+    metadata.at("bucket_width").get_to(config.bucket_width);
+    metadata.at("error_probability").get_to(config.error_probability);
+    metadata.at("num_hash_tables").get_to(config.num_hash_tables);
+    metadata.at("collision_threshold").get_to(config.collision_threshold);
+    metadata.at("page_size").get_to(config.page_size);
 
     return config;
 }
