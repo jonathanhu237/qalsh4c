@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <spdlog/spdlog.h>
+
 #include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -98,6 +100,8 @@ void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, 
                       (std::pow(config.approximation_ratio, 2.0) - 1));
         p1 = Utils::CalculateL2Probability(config.bucket_width / 2.0);
         p2 = Utils::CalculateL2Probability(config.bucket_width / (2.0 * config.approximation_ratio));
+    } else {
+        spdlog::error("Unsupported norm order: {}", norm_order);
     }
 
     double denominator = 2.0 * std::pow(p1 - p2, 2.0);
