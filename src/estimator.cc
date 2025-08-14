@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <ios>
 #include <memory>
@@ -74,8 +75,9 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     unsigned int updated_num_samples = num_samples_;
     if (updated_num_samples == 0) {
         if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<DiskQalshWeightsGenerator*>(weights_generator_.get())) {
-            std::filesystem::path qalsh_config_path =
-                to.file_path.parent_path() / "index" / to.file_path.stem() / "config.json";
+            std::filesystem::path qalsh_config_path = to.file_path.parent_path() / "index" /
+                                                      std::format("l{}", norm_order) / to.file_path.stem() /
+                                                      "config.json";
             QalshConfig config = Utils::LoadQalshConfig(qalsh_config_path);
             updated_num_samples =
                 static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (config.approximation_ratio - 1))));
