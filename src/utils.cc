@@ -20,6 +20,13 @@ double Utils::L1Distance(const Point &pt1, const Point &pt2) {
     return static_cast<double>((v1 - v2).lpNorm<1>());
 }
 
+double Utils::L2Distance(const Point &pt1, const Point &pt2) {
+    Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
+    Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
+
+    return static_cast<double>((v1 - v2).lpNorm<2>());
+}
+
 double Utils::DotProduct(const Point &pt1, const Point &pt2) {
     Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
     Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));

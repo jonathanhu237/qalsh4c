@@ -11,6 +11,7 @@
 class Utils {
    public:
     static double L1Distance(const Point &pt1, const Point &pt2);
+    static double L2Distance(const Point &pt1, const Point &pt2);
     static double DotProduct(const Point &pt1, const Point &pt2);
     static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
