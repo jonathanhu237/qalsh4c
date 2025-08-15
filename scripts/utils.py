@@ -75,21 +75,35 @@ def chamfer_distance(
     tensor_A = torch.from_numpy(A).to(device, dtype=dtype)
     tensor_B = torch.from_numpy(B).to(device, dtype=dtype)
 
-    # For each point in p1, find the closest in p2
+    # For each point in A, find the closest in B
     min_dists_A_to_B = torch.zeros(len(tensor_A), device=device, dtype=dtype)
     for i in range(0, len(tensor_A), batch_size):
         p1_batch = tensor_A[i : i + batch_size]
-        dists = torch.cdist(p1_batch, tensor_B, p=p)
-        min_dists, _ = torch.min(dists, dim=1)
-        min_dists_A_to_B[i : i + batch_size] = min_dists
+        # Compute minimum distances from batch to all points in B using batching
+        batch_min_dists = torch.full(
+            (p1_batch.size(0),), float("inf"), device=device, dtype=dtype
+        )
+        for j in range(0, len(tensor_B), batch_size):
+            p2_batch = tensor_B[j : j + batch_size]
+            dists = torch.cdist(p1_batch, p2_batch, p=p)
+            min_dists, _ = torch.min(dists, dim=1)
+            batch_min_dists = torch.min(batch_min_dists, min_dists)
+        min_dists_A_to_B[i : i + batch_size] = batch_min_dists
 
-    # For each point in p2, find the closest in p1
+    # For each point in B, find the closest in A
     min_dists_B_to_A = torch.zeros(len(tensor_B), device=device, dtype=dtype)
     for i in range(0, len(tensor_B), batch_size):
         p2_batch = tensor_B[i : i + batch_size]
-        dists = torch.cdist(p2_batch, tensor_A, p=p)
-        min_dists, _ = torch.min(dists, dim=1)
-        min_dists_B_to_A[i : i + batch_size] = min_dists
+        # Compute minimum distances from batch to all points in A using batching
+        batch_min_dists = torch.full(
+            (p2_batch.size(0),), float("inf"), device=device, dtype=dtype
+        )
+        for j in range(0, len(tensor_A), batch_size):
+            p1_batch = tensor_A[j : j + batch_size]
+            dists = torch.cdist(p2_batch, p1_batch, p=p)
+            min_dists, _ = torch.min(dists, dim=1)
+            batch_min_dists = torch.min(batch_min_dists, min_dists)
+        min_dists_B_to_A[i : i + batch_size] = batch_min_dists
 
     # Sum the distances
     chamfer_dist = torch.sum(min_dists_A_to_B) + torch.sum(min_dists_B_to_A)
