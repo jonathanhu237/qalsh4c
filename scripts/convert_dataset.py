@@ -185,7 +185,7 @@ def main():
         "-l",
         "--log-level",
         choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
-        default="WARN",
+        default="INFO",
         help="Set the logging level (default: WARN)",
     )
     parser.add_argument(
