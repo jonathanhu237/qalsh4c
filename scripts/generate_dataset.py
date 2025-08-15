@@ -157,14 +157,16 @@ def main():
         batch_size = 1024
     else:
         batch_size = args.batch_size
-    chamfer_dist = chamfer_distance(A, B, batch_size)
+    chamfer_distance_l1 = chamfer_distance(A, B, batch_size, 1)
+    chamfer_distance_l2 = chamfer_distance(A, B, batch_size, 2)
 
     # Create metadata
     create_metadata(
-        chamfer_dist=chamfer_dist,
+        num_dimensions=A.shape[1],
         num_points_a=A.shape[0],
         num_points_b=B.shape[0],
-        num_dimensions=A.shape[1],
+        chamfer_distance_l1=chamfer_distance_l1,
+        chamfer_distance_l2=chamfer_distance_l2,
         filepath=output_dir / "metadata.json",
     )
 
@@ -172,11 +174,7 @@ def main():
     logging.info(
         f"Dataset generation complete! (Total time: {total_elapsed_time:.2f} seconds)"
     )
-    logging.info(f"""Files saved to: {output_dir}
-    A.bin: {A.shape[0]} points x {A.shape[1]} dimensions
-    B.bin: {B.shape[0]} points x {B.shape[1]} dimensions
-    metadata.json: Chamfer distance = {chamfer_dist:.6f}
-    GMM components: 1 core + 1 outlier""")
+    logging.info(f"Files saved to: {output_dir}")
 
 
 if __name__ == "__main__":

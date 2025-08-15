@@ -32,18 +32,20 @@ def save_binary_data(data: np.ndarray, filepath: Path) -> None:
 
 
 def create_metadata(
-    chamfer_dist: np.double,
+    num_dimensions: int,
     num_points_a: int,
     num_points_b: int,
-    num_dimensions: int,
+    chamfer_distance_l1: np.double,
+    chamfer_distance_l2: np.double,
     filepath: Path,
 ) -> None:
     """Create metadata.json file."""
     metadata = {
-        "chamfer_distance": chamfer_dist,
         "num_dimensions": num_dimensions,
         "num_points_a": num_points_a,
         "num_points_b": num_points_b,
+        "chamfer_distance_l1": chamfer_distance_l1,
+        "chamfer_distance_l2": chamfer_distance_l2,
     }
 
     with open(filepath, "w") as f:
@@ -52,7 +54,9 @@ def create_metadata(
     logging.info(f"Saved metadata to {filepath}")
 
 
-def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double:
+def chamfer_distance(
+    A: np.ndarray, B: np.ndarray, batch_size: int, p: float
+) -> np.double:
     """
     Calculate Chamfer distance using PyTorch on a GPU.
     """
@@ -75,7 +79,7 @@ def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double
     min_dists_A_to_B = torch.zeros(len(tensor_A), device=device, dtype=dtype)
     for i in range(0, len(tensor_A), batch_size):
         p1_batch = tensor_A[i : i + batch_size]
-        dists = torch.cdist(p1_batch, tensor_B, p=1)
+        dists = torch.cdist(p1_batch, tensor_B, p=p)
         min_dists, _ = torch.min(dists, dim=1)
         min_dists_A_to_B[i : i + batch_size] = min_dists
 
@@ -83,7 +87,7 @@ def chamfer_distance(A: np.ndarray, B: np.ndarray, batch_size: int) -> np.double
     min_dists_B_to_A = torch.zeros(len(tensor_B), device=device, dtype=dtype)
     for i in range(0, len(tensor_B), batch_size):
         p2_batch = tensor_B[i : i + batch_size]
-        dists = torch.cdist(p2_batch, tensor_A, p=1)
+        dists = torch.cdist(p2_batch, tensor_A, p=p)
         min_dists, _ = torch.min(dists, dim=1)
         min_dists_B_to_A[i : i + batch_size] = min_dists
 
