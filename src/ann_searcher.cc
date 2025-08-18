@@ -360,37 +360,35 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
         keys.emplace_back(table_key);
 
         // Locate the leaf node that may contain the key.
-        std::unique_ptr<LeafNode> leaf_node = LocateLeafMayContainKey(hash_tables_[i], i, table_key);
+        std::shared_ptr<LeafNode> leaf_node = LocateLeafMayContainKey(hash_tables_[i], table_key);
         auto it = std::ranges::lower_bound(leaf_node->keys_, table_key);
         auto index = static_cast<size_t>(std::distance(leaf_node->keys_.begin(), it));
 
         // Determine the left search location
         if (index == 0) {
             if (leaf_node->prev_leaf_page_num_ != 0) {
-                std::unique_ptr<LeafNode> prev_leaf_node =
-                    LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
+                std::shared_ptr<LeafNode> prev_leaf_node =
+                    LocateLeafByPageNum(hash_tables_[i], leaf_node->prev_leaf_page_num_);
                 lefts.emplace_back(
-                    SearchRecord{.leaf_node = std::move(prev_leaf_node), .index = prev_leaf_node->num_entries_ - 1});
+                    SearchRecord{.leaf_node = prev_leaf_node, .index = prev_leaf_node->num_entries_ - 1});
             } else {
                 lefts.emplace_back(std::nullopt);
             }
         } else {
-            lefts.emplace_back(
-                SearchRecord{.leaf_node = std::move(leaf_node), .index = static_cast<unsigned int>(index - 1)});
+            lefts.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index - 1)});
         }
 
         // Determine the right search location
         if (index == leaf_node->keys_.size()) {
             if (leaf_node->next_leaf_page_num_ != 0) {
-                std::unique_ptr<LeafNode> next_leaf_node =
-                    LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
-                rights.emplace_back(SearchRecord{.leaf_node = std::move(next_leaf_node), .index = 0});
+                std::shared_ptr<LeafNode> next_leaf_node =
+                    LocateLeafByPageNum(hash_tables_[i], leaf_node->next_leaf_page_num_);
+                rights.emplace_back(SearchRecord{.leaf_node = next_leaf_node, .index = 0});
             } else {
                 rights.emplace_back(std::nullopt);
             }
         } else {
-            rights.emplace_back(
-                SearchRecord{.leaf_node = std::move(leaf_node), .index = static_cast<unsigned int>(index)});
+            rights.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index)});
         }
     }
 
@@ -446,7 +444,7 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                             left_finished = true;
                             break;
                         }
-                        leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
+                        leaf_node = LocateLeafByPageNum(hash_tables_[i], leaf_node->prev_leaf_page_num_);
                         index = leaf_node->num_entries_ - 1;
                     }
                 }
@@ -492,7 +490,7 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
                             right_finish = true;
                             break;
                         }
-                        leaf_node = LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
+                        leaf_node = LocateLeafByPageNum(hash_tables_[i], leaf_node->next_leaf_page_num_);
                         index = 0;
                     }
                 }
@@ -525,8 +523,7 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
 }
 // NOLINTEND(readability-function-cognitive-complexity)
 
-std::unique_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx,
-                                                                        double key) {
+std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, double key) {
     ReadPage(ifs, 0);
     size_t offset = 0;
     auto root_page_num = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
@@ -544,13 +541,12 @@ std::unique_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifs
 
         current_level--;
     }
-    return LocateLeafByPageNum(ifs, table_idx, next_page_num);
+    return LocateLeafByPageNum(ifs, next_page_num);
 }
 
-std::unique_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx,
-                                                                    unsigned int page_num) {
+std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int page_num) {
     ReadPage(ifs, page_num);
-    auto new_node_ptr = std::make_unique<LeafNode>(buffer_);
+    auto new_node_ptr = std::make_shared<LeafNode>(buffer_);
     return new_node_ptr;
 }
 

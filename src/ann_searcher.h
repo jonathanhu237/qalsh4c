@@ -73,7 +73,7 @@ class InMemoryQalshAnnSearcher : public AnnSearcher {
 class DiskQalshAnnSearcher : public AnnSearcher {
    public:
     struct SearchRecord {
-        std::unique_ptr<LeafNode> leaf_node;
+        std::shared_ptr<LeafNode> leaf_node;
         unsigned int index{0};
     };
 
@@ -82,8 +82,8 @@ class DiskQalshAnnSearcher : public AnnSearcher {
     AnnResult Search(const Point& query_point) override;
 
    private:
-    std::unique_ptr<LeafNode> LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx, double key);
-    std::unique_ptr<LeafNode> LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx, unsigned int page_num);
+    std::shared_ptr<LeafNode> LocateLeafMayContainKey(std::ifstream& ifs, double key);
+    std::shared_ptr<LeafNode> LocateLeafByPageNum(std::ifstream& ifs, unsigned int page_num);
     void ReadPage(std::ifstream& ifs, unsigned int page_num);
 
     std::ifstream base_file_;
