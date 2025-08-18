@@ -1,11 +1,9 @@
 #ifndef ANN_SEARCHER_H_
 #define ANN_SEARCHER_H_
 
-#include <cstdint>
 #include <fstream>
 #include <memory>
 #include <random>
-#include <unordered_map>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -75,7 +73,7 @@ class InMemoryQalshAnnSearcher : public AnnSearcher {
 class DiskQalshAnnSearcher : public AnnSearcher {
    public:
     struct SearchRecord {
-        std::shared_ptr<LeafNode> leaf_node;
+        std::unique_ptr<LeafNode> leaf_node;
         unsigned int index{0};
     };
 
@@ -84,8 +82,8 @@ class DiskQalshAnnSearcher : public AnnSearcher {
     AnnResult Search(const Point& query_point) override;
 
    private:
-    std::shared_ptr<LeafNode> LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx, double key);
-    std::shared_ptr<LeafNode> LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx, unsigned int page_num);
+    std::unique_ptr<LeafNode> LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx, double key);
+    std::unique_ptr<LeafNode> LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx, unsigned int page_num);
     void ReadPage(std::ifstream& ifs, unsigned int page_num);
 
     std::ifstream base_file_;
@@ -96,7 +94,6 @@ class DiskQalshAnnSearcher : public AnnSearcher {
     std::vector<Point> dot_vectors_;
     std::vector<std::ifstream> hash_tables_;
     std::vector<char> buffer_;
-    std::unordered_map<uint64_t, std::shared_ptr<LeafNode>> leaf_nodes_cache_;
 };
 
 #endif

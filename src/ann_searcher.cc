@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdint>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -335,9 +334,6 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double no
         dot_vector_file.read(reinterpret_cast<char*>(dot_vectors_[i].data()),
                              static_cast<std::streamsize>(num_dimensions_ * sizeof(Coordinate)));
     }
-
-    // Clean the leaf nodes cache.
-    leaf_nodes_cache_.clear();
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
@@ -364,35 +360,37 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
         keys.emplace_back(table_key);
 
         // Locate the leaf node that may contain the key.
-        std::shared_ptr<LeafNode> leaf_node = LocateLeafMayContainKey(hash_tables_[i], i, table_key);
+        std::unique_ptr<LeafNode> leaf_node = LocateLeafMayContainKey(hash_tables_[i], i, table_key);
         auto it = std::ranges::lower_bound(leaf_node->keys_, table_key);
         auto index = static_cast<size_t>(std::distance(leaf_node->keys_.begin(), it));
 
         // Determine the left search location
         if (index == 0) {
             if (leaf_node->prev_leaf_page_num_ != 0) {
-                std::shared_ptr<LeafNode> prev_leaf_node =
+                std::unique_ptr<LeafNode> prev_leaf_node =
                     LocateLeafByPageNum(hash_tables_[i], i, leaf_node->prev_leaf_page_num_);
                 lefts.emplace_back(
-                    SearchRecord{.leaf_node = prev_leaf_node, .index = prev_leaf_node->num_entries_ - 1});
+                    SearchRecord{.leaf_node = std::move(prev_leaf_node), .index = prev_leaf_node->num_entries_ - 1});
             } else {
                 lefts.emplace_back(std::nullopt);
             }
         } else {
-            lefts.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index - 1)});
+            lefts.emplace_back(
+                SearchRecord{.leaf_node = std::move(leaf_node), .index = static_cast<unsigned int>(index - 1)});
         }
 
         // Determine the right search location
         if (index == leaf_node->keys_.size()) {
             if (leaf_node->next_leaf_page_num_ != 0) {
-                std::shared_ptr<LeafNode> next_leaf_node =
+                std::unique_ptr<LeafNode> next_leaf_node =
                     LocateLeafByPageNum(hash_tables_[i], i, leaf_node->next_leaf_page_num_);
-                rights.emplace_back(SearchRecord{.leaf_node = next_leaf_node, .index = 0});
+                rights.emplace_back(SearchRecord{.leaf_node = std::move(next_leaf_node), .index = 0});
             } else {
                 rights.emplace_back(std::nullopt);
             }
         } else {
-            rights.emplace_back(SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index)});
+            rights.emplace_back(
+                SearchRecord{.leaf_node = std::move(leaf_node), .index = static_cast<unsigned int>(index)});
         }
     }
 
@@ -527,7 +525,7 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
 }
 // NOLINTEND(readability-function-cognitive-complexity)
 
-std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx,
+std::unique_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, unsigned int table_idx,
                                                                         double key) {
     ReadPage(ifs, 0);
     size_t offset = 0;
@@ -549,17 +547,10 @@ std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifs
     return LocateLeafByPageNum(ifs, table_idx, next_page_num);
 }
 
-std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx,
+std::unique_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int table_idx,
                                                                     unsigned int page_num) {
-    uint64_t composite_key = (static_cast<uint64_t>(table_idx) << 32) | page_num;  // NOLINT(readability-magic-numbers)
-    auto it = leaf_nodes_cache_.find(composite_key);
-    if (it != leaf_nodes_cache_.end()) {
-        return it->second;
-    }
-
     ReadPage(ifs, page_num);
-    auto new_node_ptr = std::make_shared<LeafNode>(buffer_);
-    leaf_nodes_cache_[composite_key] = new_node_ptr;
+    auto new_node_ptr = std::make_unique<LeafNode>(buffer_);
     return new_node_ptr;
 }
 
