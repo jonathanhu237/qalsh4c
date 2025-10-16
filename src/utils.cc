@@ -39,6 +39,32 @@ double Calc::L1Probability(double x) { return 2.0 / std::numbers::pi_v<double> *
 
 double Calc::L2Probability(double x) { return std::erf(x * M_SQRT1_2); }  // 2 * Phi(x) - 1
 
+double Memory::Usage() {
+    std::ifstream status_file("/proc/self/status");
+    std::string line;
+    size_t memory_usage = 0;
+
+    while (std::getline(status_file, line)) {
+        // NOLINTNEXTLINE: readability-magic-numbers
+        if (line.substr(0, 6) == "VmHWM:") {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key >> memory_usage;
+            break;
+        }
+    }
+
+    // Convert from KB to MB
+    return static_cast<double>(memory_usage) / 1024.0;  // NOLINT: readability-magic-numbers
+}
+
+std::mt19937 Random::SeededGenerator() {
+    if (Global::kUseFixedSeed) {
+        return std::mt19937(Global::kDefaultSeed);
+    }
+    return std::mt19937(std::random_device{}());
+}
+
 DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_path) {
     DatasetMetadata metadata;
 
@@ -172,37 +198,11 @@ unsigned int Utils::SampleFromWeights(const std::vector<double> &weights) {
     cumulative_weights.reserve(weights.size());
     std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights));
 
-    static std::mt19937 gen = CreateSeededGenerator();
+    static std::mt19937 gen = Random::SeededGenerator();
     std::uniform_real_distribution<> dis(0.0, total_sum);
     double random_value = dis(gen);
 
     auto it = std::ranges::upper_bound(cumulative_weights, random_value);
 
     return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
-}
-
-double Utils::GetMemoryUsage() {
-    std::ifstream status_file("/proc/self/status");
-    std::string line;
-    size_t memory_usage = 0;
-
-    while (std::getline(status_file, line)) {
-        // NOLINTNEXTLINE: readability-magic-numbers
-        if (line.substr(0, 6) == "VmHWM:") {
-            std::istringstream iss(line);
-            std::string key;
-            iss >> key >> memory_usage;
-            break;
-        }
-    }
-
-    // Convert from KB to MB
-    return static_cast<double>(memory_usage) / 1024.0;  // NOLINT: readability-magic-numbers
-}
-
-std::mt19937 Utils::CreateSeededGenerator() {
-    if (Global::kUseFixedSeed) {
-        return std::mt19937(Global::kDefaultSeed);
-    }
-    return std::mt19937(std::random_device{}());
 }

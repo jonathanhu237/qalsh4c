@@ -28,7 +28,7 @@ IndexCommand::IndexCommand(double norm_order, double approximation_ratio, unsign
       approximation_ratio_(approximation_ratio),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
-      gen_(Utils::CreateSeededGenerator()) {}
+      gen_(Random::SeededGenerator()) {}
 
 void IndexCommand::Execute() {
     // Read dataset metadata.
@@ -36,7 +36,7 @@ void IndexCommand::Execute() {
 
     // Begin to record the time and memory.
     auto start = std::chrono::high_resolution_clock::now();
-    double memory_before = Utils::GetMemoryUsage();
+    double memory_before = Memory::Usage();
 
     // Build index for point set B.
     BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "B.bin",
@@ -52,7 +52,7 @@ void IndexCommand::Execute() {
 
     // End to record the time and memory.
     auto end = std::chrono::high_resolution_clock::now();
-    double memory_after = Utils::GetMemoryUsage();
+    double memory_after = Memory::Usage();
 
     // Output the result.
     std::cout << std::format(
@@ -183,7 +183,7 @@ void EstimateCommand::Execute() {
 
     // Calculate the distance from A to B
     auto start = std::chrono::high_resolution_clock::now();
-    double memory_before = Utils::GetMemoryUsage();
+    double memory_before = Memory::Usage();
     spdlog::info("Calculating the distance from A to B...");
     double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_);
 
@@ -191,7 +191,7 @@ void EstimateCommand::Execute() {
     spdlog::info("Calculating the distance from B to A...");
     double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_);
     auto end = std::chrono::high_resolution_clock::now();
-    double memory_after = Utils::GetMemoryUsage();
+    double memory_after = Memory::Usage();
 
     // Output the result.
     double estimation = distance_ab + distance_ba;

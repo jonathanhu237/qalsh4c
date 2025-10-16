@@ -16,6 +16,16 @@ class Calc {
     static double L2Probability(double x);
 };
 
+class Random {
+   public:
+    static std::mt19937 SeededGenerator();
+};
+
+class Memory {
+   public:
+    static double Usage();
+};
+
 class Utils {
    public:
     static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
@@ -26,8 +36,6 @@ class Utils {
     static void SaveQalshConfig(QalshConfig &config, const std::filesystem::path &file_path);
     static QalshConfig LoadQalshConfig(const std::filesystem::path &file_path);
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
-    static double GetMemoryUsage();
-    static std::mt19937 CreateSeededGenerator();
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
