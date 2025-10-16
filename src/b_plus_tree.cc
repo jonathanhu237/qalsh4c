@@ -8,34 +8,31 @@
 #include <cstring>
 #include <vector>
 
-#include "utils.h"
-
 // ---------- InternalNode Implementation ----------
 InternalNode::InternalNode(unsigned int order) {
     keys_.reserve(order - 1);
     pointers_.reserve(order);
 };
 
-InternalNode::InternalNode(const std::vector<char>& buffer) {
+InternalNode::InternalNode(const Buffer& buffer) {
     size_t offset = 0;
 
-    num_children_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-
-    keys_ = Utils::ReadVectorFromBuffer<double>(buffer, offset, num_children_ - 1);
-    pointers_ = Utils::ReadVectorFromBuffer<unsigned int>(buffer, offset, num_children_);
+    num_children_ = buffer.Read<unsigned int>(offset);
+    keys_ = buffer.ReadVector<double>(offset, num_children_ - 1);
+    pointers_ = buffer.ReadVector<unsigned int>(offset, num_children_);
 };
 
 size_t InternalNode::GetHeaderSize() { return sizeof(num_children_); }
 
-void InternalNode::Serialize(std::vector<char>& buffer) const {
+void InternalNode::Serialize(Buffer& buffer) const {
     size_t offset = 0;
-    Utils::WriteToBuffer(buffer, offset, num_children_);
+    buffer.Write(offset, num_children_);
 
     for (auto key : keys_) {
-        Utils::WriteToBuffer(buffer, offset, key);
+        buffer.Write(offset, key);
     }
     for (auto pointer : pointers_) {
-        Utils::WriteToBuffer(buffer, offset, pointer);
+        buffer.Write(offset, pointer);
     }
 }
 
@@ -45,32 +42,32 @@ LeafNode::LeafNode(unsigned int order) {
     values_.reserve(order);
 };
 
-LeafNode::LeafNode(const std::vector<char>& buffer) {
+LeafNode::LeafNode(const Buffer& buffer) {
     size_t offset = 0;
 
-    num_entries_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    prev_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
-    next_leaf_page_num_ = Utils::ReadFromBuffer<unsigned int>(buffer, offset);
+    num_entries_ = buffer.Read<unsigned int>(offset);
+    prev_leaf_page_num_ = buffer.Read<unsigned int>(offset);
+    next_leaf_page_num_ = buffer.Read<unsigned int>(offset);
 
-    keys_ = Utils::ReadVectorFromBuffer<double>(buffer, offset, num_entries_);
-    values_ = Utils::ReadVectorFromBuffer<unsigned int>(buffer, offset, num_entries_);
+    keys_ = buffer.ReadVector<double>(offset, num_entries_);
+    values_ = buffer.ReadVector<unsigned int>(offset, num_entries_);
 }
 
 size_t LeafNode::GetHeaderSize() {
     return sizeof(num_entries_) + sizeof(prev_leaf_page_num_) + sizeof(next_leaf_page_num_);
 }
 
-void LeafNode::Serialize(std::vector<char>& buffer) const {
+void LeafNode::Serialize(Buffer& buffer) const {
     size_t offset = 0;
-    Utils::WriteToBuffer(buffer, offset, num_entries_);
-    Utils::WriteToBuffer(buffer, offset, prev_leaf_page_num_);
-    Utils::WriteToBuffer(buffer, offset, next_leaf_page_num_);
+    buffer.Write(offset, num_entries_);
+    buffer.Write(offset, prev_leaf_page_num_);
+    buffer.Write(offset, next_leaf_page_num_);
 
     for (auto key : keys_) {
-        Utils::WriteToBuffer(buffer, offset, key);
+        buffer.Write(offset, key);
     }
     for (auto value : values_) {
-        Utils::WriteToBuffer(buffer, offset, value);
+        buffer.Write(offset, value);
     }
 }
 
@@ -86,7 +83,7 @@ BPlusTreeBulkLoader::BPlusTreeBulkLoader(const std::filesystem::path& file_path,
                                                      (sizeof(double) + sizeof(unsigned int)));
     leaf_node_order_ =
         static_cast<unsigned int>((page_size - LeafNode::GetHeaderSize()) / (sizeof(double) + sizeof(unsigned int)));
-    buffer_.resize(page_size_, 0);
+    buffer_.Init(page_size_);
 }
 
 void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) {
@@ -172,8 +169,8 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
     // write the header
     size_t offset = 0;
 
-    Utils::WriteToBuffer(buffer_, offset, root_page_num_);
-    Utils::WriteToBuffer(buffer_, offset, level_);
+    buffer_.Write(offset, root_page_num_);
+    buffer_.Write(offset, level_);
 
     WritePage(0);
 }
@@ -191,5 +188,84 @@ unsigned int BPlusTreeBulkLoader::AllocatePage() {
 
 void BPlusTreeBulkLoader::WritePage(unsigned int page_num) {
     ofs_.seekp(static_cast<std::streamoff>(page_num * page_size_));
-    ofs_.write(buffer_.data(), static_cast<std::streamsize>(buffer_.size()));
+    buffer_.Save(ofs_);
+}
+
+// ---------- BPlusTreeSearcher Implementation ----------
+BPlusTreeSearcher::BPlusTreeSearcher(const std::filesystem::path& file_path, unsigned int page_size)
+    : page_size_(page_size) {
+    // Open the B+ tree file
+    ifs_.open(file_path, std::ios::binary);
+    if (!ifs_) {
+        spdlog::error("Failed to open file: {}", file_path.string());
+        return;
+    }
+
+    // Initialize the buffer
+    buffer_.Init(page_size_);
+}
+
+void BPlusTreeSearcher::Init(double query_key) {
+    query_key_ = query_key;
+
+    // Locate the leaf node that may contain the key.
+    std::shared_ptr<LeafNode> leaf_node = LocateLeafMayContainKey();
+    auto it = std::ranges::lower_bound(leaf_node->keys_, query_key_);
+    auto index = static_cast<size_t>(std::distance(leaf_node->keys_.begin(), it));
+
+    // Determine the left search location
+    if (index == 0) {
+        if (leaf_node->prev_leaf_page_num_ != 0) {
+            std::shared_ptr<LeafNode> prev_leaf_node = LocateLeafByPageNum(leaf_node->prev_leaf_page_num_);
+            left_ = SearchRecord{.leaf_node = prev_leaf_node, .index = prev_leaf_node->num_entries_ - 1};
+        } else {
+            left_ = std::nullopt;
+        }
+    } else {
+        left_ = SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index - 1)};
+    }
+
+    // Determine the right search location
+    if (index == leaf_node->keys_.size()) {
+        if (leaf_node->next_leaf_page_num_ != 0) {
+            std::shared_ptr<LeafNode> next_leaf_node = LocateLeafByPageNum(leaf_node->next_leaf_page_num_);
+            right_ = SearchRecord{.leaf_node = next_leaf_node, .index = 0};
+        } else {
+            right_ = std::nullopt;
+        }
+    } else {
+        right_ = SearchRecord{.leaf_node = leaf_node, .index = static_cast<unsigned int>(index)};
+    }
+}
+
+void BPlusTreeSearcher::ReadPage(unsigned int page_num) {
+    ifs_.seekg(static_cast<std::streamoff>(page_num) * page_size_, std::ios::beg);
+    buffer_.Load(ifs_);
+}
+
+std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafMayContainKey() {
+    ReadPage(0);
+    size_t offset = 0;
+    auto root_page_num = buffer_.Read<unsigned int>(offset);
+    auto level = buffer_.Read<unsigned int>(offset);
+
+    unsigned int current_level = level;
+    unsigned int next_page_num = root_page_num;
+    while (current_level != 0) {
+        ReadPage(next_page_num);
+        InternalNode internal_node(buffer_);
+
+        auto it = std::ranges::upper_bound(internal_node.keys_, query_key_);
+        auto index = static_cast<size_t>(std::distance(internal_node.keys_.begin(), it));
+        next_page_num = internal_node.pointers_.at(index);
+
+        current_level--;
+    }
+    return LocateLeafByPageNum(next_page_num);
+}
+
+std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafByPageNum(unsigned int page_num) {
+    ReadPage(page_num);
+    auto new_node_ptr = std::make_shared<LeafNode>(buffer_);
+    return new_node_ptr;
 }

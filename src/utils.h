@@ -6,7 +6,7 @@
 #include <Eigen/Eigen>
 #include <random>
 
-#include "types.h"
+#include "point_set.h"
 
 class Calc {
    public:
@@ -30,53 +30,5 @@ class Sample {
    public:
     static unsigned int FromWeights(const std::vector<double> &weights);
 };
-
-class Utils {
-   public:
-    static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
-                                                 unsigned int num_dimensions);
-    static Point ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id);
-
-    template <typename T>
-    static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);
-
-    template <typename T>
-    static std::vector<T> ReadVectorFromBuffer(const std::vector<char> &buffer, size_t &offset, size_t count);
-
-    template <typename T>
-    static void WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data);
-};
-
-template <typename T>
-T Utils::ReadFromBuffer(const std::vector<char> &buffer, size_t &offset) {
-    if (offset + sizeof(T) > buffer.size()) {
-        spdlog::error("Not enough data in buffer to read.");
-    }
-
-    T data;
-    std::memcpy(&data, &buffer[offset], sizeof(T));
-    offset += sizeof(T);
-
-    return data;
-}
-
-template <typename T>
-std::vector<T> Utils::ReadVectorFromBuffer(const std::vector<char> &buffer, size_t &offset, size_t count) {
-    const size_t num_bytes_to_read = count * sizeof(T);
-    std::vector<T> result(count);
-    std::memcpy(result.data(), &buffer[offset], num_bytes_to_read);
-
-    offset += num_bytes_to_read;
-    return result;
-}
-
-template <typename T>
-void Utils::WriteToBuffer(std::vector<char> &buffer, size_t &offset, const T &data) {
-    if (offset + sizeof(T) > buffer.size()) {
-        spdlog::error("Not enough space in buffer to write.");
-    }
-    std::memcpy(&buffer[offset], &data, sizeof(T));
-    offset += sizeof(T);
-}
 
 #endif

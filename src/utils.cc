@@ -83,36 +83,3 @@ unsigned int Sample::FromWeights(const std::vector<double> &weights) {
 
     return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
 }
-
-std::vector<Point> Utils::LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
-                                             unsigned int num_dimensions) {
-    std::ifstream ifs(file_path);
-    if (!ifs.is_open()) {
-        spdlog::error("Could not open base points file: {}", file_path.string());
-        return {};
-    }
-
-    unsigned int total_doubles = num_points * num_dimensions;
-    std::vector<double> buffer(total_doubles);
-    ifs.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamoff>(total_doubles * sizeof(Coordinate)));
-
-    std::vector<Point> points;
-    points.reserve(num_points);
-    for (unsigned int i = 0; i < num_points; ++i) {
-        auto start_offset = i * num_dimensions;
-        auto end_offset = start_offset + num_dimensions;
-        auto start_it = buffer.begin() + start_offset;
-        auto end_it = buffer.begin() + end_offset;
-        points.emplace_back(start_it, end_it);
-    }
-
-    return points;
-}
-
-Point Utils::ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id) {
-    ifs.seekg(static_cast<std::streamoff>(static_cast<unsigned long>(point_id * num_dimensions) * sizeof(Coordinate)),
-              std::ios::beg);
-    Point point(num_dimensions);
-    ifs.read(reinterpret_cast<char *>(point.data()), static_cast<std::streamoff>(num_dimensions * sizeof(Coordinate)));
-    return point;
-}

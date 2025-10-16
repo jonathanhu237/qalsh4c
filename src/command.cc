@@ -17,6 +17,7 @@
 #include "b_plus_tree.h"
 #include "estimator.h"
 #include "global.h"
+#include "point_set.h"
 #include "utils.h"
 
 // --------------------------------------------------
@@ -132,17 +133,14 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     }
 
     // Open the point set file
-    std::ifstream base_file(point_set_metadata.file_path, std::ios::binary);
-    if (!base_file.is_open()) {
-        spdlog::error("Failed to open base file: {}", point_set_metadata.file_path.string());
-        return;
-    }
+    PointSet base;
+    base.Init(point_set_metadata.file_path, point_set_metadata.num_points, point_set_metadata.num_dimensions);
 
     // Build the B+ trees for each hash table.
     spdlog::info("Building B+ trees for each hash table...");
     std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
     for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
-        Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, i);
+        Point point = base.ReadPoint(i);
         for (unsigned int j = 0; j < config.num_hash_tables; j++) {
             double dot_product = Calc::DotProduct(point, dot_vectors[j]);
             data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});

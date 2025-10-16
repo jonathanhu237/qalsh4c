@@ -6,14 +6,13 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
-#include <fstream>
-#include <ios>
 #include <memory>
 #include <numeric>
 #include <utility>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "point_set.h"
 #include "types.h"
 #include "utils.h"
 #include "weights_generator.h"
@@ -30,17 +29,14 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     }
 
     std::vector<double> distances;
-    ann_searcher_->Init(to, norm_order);
+    ann_searcher_->Init(to.file_path, to.num_points, to.num_dimensions, norm_order);
 
-    std::ifstream query_file(from.file_path, std::ios::binary);
-    if (!query_file.is_open()) {
-        spdlog::error("Failed to open query file: {}", from.file_path.string());
-        return 0.0;
-    }
+    PointSet queries;
+    queries.Init(from.file_path, from.num_points, from.num_dimensions);
+
     distances.reserve(from.num_points);
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
-        distances.emplace_back(
-            ann_searcher_->Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id)).distance);
+        distances.emplace_back(ann_searcher_->Search(queries.ReadPoint(point_id)).distance);
     }
 
     return std::accumulate(distances.begin(), distances.end(), 0.0);
@@ -105,13 +101,11 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     };
 
     ann_searcher = std::make_unique<LinearScanAnnSearcher>();
-    ann_searcher->Init(to, norm_order);
-    std::ifstream query_file(from.file_path, std::ios::binary);
-    if (!query_file.is_open()) {
-        spdlog::error("Failed to open query file: {}", from.file_path.string());
-        return 0.0;
-    }
-    processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
+    ann_searcher->Init(to.file_path, to.num_points, to.num_dimensions, norm_order);
+
+    PointSet queries;
+    queries.Init(from.file_path, from.num_points, from.num_dimensions);
+    processing_loop([&](unsigned int id) { return queries.ReadPoint(id); });
 
     return estimation / updated_num_samples;
 }

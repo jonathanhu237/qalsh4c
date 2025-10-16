@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "ann_searcher.h"
-#include "utils.h"
+#include "point_set.h"
 
 // --------------------------------------------------
 // UniformWeightsGenerator Implementation
@@ -48,17 +48,13 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH (Disk)...");
+    ann_searcher_->Init(to_metadata.file_path, to_metadata.num_points, to_metadata.num_dimensions, norm_order);
 
-    ann_searcher_->Init(to_metadata, norm_order);
-
-    std::ifstream base_file(from_metadata.file_path, std::ios::binary);
-    if (!base_file.is_open()) {
-        spdlog::error("Failed to open base file: {}", from_metadata.file_path.string());
-        return {};
-    }
+    PointSet base;
+    base.Init(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
 
     for (unsigned int i = 0; i < from_metadata.num_points; i++) {
-        weights[i] = ann_searcher_->Search(Utils::ReadPoint(base_file, from_metadata.num_dimensions, i)).distance;
+        weights[i] = ann_searcher_->Search(base.ReadPoint(i)).distance;
     }
 
     if (use_cache) {
