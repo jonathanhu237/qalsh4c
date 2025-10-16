@@ -27,25 +27,11 @@ class UniformWeightsGenerator : public WeightsGenerator {
 };
 
 // --------------------------------------------------
-// InMemoryQalshWeightsGenerator Definition
+// QalshWeightsGenerator Definition
 // --------------------------------------------------
-class InMemoryQalshWeightsGenerator : public WeightsGenerator {
+class QalshWeightsGenerator : public WeightsGenerator {
    public:
-    InMemoryQalshWeightsGenerator(double approximation_ratio);
-    std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
-
-   private:
-    double approximation_ratio_;
-    std::unique_ptr<AnnSearcher> ann_searcher_;
-};
-
-// --------------------------------------------------
-// DiskQalshWeightsGenerator Definition
-// --------------------------------------------------
-class DiskQalshWeightsGenerator : public WeightsGenerator {
-   public:
-    DiskQalshWeightsGenerator();
+    QalshWeightsGenerator();
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  double norm_order, bool use_cache) override;
 

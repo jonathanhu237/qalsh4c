@@ -3,7 +3,6 @@
 
 #include <fstream>
 #include <memory>
-#include <random>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -20,25 +19,11 @@ class AnnSearcher {
 };
 
 // ---------------------------------------------
-// InMemoryLinearScanAnnSearcher Definition
+// LinearScanAnnSearcher Definition
 // ---------------------------------------------
-class InMemoryLinearScanAnnSearcher : public AnnSearcher {
+class LinearScanAnnSearcher : public AnnSearcher {
    public:
-    InMemoryLinearScanAnnSearcher() = default;
-    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
-    AnnResult Search(const Point& query_point) override;
-
-   private:
-    std::vector<Point> base_points_;
-    double norm_order_{0.0};
-};
-
-// ---------------------------------------------
-// DiskLinearScanAnnSearcher Definition
-// ---------------------------------------------
-class DiskLinearScanAnnSearcher : public AnnSearcher {
-   public:
-    DiskLinearScanAnnSearcher() = default;
+    LinearScanAnnSearcher() = default;
     void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
@@ -50,34 +35,16 @@ class DiskLinearScanAnnSearcher : public AnnSearcher {
 };
 
 // ---------------------------------------------
-// InMemoryQalshAnnSearcher Definition
+// QalshAnnSearcher Definition
 // ---------------------------------------------
-class InMemoryQalshAnnSearcher : public AnnSearcher {
-   public:
-    InMemoryQalshAnnSearcher(double approximation_ratio);
-    void Init(const PointSetMetadata& base_metadata, double norm_order) override;
-    AnnResult Search(const Point& query_point) override;
-
-   private:
-    std::mt19937 gen_;
-    std::vector<Point> base_points_;
-    double norm_order_{0.0};
-    QalshConfig qalsh_config_;
-    std::vector<Point> dot_vectors_;
-    std::vector<std::vector<DotProductPointIdPair>> hash_tables_;
-};
-
-// ---------------------------------------------
-// DiskQalshAnnSearcher Definition
-// ---------------------------------------------
-class DiskQalshAnnSearcher : public AnnSearcher {
+class QalshAnnSearcher : public AnnSearcher {
    public:
     struct SearchRecord {
         std::shared_ptr<LeafNode> leaf_node;
         unsigned int index{0};
     };
 
-    DiskQalshAnnSearcher() = default;
+    QalshAnnSearcher() = default;
     void Init(const PointSetMetadata& base_metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 

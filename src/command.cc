@@ -161,11 +161,8 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 // EstimateCommand Implementation
 // --------------------------------------------------
 EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order,
-                                 std::filesystem::path dataset_directory, bool in_memory)
-    : estimator_(std::move(estimator)),
-      norm_order_(norm_order),
-      dataset_directory_(std::move(dataset_directory)),
-      in_memory_(in_memory) {}
+                                 std::filesystem::path dataset_directory)
+    : estimator_(std::move(estimator)), norm_order_(norm_order), dataset_directory_(std::move(dataset_directory)) {}
 
 void EstimateCommand::Execute() {
     // Load dataset metadata
@@ -188,13 +185,11 @@ void EstimateCommand::Execute() {
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Utils::GetMemoryUsage();
     spdlog::info("Calculating the distance from A to B...");
-    double distance_ab =
-        estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_, in_memory_);
+    double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_);
 
     // Calculate the distance from B to A
     spdlog::info("Calculating the distance from B to A...");
-    double distance_ba =
-        estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_, in_memory_);
+    double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_);
     auto end = std::chrono::high_resolution_clock::now();
     double memory_after = Utils::GetMemoryUsage();
 

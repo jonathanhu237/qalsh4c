@@ -11,7 +11,7 @@
 class InternalNode {
    public:
     friend class BPlusTreeBulkLoader;
-    friend class DiskQalshAnnSearcher;
+    friend class QalshAnnSearcher;
     InternalNode(unsigned int order);
     InternalNode(const std::vector<char>& buffer);
 
@@ -30,7 +30,7 @@ class InternalNode {
 class LeafNode {
    public:
     friend class BPlusTreeBulkLoader;
-    friend class DiskQalshAnnSearcher;
+    friend class QalshAnnSearcher;
     LeafNode(unsigned int order);
     LeafNode(const std::vector<char>& buffer);
 

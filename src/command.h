@@ -31,15 +31,13 @@ class IndexCommand : public Command {
 
 class EstimateCommand : public Command {
    public:
-    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory,
-                    bool in_memory);
+    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory);
     void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;
     double norm_order_;
     std::filesystem::path dataset_directory_;
-    bool in_memory_;
 };
 
 #endif

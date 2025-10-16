@@ -23,8 +23,7 @@
 // --------------------------------------------------
 AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
 
-double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
-                                      bool in_memory) {
+double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) {
     // Check the ANN searcher
     if (!ann_searcher_) {
         spdlog::error("The ANN searcher is not set.");
@@ -33,21 +32,15 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     std::vector<double> distances;
     ann_searcher_->Init(to, norm_order);
 
-    if (in_memory) {
-        std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-        for (const auto& point : query_set) {
-            distances.emplace_back(ann_searcher_->Search(point).distance);
-        }
-    } else {
-        std::ifstream query_file(from.file_path, std::ios::binary);
-        if (!query_file.is_open()) {
-            spdlog::error("Failed to open query file: {}", from.file_path.string());
-            return 0.0;
-        }
-        for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
-            distances.emplace_back(
-                ann_searcher_->Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id)).distance);
-        }
+    std::ifstream query_file(from.file_path, std::ios::binary);
+    if (!query_file.is_open()) {
+        spdlog::error("Failed to open query file: {}", from.file_path.string());
+        return 0.0;
+    }
+    distances.reserve(from.num_points);
+    for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
+        distances.emplace_back(
+            ann_searcher_->Search(Utils::ReadPoint(query_file, from.num_dimensions, point_id)).distance);
     }
 
     return std::accumulate(distances.begin(), distances.end(), 0.0);
@@ -64,8 +57,8 @@ SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_g
       error_probability_(error_probability),
       use_cache_(use_cache) {}
 
-double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
-                                           bool in_memory) {
+double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
+                                           double norm_order) {
     // Check the ANN searcher
     if (!weights_generator_) {
         spdlog::error("The ANN searcher is not set.");
@@ -74,7 +67,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     // Update the num_samples_
     unsigned int updated_num_samples = num_samples_;
     if (updated_num_samples == 0) {
-        if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<DiskQalshWeightsGenerator*>(weights_generator_.get())) {
+        if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get())) {
             std::filesystem::path qalsh_config_path = to.file_path.parent_path() / "index" /
                                                       std::format("l{}", norm_order) / to.file_path.stem() /
                                                       "config.json";
@@ -110,21 +103,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         }
     };
 
-    if (in_memory) {
-        ann_searcher = std::make_unique<InMemoryLinearScanAnnSearcher>();
-        ann_searcher->Init(to, norm_order);
-        std::vector<Point> query_set = Utils::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-        processing_loop([&](unsigned int id) { return query_set[id]; });
-    } else {
-        ann_searcher = std::make_unique<DiskLinearScanAnnSearcher>();
-        ann_searcher->Init(to, norm_order);
-        std::ifstream query_file(from.file_path, std::ios::binary);
-        if (!query_file.is_open()) {
-            spdlog::error("Failed to open query file: {}", from.file_path.string());
-            return 0.0;
-        }
-        processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
+    ann_searcher = std::make_unique<LinearScanAnnSearcher>();
+    ann_searcher->Init(to, norm_order);
+    std::ifstream query_file(from.file_path, std::ios::binary);
+    if (!query_file.is_open()) {
+        spdlog::error("Failed to open query file: {}", from.file_path.string());
+        return 0.0;
     }
+    processing_loop([&](unsigned int id) { return Utils::ReadPoint(query_file, from.num_dimensions, id); });
 
     return estimation / updated_num_samples;
 }

@@ -78,17 +78,13 @@ int main(int argc, char** argv) {
 
     estimate->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
-    bool in_memory{false};
-    estimate->add_flag("--in-memory", in_memory, "Run the algorithm in memory")
-        ->default_str(in_memory ? "True" : "False");
-
     std::unique_ptr<Estimator> estimator;
     estimate->require_subcommand(1);
     estimate->callback([&]() {
         if (!estimator) {
             spdlog::error("Estimator is not set. Please specify a estimator.");
         }
-        command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory, in_memory);
+        command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory);
     });
 
     // ------------------------------
@@ -110,13 +106,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* linear_scan = ann->add_subcommand("linear_scan", "Use linear scan for ANN.");
 
-    linear_scan->callback([&] {
-        if (in_memory) {
-            ann_searcher = std::make_unique<InMemoryLinearScanAnnSearcher>();
-        } else {
-            ann_searcher = std::make_unique<DiskLinearScanAnnSearcher>();
-        }
-    });
+    linear_scan->callback([&] { ann_searcher = std::make_unique<LinearScanAnnSearcher>(); });
 
     // ------------------------------
     // qalsh ann estimate
@@ -126,14 +116,7 @@ int main(int argc, char** argv) {
     qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    // If in_memory = false, the setting of approximation_ratio would not have any effect.
-    qalsh_ann->callback([&] {
-        if (in_memory) {
-            ann_searcher = std::make_unique<InMemoryQalshAnnSearcher>(approximation_ratio);
-        } else {
-            ann_searcher = std::make_unique<DiskQalshAnnSearcher>();
-        }
-    });
+    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(); });
 
     // ------------------------------
     // sampling estimate
@@ -177,13 +160,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
 
-    qalsh_sampling->callback([&]() {
-        if (in_memory) {
-            weights_generator = std::make_unique<InMemoryQalshWeightsGenerator>(approximation_ratio);
-        } else {
-            weights_generator = std::make_unique<DiskQalshWeightsGenerator>();
-        }
-    });
+    qalsh_sampling->callback([&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(); });
 
     CLI11_PARSE(app, argc, argv);
 

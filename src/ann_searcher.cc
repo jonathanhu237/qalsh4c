@@ -9,7 +9,6 @@
 #include <memory>
 #include <optional>
 #include <queue>
-#include <random>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -18,32 +17,9 @@
 #include "utils.h"
 
 // ---------------------------------------------
-// InMemoryLinearScanAnnSearcher Definition
+// LinearScanAnnSearcher Implementation
 // ---------------------------------------------
-void InMemoryLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
-    base_points_ =
-        Utils::LoadPointsFromFile(base_metadata.file_path, base_metadata.num_points, base_metadata.num_dimensions);
-    norm_order_ = norm_order;
-}
-
-AnnResult InMemoryLinearScanAnnSearcher::Search(const Point& query_point) {
-    AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
-
-    for (unsigned int i = 0; i < base_points_.size(); i++) {
-        double distance = Utils::LpDistance(base_points_[i], query_point, norm_order_);
-        if (distance < result.distance) {
-            result.point_id = i;
-            result.distance = distance;
-        }
-    }
-
-    return result;
-}
-
-// ---------------------------------------------
-// DiskLinearScanAnnSearcher Definition
-// ---------------------------------------------
-void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
+void LinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     if (base_file_.is_open()) {
         base_file_.close();
     }
@@ -57,7 +33,7 @@ void DiskLinearScanAnnSearcher::Init(const PointSetMetadata& base_metadata, doub
     norm_order_ = norm_order;
 }
 
-AnnResult DiskLinearScanAnnSearcher::Search(const Point& query_point) {
+AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
     AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
 
     for (unsigned int i = 0; i < num_points_; i++) {
@@ -72,206 +48,9 @@ AnnResult DiskLinearScanAnnSearcher::Search(const Point& query_point) {
 }
 
 // ---------------------------------------------
-// InMemoryQalshAnnSearcher Implementation
+// QalshAnnSearcher Implementation
 // ---------------------------------------------
-InMemoryQalshAnnSearcher::InMemoryQalshAnnSearcher(double approximation_ratio) : gen_(Utils::CreateSeededGenerator()) {
-    qalsh_config_.approximation_ratio = approximation_ratio;
-}
-
-void InMemoryQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
-    // Load the base points from the file.
-    base_points_ =
-        Utils::LoadPointsFromFile(base_metadata.file_path, base_metadata.num_points, base_metadata.num_dimensions);
-    norm_order_ = norm_order;
-
-    // Regularize the QalshConfig parameters based on the number of points.
-    Utils::RegularizeQalshConfig(qalsh_config_, base_metadata.num_points, norm_order_);
-
-    // Print the QalshConfig parameters.
-    spdlog::info(
-        "QALSH Configuration:\n"
-        "\tApproximation Ratio: {}\n"
-        "\tBucket Width: {}\n"
-        "\tError Probability: {}\n"
-        "\tNumber of Hash Tables: {}\n"
-        "\tCollision Threshold: {}",
-        qalsh_config_.approximation_ratio, qalsh_config_.bucket_width, qalsh_config_.error_probability,
-        qalsh_config_.num_hash_tables, qalsh_config_.collision_threshold);
-
-    // Generate dot vectors.
-    dot_vectors_.clear();
-    dot_vectors_.resize(qalsh_config_.num_hash_tables);
-    std::function<double()> generator;
-    auto num_dimensions = static_cast<unsigned int>(base_points_[0].size());
-
-    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
-        std::cauchy_distribution<double> dist(0.0, 1.0);
-        generator = [dist, this]() mutable { return dist(gen_); };
-    }
-    // NOLINTNEXTLINE(readability-magic-numbers)
-    else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
-        std::normal_distribution<double> dist(0.0, 1.0);
-        generator = [dist, this]() mutable { return dist(gen_); };
-    } else {
-        spdlog::error("Unsupported norm order: {}", norm_order_);
-    }
-
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        dot_vectors_[i].reserve(num_dimensions);
-        std::ranges::generate_n(std::back_inserter(dot_vectors_[i]), num_dimensions, [&]() { return generator(); });
-    }
-
-    // Initialize QALSH hash tables.
-    hash_tables_.clear();
-    hash_tables_.resize(qalsh_config_.num_hash_tables);
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        hash_tables_[i].reserve(base_metadata.num_points);
-        for (unsigned int j = 0; j < base_metadata.num_points; j++) {
-            hash_tables_[i].emplace_back(DotProductPointIdPair{
-                .dot_product = Utils::DotProduct(base_points_[j], dot_vectors_[i]), .point_id = j});
-        }
-        std::ranges::sort(hash_tables_[i], {}, &DotProductPointIdPair::dot_product);
-    }
-}
-
-// NOLINTBEGIN(readability-function-cognitive-complexity)
-AnnResult InMemoryQalshAnnSearcher::Search(const Point& query_point) {
-    std::vector<unsigned int> collision_count(base_points_.size(), 0);
-    std::vector<bool> visited(base_points_.size(), false);
-    std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
-
-    unsigned int num_hash_tables = qalsh_config_.num_hash_tables;
-    unsigned int collision_threshold = qalsh_config_.collision_threshold;
-    double bucket_width = qalsh_config_.bucket_width;
-    double approximation_ratio = qalsh_config_.approximation_ratio;
-
-    std::vector<double> keys;
-    keys.reserve(num_hash_tables);
-    std::vector<std::optional<unsigned int>> lefts;
-    lefts.reserve(num_hash_tables);
-    std::vector<std::optional<unsigned int>> rights;
-    rights.reserve(num_hash_tables);
-
-    // Initialize the keys, lefts and rights.
-    for (unsigned int i = 0; i < num_hash_tables; i++) {
-        double table_key = Utils::DotProduct(query_point, dot_vectors_[i]);
-        keys.emplace_back(table_key);
-        auto it = std::ranges::lower_bound(hash_tables_[i], table_key, {}, &DotProductPointIdPair::dot_product);
-        auto index = static_cast<size_t>(std::distance(hash_tables_[i].begin(), it));
-
-        lefts.emplace_back(index == 0 ? std::nullopt : std::make_optional(index - 1));
-        rights.emplace_back(index == hash_tables_[i].size() ? std::nullopt : std::make_optional(index));
-    }
-
-    // c-ANN search
-    double radius = 1.0;
-    double width = bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
-
-    while (true) {
-        unsigned int num_finished = 0;
-        std::vector<bool> finish(num_hash_tables, false);
-        while (num_finished < num_hash_tables) {
-            for (unsigned int i = 0; i < num_hash_tables; i++) {
-                if (finish[i]) {
-                    continue;
-                }
-                double table_key = keys[i];
-
-                // Scan the left side of hash table.
-                bool left_finished = !lefts[i].has_value();
-                for (unsigned int j = 0; j < Global::kScanSize; j++) {
-                    if (!lefts[i].has_value()) {
-                        left_finished = true;
-                        break;
-                    }
-                    auto& [dot_product, point_id] = hash_tables_[i][lefts[i].value()];
-                    if (table_key - dot_product > width) {
-                        left_finished = true;
-                        break;
-                    }
-                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
-                        visited[point_id] = true;
-                        candidates.emplace(
-                            AnnResult{.distance = Utils::LpDistance(base_points_[point_id], query_point, norm_order_),
-                                      .point_id = point_id});
-                        if (candidates.size() >= Global::kNumCandidates) {
-                            break;
-                        }
-                    }
-                    if (lefts[i].value() > 0) {
-                        lefts[i].value()--;
-                    } else {
-                        lefts[i] = std::nullopt;
-                        left_finished = true;
-                        break;
-                    }
-                }
-                if (candidates.size() >= Global::kNumCandidates) {
-                    break;
-                }
-
-                // Scan the right side of hash table.
-                bool right_finish = !rights[i].has_value();
-                for (unsigned int j = 0; j < Global::kScanSize; j++) {
-                    if (!rights[i].has_value()) {
-                        right_finish = true;
-                        break;
-                    }
-                    auto& [dot_product, point_id] = hash_tables_[i][rights[i].value()];
-                    if (dot_product - table_key > width) {
-                        right_finish = true;
-                        break;
-                    }
-                    if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
-                        visited[point_id] = true;
-                        candidates.emplace(
-                            AnnResult{.distance = Utils::LpDistance(base_points_[point_id], query_point, norm_order_),
-                                      .point_id = point_id});
-                        if (candidates.size() >= Global::kNumCandidates) {
-                            break;
-                        }
-                    }
-                    if (rights[i].value() < hash_tables_[i].size() - 1) {
-                        rights[i].value()++;
-                    } else {
-                        rights[i] = std::nullopt;
-                        right_finish = true;
-                        break;
-                    }
-                }
-                if (candidates.size() >= Global::kNumCandidates) {
-                    break;
-                }
-
-                if (left_finished && right_finish) {
-                    finish[i] = true;
-                    if (++num_finished == num_hash_tables) {
-                        break;
-                    }
-                }
-            }
-            if (num_finished == num_hash_tables || candidates.size() >= Global::kNumCandidates) {
-                break;
-            }
-        }
-        if (!candidates.empty() && (candidates.top().distance <= approximation_ratio * radius ||
-                                    candidates.size() >= Global::kNumCandidates)) {
-            break;
-        }
-
-        radius *= approximation_ratio;
-        width = bucket_width * radius / 2.0;  // NOLINT(readability-magic-numbers)
-    }
-
-    return candidates.empty() ? AnnResult{.distance = std::numeric_limits<double>::max(), .point_id = 0}
-                              : candidates.top();
-}
-// NOLINTEND(readability-function-cognitive-complexity)
-
-// ---------------------------------------------
-// DiskQalshAnnSearcher Implementation
-// ---------------------------------------------
-void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
+void QalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_order) {
     // Open the base file.
     if (base_file_.is_open()) {
         base_file_.close();
@@ -337,7 +116,7 @@ void DiskQalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double no
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
-AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
+AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     std::vector<unsigned int> collision_count(num_points_, 0);
     std::vector<bool> visited(num_points_, false);
     std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
@@ -523,7 +302,7 @@ AnnResult DiskQalshAnnSearcher::Search(const Point& query_point) {
 }
 // NOLINTEND(readability-function-cognitive-complexity)
 
-std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, double key) {
+std::shared_ptr<LeafNode> QalshAnnSearcher::LocateLeafMayContainKey(std::ifstream& ifs, double key) {
     ReadPage(ifs, 0);
     size_t offset = 0;
     auto root_page_num = Utils::ReadFromBuffer<unsigned int>(buffer_, offset);
@@ -544,13 +323,13 @@ std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafMayContainKey(std::ifs
     return LocateLeafByPageNum(ifs, next_page_num);
 }
 
-std::shared_ptr<LeafNode> DiskQalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int page_num) {
+std::shared_ptr<LeafNode> QalshAnnSearcher::LocateLeafByPageNum(std::ifstream& ifs, unsigned int page_num) {
     ReadPage(ifs, page_num);
     auto new_node_ptr = std::make_shared<LeafNode>(buffer_);
     return new_node_ptr;
 }
 
-void DiskQalshAnnSearcher::ReadPage(std::ifstream& ifs, unsigned int page_num) {
+void QalshAnnSearcher::ReadPage(std::ifstream& ifs, unsigned int page_num) {
     ifs.seekg(static_cast<std::streamoff>(page_num) * qalsh_config_.page_size, std::ios::beg);
     ifs.read(buffer_.data(), static_cast<std::streamsize>(qalsh_config_.page_size));
 }
