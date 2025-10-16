@@ -24,3 +24,6 @@ __pycache__
 # perf
 perf.data
 perf.data.old
+
+# Vscode
+.vscode/
