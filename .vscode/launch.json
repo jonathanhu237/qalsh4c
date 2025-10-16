@@ -8,7 +8,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug L1 QALSH ANN Estimator (In Memory)",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "program": "${workspaceRoot}/build/qalsh4c",
             "args": [
                 "--use-fixed-seed",
                 "estimate",
@@ -27,7 +27,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug QALSH Sampling Estimator (In Memory)",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "program": "${workspaceRoot}/build/qalsh4c",
             "args": [
                 "--use-fixed-seed",
                 "estimate",
@@ -44,7 +44,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug QALSH Index",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "program": "${workspaceRoot}/build/qalsh4c",
             "args": [
                 "--use-fixed-seed",
                 "index",
@@ -58,7 +58,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug QALSH Ann Estimator (Disk)",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "program": "${workspaceRoot}/build/qalsh4c",
             "args": [
                 "--use-fixed-seed",
                 "estimate",
@@ -74,7 +74,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Debug QALSH Sampling Estimator (Disk)",
-            "program": "${workspaceRoot}/build/qalsh_chamfer",
+            "program": "${workspaceRoot}/build/qalsh4c",
             "args": [
                 "--use-fixed-seed",
                 "estimate",

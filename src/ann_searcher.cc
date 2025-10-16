@@ -44,7 +44,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
 
     // Load QALSH configuration.
     std::filesystem::path index_directory =
-        metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_);
+        metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_) / metadata.file_path.stem();
     qalsh_config_.Load(index_directory / "config.json");
 
     // Load the dot vectors.

@@ -10,7 +10,7 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
-add_executable(qalsh_chamfer 
+add_executable(qalsh4c 
     src/ann_searcher.cc
     src/b_plus_tree.cc
     src/buffer.cc
@@ -24,7 +24,7 @@ add_executable(qalsh_chamfer
     src/weights_generator.cc
 )
 
-target_link_libraries(qalsh_chamfer PRIVATE 
+target_link_libraries(qalsh4c PRIVATE 
     CLI11::CLI11
     spdlog::spdlog
     Eigen3::Eigen
