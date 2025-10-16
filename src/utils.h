@@ -8,10 +8,16 @@
 
 #include "types.h"
 
-class Utils {
+class Calc {
    public:
     static double LpDistance(const Point &pt1, const Point &pt2, double norm_order);
     static double DotProduct(const Point &pt1, const Point &pt2);
+    static double L1Probability(double x);
+    static double L2Probability(double x);
+};
+
+class Utils {
+   public:
     static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                                  unsigned int num_dimensions);
@@ -22,8 +28,6 @@ class Utils {
     static unsigned int SampleFromWeights(const std::vector<double> &weights);
     static double GetMemoryUsage();
     static std::mt19937 CreateSeededGenerator();
-    static double CalculateL1Probability(double x);
-    static double CalculateL2Probability(double x);
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);

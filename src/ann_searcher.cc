@@ -37,7 +37,7 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
     AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
 
     for (unsigned int i = 0; i < num_points_; i++) {
-        double distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, i), query_point, norm_order_);
+        double distance = Calc::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, i), query_point, norm_order_);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -135,7 +135,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
     // Initialize the keys, lefts and rights.
     for (unsigned int i = 0; i < num_hash_tables; i++) {
-        double table_key = Utils::DotProduct(query_point, dot_vectors_[i]);
+        double table_key = Calc::DotProduct(query_point, dot_vectors_[i]);
         keys.emplace_back(table_key);
 
         // Locate the leaf node that may contain the key.
@@ -208,8 +208,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{
-                            .distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
-                                                          query_point, norm_order_),
+                            .distance = Calc::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
+                                                         query_point, norm_order_),
                             .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;
@@ -254,8 +254,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                     if (!visited[point_id] && ++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
                         candidates.emplace(AnnResult{
-                            .distance = Utils::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
-                                                          query_point, norm_order_),
+                            .distance = Calc::LpDistance(Utils::ReadPoint(base_file_, num_dimensions_, point_id),
+                                                         query_point, norm_order_),
                             .point_id = point_id});
                         if (candidates.size() >= Global::kNumCandidates) {
                             break;

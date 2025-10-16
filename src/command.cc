@@ -143,7 +143,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
         Point point = Utils::ReadPoint(base_file, point_set_metadata.num_dimensions, i);
         for (unsigned int j = 0; j < config.num_hash_tables; j++) {
-            double dot_product = Utils::DotProduct(point, dot_vectors[j]);
+            double dot_product = Calc::DotProduct(point, dot_vectors[j]);
             data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});
         }
     }

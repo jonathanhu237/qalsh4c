@@ -13,7 +13,7 @@
 
 #include "global.h"
 
-double Utils::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
+double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
     Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
     Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
@@ -28,12 +28,16 @@ double Utils::LpDistance(const Point &pt1, const Point &pt2, double norm_order) 
     return 0.0;
 }
 
-double Utils::DotProduct(const Point &pt1, const Point &pt2) {
+double Calc::DotProduct(const Point &pt1, const Point &pt2) {
     Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
     Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
     return v1.dot(v2);
 }
+
+double Calc::L1Probability(double x) { return 2.0 / std::numbers::pi_v<double> * atan(x); }  // 2 / pi * atan(x)
+
+double Calc::L2Probability(double x) { return std::erf(x * M_SQRT1_2); }  // 2 * Phi(x) - 1
 
 DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_path) {
     DatasetMetadata metadata;
@@ -101,14 +105,14 @@ void Utils::RegularizeQalshConfig(QalshConfig &config, unsigned int num_points, 
 
     if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         config.bucket_width = 2.0 * std::sqrt(config.approximation_ratio);
-        p1 = Utils::CalculateL1Probability(config.bucket_width / 2.0);
-        p2 = Utils::CalculateL1Probability(config.bucket_width / (2.0 * config.approximation_ratio));
+        p1 = Calc::L1Probability(config.bucket_width / 2.0);
+        p2 = Calc::L1Probability(config.bucket_width / (2.0 * config.approximation_ratio));
     } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         config.bucket_width =
             std::sqrt((8.0 * std::pow(config.approximation_ratio, 2.0) * std::log(config.approximation_ratio)) /
                       (std::pow(config.approximation_ratio, 2.0) - 1));
-        p1 = Utils::CalculateL2Probability(config.bucket_width / 2.0);
-        p2 = Utils::CalculateL2Probability(config.bucket_width / (2.0 * config.approximation_ratio));
+        p1 = Calc::L2Probability(config.bucket_width / 2.0);
+        p2 = Calc::L2Probability(config.bucket_width / (2.0 * config.approximation_ratio));
     } else {
         spdlog::error("Unsupported norm order: {}", norm_order);
     }
@@ -202,11 +206,3 @@ std::mt19937 Utils::CreateSeededGenerator() {
     }
     return std::mt19937(std::random_device{}());
 }
-
-// NOLINTBEGIN(readability-magic-numbers)
-double Utils::CalculateL1Probability(double x) { return 2.0 / std::numbers::pi_v<double> * atan(x); }
-// NOLINTEND(readability-magic-numbers)
-
-// NOLINTBEGIN(readability-magic-numbers)
-double Utils::CalculateL2Probability(double x) { return 1 - (2 * (0.5 * std::erfc(x * M_SQRT1_2))); }
-// NOLINTEND(readability-magic-numbers)
