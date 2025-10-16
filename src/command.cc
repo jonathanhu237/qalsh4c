@@ -134,7 +134,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Open the point set file
     PointSet base;
-    base.Init(point_set_metadata.file_path, point_set_metadata.num_points, point_set_metadata.num_dimensions);
+    base.Init(point_set_metadata);
 
     // Build the B+ trees for each hash table.
     spdlog::info("Building B+ trees for each hash table...");

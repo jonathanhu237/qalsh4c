@@ -2,13 +2,13 @@
 
 #include <spdlog/spdlog.h>
 
-void PointSet::Init(const std::filesystem::path &file_path, unsigned int num_points, unsigned int num_dimensions) {
-    num_points_ = num_points;
-    num_dimensions_ = num_dimensions;
+void PointSet::Init(const PointSetMetadata &metadata) {
+    num_points_ = metadata.num_points;
+    num_dimensions_ = metadata.num_dimensions;
 
-    ifs_.open(file_path, std::ios::binary);
+    ifs_.open(metadata.file_path, std::ios::binary);
     if (!ifs_.is_open()) {
-        throw std::runtime_error("Could not open point set file: " + file_path.string());
+        spdlog::error("Could not open point set file: {}", metadata.file_path.string());
     }
 }
 

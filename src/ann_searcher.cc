@@ -16,9 +16,8 @@
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
-void LinearScanAnnSearcher::Init(const std::filesystem::path& base_path, unsigned int num_points,
-                                 unsigned int num_dimensions, double norm_order) {
-    base_.Init(base_path, num_points, num_dimensions);
+void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+    base_.Init(metadata);
     norm_order_ = norm_order;
 }
 
@@ -39,13 +38,13 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
-void QalshAnnSearcher::Init(const std::filesystem::path& base_path, unsigned int num_points,
-                            unsigned int num_dimensions, double norm_order) {
-    base_.Init(base_path, num_points, num_dimensions);
+void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+    base_.Init(metadata);
     norm_order_ = norm_order;
 
     // Load QALSH configuration.
-    std::filesystem::path index_directory = base_path.parent_path() / "index" / std::format("l{}", norm_order_);
+    std::filesystem::path index_directory =
+        metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_);
     qalsh_config_.Load(index_directory / "config.json");
 
     // Load the dot vectors.

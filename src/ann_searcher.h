@@ -1,7 +1,6 @@
 #ifndef ANN_SEARCHER_H_
 #define ANN_SEARCHER_H_
 
-#include <filesystem>
 #include <vector>
 
 #include "b_plus_tree.h"
@@ -23,8 +22,7 @@ struct CompareAnnResult {
 class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;
-    virtual void Init(const std::filesystem::path& base_path, unsigned int num_points, unsigned int num_dimensions,
-                      double norm_order) = 0;
+    virtual void Init(const PointSetMetadata& metadata, double norm_order) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
 };
 
@@ -34,8 +32,7 @@ class AnnSearcher {
 class LinearScanAnnSearcher : public AnnSearcher {
    public:
     LinearScanAnnSearcher() = default;
-    void Init(const std::filesystem::path& base_path, unsigned int num_points, unsigned int num_dimensions,
-              double norm_order) override;
+    void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
@@ -49,8 +46,7 @@ class LinearScanAnnSearcher : public AnnSearcher {
 class QalshAnnSearcher : public AnnSearcher {
    public:
     QalshAnnSearcher() = default;
-    void Init(const std::filesystem::path& base_path, unsigned int num_points, unsigned int num_dimensions,
-              double norm_order) override;
+    void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:

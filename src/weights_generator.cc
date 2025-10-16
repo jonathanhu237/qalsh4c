@@ -48,10 +48,10 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 
     // Generate weights based on QALSH algorithm.
     spdlog::info("Generating weights using QALSH (Disk)...");
-    ann_searcher_->Init(to_metadata.file_path, to_metadata.num_points, to_metadata.num_dimensions, norm_order);
+    ann_searcher_->Init(to_metadata, norm_order);
 
     PointSet base;
-    base.Init(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
+    base.Init(from_metadata);
 
     for (unsigned int i = 0; i < from_metadata.num_points; i++) {
         weights[i] = ann_searcher_->Search(base.ReadPoint(i)).distance;

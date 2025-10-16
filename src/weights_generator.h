@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "ann_searcher.h"
-#include "types.h"
+#include "point_set.h"
 
 // --------------------------------------------------
 // WeightsGenerator Definition

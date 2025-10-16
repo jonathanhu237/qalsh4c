@@ -13,7 +13,6 @@
 
 #include "ann_searcher.h"
 #include "point_set.h"
-#include "types.h"
 #include "utils.h"
 #include "weights_generator.h"
 
@@ -29,10 +28,10 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     }
 
     std::vector<double> distances;
-    ann_searcher_->Init(to.file_path, to.num_points, to.num_dimensions, norm_order);
+    ann_searcher_->Init(to, norm_order);
 
     PointSet queries;
-    queries.Init(from.file_path, from.num_points, from.num_dimensions);
+    queries.Init(from);
 
     distances.reserve(from.num_points);
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
@@ -101,10 +100,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     };
 
     ann_searcher = std::make_unique<LinearScanAnnSearcher>();
-    ann_searcher->Init(to.file_path, to.num_points, to.num_dimensions, norm_order);
+    ann_searcher->Init(to, norm_order);
 
     PointSet queries;
-    queries.Init(from.file_path, from.num_points, from.num_dimensions);
+    queries.Init(from);
     processing_loop([&](unsigned int id) { return queries.ReadPoint(id); });
 
     return estimation / updated_num_samples;
