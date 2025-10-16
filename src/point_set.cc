@@ -6,6 +6,10 @@ void PointSet::Init(const PointSetMetadata &metadata) {
     num_points_ = metadata.num_points;
     num_dimensions_ = metadata.num_dimensions;
 
+    if (ifs_.is_open()) {
+        ifs_.close();
+    }
+
     ifs_.open(metadata.file_path, std::ios::binary);
     if (!ifs_.is_open()) {
         spdlog::error("Could not open point set file: {}", metadata.file_path.string());
