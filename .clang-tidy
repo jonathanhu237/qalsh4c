@@ -12,6 +12,8 @@ Checks: >
   performance-*,
   readability-*,
   -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -readability-magic-numbers
 
 WarningsAsErrors: true
 
