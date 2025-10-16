@@ -57,6 +57,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
                                                 base_.get_num_dimensions());
 
     // Create B+ tree searchers.
+    searchers_.clear();
     searchers_.reserve(qalsh_config_.num_hash_tables);
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         searchers_.emplace_back(index_directory / "b_plus_trees" / std::format("{}.bin", i), qalsh_config_.page_size);
