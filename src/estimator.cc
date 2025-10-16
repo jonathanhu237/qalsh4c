@@ -92,19 +92,15 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     std::unique_ptr<AnnSearcher> ann_searcher;
 
-    auto processing_loop = [&](auto&& get_point_by_id) {
-        for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
-            unsigned int point_id = Sample::FromWeights(weights);
-            estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
-        }
-    };
-
     ann_searcher = std::make_unique<LinearScanAnnSearcher>();
     ann_searcher->Init(to, norm_order);
 
     PointSet queries;
     queries.Init(from);
-    processing_loop([&](unsigned int id) { return queries.ReadPoint(id); });
+    for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
+        unsigned int point_id = Sample::FromWeights(weights);
+        estimation += (sum * ann_searcher->Search(queries.ReadPoint(point_id)).distance / weights[point_id]);
+    }
 
     return estimation / updated_num_samples;
 }
