@@ -28,7 +28,6 @@ class Memory {
 
 class Utils {
    public:
-    static DatasetMetadata LoadDatasetMetadata(const std::filesystem::path &file_path);
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                                  unsigned int num_dimensions);
     static Point ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id);

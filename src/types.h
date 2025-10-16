@@ -23,14 +23,6 @@ struct CompareAnnResult {
     bool operator()(const AnnResult& a, const AnnResult& b) const { return a.distance > b.distance; }
 };
 
-struct DatasetMetadata {
-    unsigned int num_points_a{0};
-    unsigned int num_points_b{0};
-    unsigned int num_dimensions{0};
-    double chamfer_distance_l1{0.0};
-    double chamfer_distance_l2{0.0};
-};
-
 using Coordinate = double;
 using Point = std::vector<Coordinate>;
 

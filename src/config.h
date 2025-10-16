@@ -3,6 +3,16 @@
 
 #include <filesystem>
 
+struct DatasetMetadata {
+    unsigned int num_points_a{0};
+    unsigned int num_points_b{0};
+    unsigned int num_dimensions{0};
+    double chamfer_distance_l1{0.0};
+    double chamfer_distance_l2{0.0};
+
+    void Load(const std::filesystem::path &file_path);
+};
+
 struct QalshConfig {
     double approximation_ratio{0.0};
     double bucket_width{0.0};

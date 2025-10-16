@@ -65,25 +65,6 @@ std::mt19937 Random::SeededGenerator() {
     return std::mt19937(std::random_device{}());
 }
 
-DatasetMetadata Utils::LoadDatasetMetadata(const std::filesystem::path &file_path) {
-    DatasetMetadata metadata;
-
-    if (!std::filesystem::exists(file_path)) {
-        spdlog::error("The dataset metadata file does not exists, file path: {}", file_path.string());
-    }
-
-    std::ifstream ifs(file_path);
-    nlohmann::json json_metadata = nlohmann::json::parse(ifs);
-
-    json_metadata.at("num_points_a").get_to(metadata.num_points_a);
-    json_metadata.at("num_points_b").get_to(metadata.num_points_b);
-    json_metadata.at("num_dimensions").get_to(metadata.num_dimensions);
-    json_metadata.at("chamfer_distance_l1").get_to(metadata.chamfer_distance_l1);
-    json_metadata.at("chamfer_distance_l2").get_to(metadata.chamfer_distance_l2);
-
-    return metadata;
-}
-
 std::vector<Point> Utils::LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                              unsigned int num_dimensions) {
     std::ifstream ifs(file_path);
