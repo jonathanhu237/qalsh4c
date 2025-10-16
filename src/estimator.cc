@@ -27,12 +27,12 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         spdlog::error("The ANN searcher is not set.");
     }
 
-    std::vector<double> distances;
     ann_searcher_->Init(to, norm_order);
 
     PointSet queries;
     queries.Init(from);
 
+    std::vector<double> distances;
     distances.reserve(from.num_points);
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
         distances.emplace_back(ann_searcher_->Search(queries.ReadPoint(point_id)).distance);
