@@ -26,12 +26,16 @@ class Memory {
     static double Usage();
 };
 
+class Sample {
+   public:
+    static unsigned int FromWeights(const std::vector<double> &weights);
+};
+
 class Utils {
    public:
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                                  unsigned int num_dimensions);
     static Point ReadPoint(std::ifstream &ifs, unsigned int num_dimensions, unsigned int point_id);
-    static unsigned int SampleFromWeights(const std::vector<double> &weights);
 
     template <typename T>
     static T ReadFromBuffer(const std::vector<char> &buffer, size_t &offset);

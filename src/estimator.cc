@@ -99,7 +99,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     auto processing_loop = [&](auto&& get_point_by_id) {
         for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
-            unsigned int point_id = Utils::SampleFromWeights(weights);
+            unsigned int point_id = Sample::FromWeights(weights);
             estimation += (sum * ann_searcher->Search(get_point_by_id(point_id)).distance / weights[point_id]);
         }
     };
