@@ -71,7 +71,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             std::filesystem::path qalsh_config_path = to.file_path.parent_path() / "index" /
                                                       std::format("l{}", norm_order) / to.file_path.stem() /
                                                       "config.json";
-            QalshConfig config = Utils::LoadQalshConfig(qalsh_config_path);
+            QalshConfig config;
+            config.Load(qalsh_config_path);
             updated_num_samples =
                 static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (config.approximation_ratio - 1))));
         } else {

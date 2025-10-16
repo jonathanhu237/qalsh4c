@@ -65,7 +65,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                               const std::filesystem::path& index_directory) {
     // Regularize the QALSH configuration
     QalshConfig config{.approximation_ratio = approximation_ratio_, .page_size = page_size_};
-    Utils::RegularizeQalshConfig(config, point_set_metadata.num_points, norm_order_);
+    config.Regularize(point_set_metadata.num_points, norm_order_);
 
     // Print the QalshConfig parameters.
     spdlog::info(
@@ -87,7 +87,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Save the QALSH configuration.
     spdlog::info("Saving QALSH configuration...");
-    Utils::SaveQalshConfig(config, index_directory / "config.json");
+    config.Save(index_directory / "config.json");
 
     // Create the B+ tree directory.
     std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";

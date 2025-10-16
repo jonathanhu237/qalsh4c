@@ -40,13 +40,4 @@ struct PointSetMetadata {
     unsigned int num_dimensions{0};
 };
 
-struct QalshConfig {
-    double approximation_ratio{0.0};
-    double bucket_width{0.0};
-    double error_probability{0.0};
-    unsigned int num_hash_tables{0};
-    unsigned int collision_threshold{0};
-    unsigned int page_size{0};
-};
-
 #endif

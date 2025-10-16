@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "b_plus_tree.h"
+#include "config.h"
 #include "types.h"
 
 // ---------------------------------------------

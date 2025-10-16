@@ -14,6 +14,7 @@ add_executable(qalsh_chamfer
     src/ann_searcher.cc
     src/b_plus_tree.cc
     src/command.cc
+    src/config.cc
     src/estimator.cc
     src/global.cc
     src/main.cc

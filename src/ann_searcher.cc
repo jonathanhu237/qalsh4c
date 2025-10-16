@@ -68,7 +68,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& base_metadata, double norm_o
     std::string stem = base_metadata.file_path.stem();
     std::filesystem::path index_directory =
         base_metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_) / stem;
-    qalsh_config_ = Utils::LoadQalshConfig(index_directory / "config.json");
+    qalsh_config_.Load(index_directory / "config.json");
 
     // Print the QalshConfig parameters.
     spdlog::info(
