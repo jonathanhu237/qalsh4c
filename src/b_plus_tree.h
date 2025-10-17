@@ -1,5 +1,4 @@
-#ifndef B_PLUS_TREE_H_
-#define B_PLUS_TREE_H_
+#pragma once
 
 #include <concepts>
 #include <cstddef>
@@ -202,5 +201,3 @@ bool BPlusTreeSearcher::IncrementalSearch(double bound, Handler&& handler) {
     bool right_finished = IncrementalSearchRight(bound, std::forward<Handler>(handler));
     return left_finished && right_finished;
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef WEIGHTS_GENERATOR_H_
-#define WEIGHTS_GENERATOR_H_
+#pragma once
 
 #include <vector>
 
@@ -38,5 +37,3 @@ class QalshWeightsGenerator : public WeightsGenerator {
    private:
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };
-
-#endif

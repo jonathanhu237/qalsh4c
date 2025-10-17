@@ -1,5 +1,4 @@
-#ifndef ANN_SEARCHER_H_
-#define ANN_SEARCHER_H_
+#pragma once
 
 #include <vector>
 
@@ -56,5 +55,3 @@ class QalshAnnSearcher : public AnnSearcher {
     std::vector<Point> dot_vectors_;
     std::vector<BPlusTreeSearcher> searchers_;
 };
-
-#endif

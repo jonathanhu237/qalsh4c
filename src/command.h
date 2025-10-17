@@ -1,5 +1,4 @@
-#ifndef COMMAND_H_
-#define COMMAND_H_
+#pragma once
 
 #include <filesystem>
 #include <memory>
@@ -39,5 +38,3 @@ class EstimateCommand : public Command {
     double norm_order_;
     std::filesystem::path dataset_directory_;
 };
-
-#endif

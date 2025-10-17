@@ -1,5 +1,4 @@
-#ifndef UTILS_H_
-#define UTILS_H_
+#pragma once
 
 #include <spdlog/spdlog.h>
 
@@ -30,5 +29,3 @@ class Sample {
    public:
     static unsigned int FromWeights(const std::vector<double> &weights);
 };
-
-#endif

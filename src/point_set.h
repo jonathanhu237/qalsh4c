@@ -1,5 +1,4 @@
-#ifndef POINT_SET_H_
-#define POINT_SET_H_
+#pragma once
 
 #include <filesystem>
 #include <fstream>
@@ -31,5 +30,3 @@ class PointSet {
 
     std::ifstream ifs_;
 };
-
-#endif

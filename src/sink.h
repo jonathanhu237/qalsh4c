@@ -1,5 +1,4 @@
-#ifndef SINK_H_
-#define SINK_H_
+#pragma once
 
 #include <spdlog/common.h>
 #include <spdlog/details/log_msg.h>
@@ -41,5 +40,3 @@ template <typename Mutex>
 void TerminatingSink<Mutex>::flush_() {
     wrapped_sink_->flush();
 }
-
-#endif

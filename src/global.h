@@ -1,5 +1,4 @@
-#ifndef GLOBAL_H_
-#define GLOBAL_H_
+#pragma once
 
 #include <cmath>
 #include <numbers>
@@ -17,5 +16,3 @@ class Global {
     static bool kUseFixedSeed;
     static constexpr unsigned int kDefaultSeed = 42;
 };
-
-#endif

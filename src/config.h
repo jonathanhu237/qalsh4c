@@ -1,5 +1,4 @@
-#ifndef QALSH_CONFIG_H_
-#define QALSH_CONFIG_H_
+#pragma once
 
 #include <filesystem>
 
@@ -25,5 +24,3 @@ struct QalshConfig {
     void Load(const std::filesystem::path &file_path);
     void Regularize(unsigned int num_points, double norm_order);
 };
-
-#endif

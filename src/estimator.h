@@ -1,5 +1,4 @@
-#ifndef ESTIMATOR_H_
-#define ESTIMATOR_H_
+#pragma once
 
 #include <memory>
 
@@ -34,5 +33,3 @@ class SamplingEstimator : public Estimator {
     double error_probability_;
     bool use_cache_;
 };
-
-#endif

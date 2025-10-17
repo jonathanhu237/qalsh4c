@@ -1,5 +1,4 @@
-#ifndef BUFFER_H_
-#define BUFFER_H_
+#pragma once
 
 #include <cstring>
 #include <fstream>
@@ -50,5 +49,3 @@ void Buffer::Write(size_t &offset, const T &data) {
     std::memcpy(&data_[offset], &data, sizeof(T));
     offset += sizeof(T);
 }
-
-#endif
