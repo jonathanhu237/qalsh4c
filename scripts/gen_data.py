@@ -1,11 +1,11 @@
 import argparse
-import logging
 import time
 from pathlib import Path
 
 import numpy as np
+import utils
+from loguru import logger
 from sklearn.mixture import GaussianMixture
-from utils import chamfer_distance, create_metadata, save_binary_data, setup_logging
 
 
 def generate_point_set(
@@ -16,7 +16,7 @@ def generate_point_set(
 ) -> np.ndarray:
     """Generate a point set with specified parameters using Gaussian Mixture Model."""
     total_components = 2  # 1 core component + 1 outlier component
-    logging.info(
+    logger.info(
         f"Generating {num_points} points with 1 core component and {outlier_fraction * 100}% outliers."
     )
 
@@ -110,29 +110,18 @@ def main():
         default=None,
         help="Batch size for Chamfer distance calculation",
     )
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARN", "ERROR"],
-        default="INFO",
-        help="Set the logging level (default: INFO)",
-    )
-
     args = parser.parse_args()
 
-    # Setup logging
-    log_level = getattr(logging, args.log_level.upper())
-    setup_logging(log_level)
-
-    logging.info("Starting dataset generation")
+    logger.info("Starting dataset generation")
     total_start_time = time.time()
 
     # Create output directory
     output_dir = Path(args.output_directory)
     output_dir.mkdir(parents=True, exist_ok=True)
-    logging.info(f"Output directory: {output_dir}")
+    logger.info(f"Output directory: {output_dir}")
 
     # Generate the point sets
-    logging.info("Generating point set A...")
+    logger.info("Generating point set A...")
     A = generate_point_set(
         args.num_points_a,
         args.num_dimensions,
@@ -140,7 +129,7 @@ def main():
         args.outlier_scale,
     )
 
-    logging.info("Generating point set B...")
+    logger.info("Generating point set B...")
     B = generate_point_set(
         args.num_points_b,
         args.num_dimensions,
@@ -149,19 +138,19 @@ def main():
     )
 
     # Save binary files
-    save_binary_data(A, output_dir / "A.bin")
-    save_binary_data(B, output_dir / "B.bin")
+    utils.save_binary_data(A, output_dir / "A.bin")
+    utils.save_binary_data(B, output_dir / "B.bin")
 
     # Calculate the Chamfer distance between two sets
     if args.batch_size is None:
         batch_size = 1024
     else:
         batch_size = args.batch_size
-    chamfer_distance_l1 = chamfer_distance(A, B, batch_size, 1)
-    chamfer_distance_l2 = chamfer_distance(A, B, batch_size, 2)
+    chamfer_distance_l1 = utils.chamfer_distance(A, B, batch_size, 1)
+    chamfer_distance_l2 = utils.chamfer_distance(A, B, batch_size, 2)
 
     # Create metadata
-    create_metadata(
+    utils.create_metadata(
         num_dimensions=A.shape[1],
         num_points_a=A.shape[0],
         num_points_b=B.shape[0],
@@ -171,10 +160,10 @@ def main():
     )
 
     total_elapsed_time = time.time() - total_start_time
-    logging.info(
+    logger.info(
         f"Dataset generation complete! (Total time: {total_elapsed_time:.2f} seconds)"
     )
-    logging.info(f"Files saved to: {output_dir}")
+    logger.info(f"Files saved to: {output_dir}")
 
 
 if __name__ == "__main__":

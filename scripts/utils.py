@@ -1,24 +1,15 @@
 import json
-import logging
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-
-
-def setup_logging(level: int) -> None:
-    """Setup logging configuration."""
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+from loguru import logger
 
 
 def save_binary_data(data: np.ndarray, filepath: Path) -> None:
     """Save numpy array as binary file with float32 format."""
-    logging.info(f"Saving binary data to {filepath}")
+    logger.info(f"Saving binary data to {filepath}")
 
     # Ensure data is double
     data = data.astype(np.double)
@@ -28,7 +19,7 @@ def save_binary_data(data: np.ndarray, filepath: Path) -> None:
         # Write the data directly as binary
         f.write(data.tobytes())
 
-    logging.info(f"Saved {data.shape[0]} points with {data.shape[1]} dimensions")
+    logger.info(f"Saved {data.shape[0]} points with {data.shape[1]} dimensions")
 
 
 def create_metadata(
@@ -51,7 +42,7 @@ def create_metadata(
     with open(filepath, "w") as f:
         json.dump(metadata, f, indent=4)
 
-    logging.info(f"Saved metadata to {filepath}")
+    logger.info(f"Saved metadata to {filepath}")
 
 
 def chamfer_distance(
@@ -62,12 +53,12 @@ def chamfer_distance(
     """
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        logging.info("CUDA is available. Using GPU for computation.")
+        logger.info("CUDA is available. Using GPU for computation.")
     else:
         device = torch.device("cpu")
-        logging.info("CUDA not available. Using CPU for computation.")
+        logger.info("CUDA not available. Using CPU for computation.")
 
-    logging.info("Calculating Chamfer distance using GPU (PyTorch)...")
+    logger.info("Calculating Chamfer distance using GPU (PyTorch)...")
     start_time = time.time()
     dtype = torch.double
 
@@ -109,7 +100,7 @@ def chamfer_distance(
     chamfer_dist = torch.sum(min_dists_A_to_B) + torch.sum(min_dists_B_to_A)
 
     elapsed_time = time.time() - start_time
-    logging.info(
+    logger.info(
         f"Chamfer distance: {chamfer_dist.item():.6f} (computed in {elapsed_time:.2f} seconds)"
     )
 
