@@ -45,12 +45,11 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // SamplingEstimator Implementation
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     double approximation_ratio, double error_probability, bool use_cache)
+                                     double approximation_ratio, double error_probability)
     : weights_generator_(std::move(weights_generator)),
       num_samples_(num_samples),
       approximation_ratio_(approximation_ratio),
-      error_probability_(error_probability),
-      use_cache_(use_cache) {}
+      error_probability_(error_probability) {}
 
 double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
                                            double norm_order) {
@@ -78,7 +77,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     // Generate weights.
     spdlog::info("Generating weights...");
-    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
+    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
