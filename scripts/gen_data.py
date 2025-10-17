@@ -115,11 +115,6 @@ def main():
     logger.info("Starting dataset generation")
     total_start_time = time.time()
 
-    # Create output directory
-    output_dir = Path(args.output_directory)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Output directory: {output_dir}")
-
     # Generate the point sets
     logger.info("Generating point set A...")
     A = generate_point_set(
@@ -137,33 +132,14 @@ def main():
         args.outlier_scale,
     )
 
-    # Save binary files
-    utils.save_binary_data(A, output_dir / "A.bin")
-    utils.save_binary_data(B, output_dir / "B.bin")
-
-    # Calculate the Chamfer distance between two sets
-    if args.batch_size is None:
-        batch_size = 1024
-    else:
-        batch_size = args.batch_size
-    chamfer_distance_l1 = utils.chamfer_distance(A, B, batch_size, 1)
-    chamfer_distance_l2 = utils.chamfer_distance(A, B, batch_size, 2)
-
-    # Create metadata
-    utils.create_metadata(
-        num_dimensions=A.shape[1],
-        num_points_a=A.shape[0],
-        num_points_b=B.shape[0],
-        chamfer_distance_l1=chamfer_distance_l1,
-        chamfer_distance_l2=chamfer_distance_l2,
-        filepath=output_dir / "metadata.json",
-    )
+    # Process and save dataset
+    output_dir = Path(args.output_directory)
+    utils.process_and_save_dataset(A, B, output_dir, args.batch_size)
 
     total_elapsed_time = time.time() - total_start_time
     logger.info(
         f"Dataset generation complete! (Total time: {total_elapsed_time:.2f} seconds)"
     )
-    logger.info(f"Files saved to: {output_dir}")
 
 
 if __name__ == "__main__":

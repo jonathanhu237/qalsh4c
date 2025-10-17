@@ -105,3 +105,51 @@ def chamfer_distance(
     )
 
     return np.double(chamfer_dist.item())
+
+
+def process_and_save_dataset(
+    A: np.ndarray,
+    B: np.ndarray,
+    output_dir: Path,
+    batch_size: int | None = None,
+) -> None:
+    """
+    Process two point sets and save them with metadata.
+
+    This function handles the common workflow of:
+    1. Creating the output directory
+    2. Saving binary data files for both point sets
+    3. Calculating Chamfer distances (L1 and L2)
+    4. Creating and saving metadata
+
+    Args:
+        A: First point set (numpy array of shape [num_points_a, num_dimensions])
+        B: Second point set (numpy array of shape [num_points_b, num_dimensions])
+        output_dir: Directory to save the dataset
+        batch_size: Batch size for Chamfer distance calculation (default: 1024)
+    """
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Output directory: {output_dir}")
+
+    # Save binary files
+    save_binary_data(A, output_dir / "A.bin")
+    save_binary_data(B, output_dir / "B.bin")
+
+    # Calculate the Chamfer distance between two sets
+    if batch_size is None:
+        batch_size = 1024
+    chamfer_distance_l1 = chamfer_distance(A, B, batch_size, 1)
+    chamfer_distance_l2 = chamfer_distance(A, B, batch_size, 2)
+
+    # Create metadata
+    create_metadata(
+        num_dimensions=A.shape[1],
+        num_points_a=A.shape[0],
+        num_points_b=B.shape[0],
+        chamfer_distance_l1=chamfer_distance_l1,
+        chamfer_distance_l2=chamfer_distance_l2,
+        filepath=output_dir / "metadata.json",
+    )
+
+    logger.info(f"Files saved to: {output_dir}")
