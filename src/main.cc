@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     // index
     // ------------------------------
-    CLI::App* index = app.add_subcommand("index", "Index a dataset using QALSH algorithm");
+    CLI::App* index = app.add_subcommand("index", "Index a dataset for QALSH algorithm");
 
     double norm_order{0.0};
     index->add_option("-p, --norm-order", norm_order, "Norm order")
