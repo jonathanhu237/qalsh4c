@@ -154,7 +154,6 @@ int main(int argc, char** argv) {
     // qalsh sampling estimate
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
-
     qalsh_sampling->callback([&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(); });
 
     CLI11_PARSE(app, argc, argv);
