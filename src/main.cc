@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 
     std::string log_level;
     app.add_option("-l,--log-level", log_level, "Set the logging level")
-        ->default_val("warn")
+        ->default_val("error")
         ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
