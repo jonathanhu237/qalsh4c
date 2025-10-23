@@ -2,7 +2,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
