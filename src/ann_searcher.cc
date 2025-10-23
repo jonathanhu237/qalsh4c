@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "b_plus_tree.h"
-#include "global.h"
 #include "point_set.h"
 #include "utils.h"
 
@@ -112,10 +111,10 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                         }
 
                         // Termination condition 2
-                        if (candidates.size() >= Global::kNumCandidates) {
-                            shouldTerminate = true;
-                            return;
-                        }
+                        // if (candidates.size() >= Global::kNumCandidates) {
+                        //     shouldTerminate = true;
+                        //     return;
+                        // }
                     }
                 });
 
