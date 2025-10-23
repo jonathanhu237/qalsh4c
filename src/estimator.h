@@ -22,13 +22,11 @@ class AnnEstimator : public Estimator {
 
 class SamplingEstimator : public Estimator {
    public:
-    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                      double approximation_ratio, double error_probability);
+    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples, double epsilon);
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
    private:
     std::unique_ptr<WeightsGenerator> weights_generator_;
     unsigned int num_samples_;
-    double approximation_ratio_;
-    double error_probability_;
+    double epsilon_;
 };
