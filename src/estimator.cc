@@ -4,8 +4,6 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <filesystem>
-#include <format>
 #include <memory>
 #include <numeric>
 #include <utility>
@@ -59,19 +57,15 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Update the num_samples_
-    unsigned int updated_num_samples = num_samples_;
-    if (updated_num_samples == 0) {
-        if ([[maybe_unused]] auto* disk_qalsh = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get())) {
-            std::filesystem::path qalsh_config_path = to.file_path.parent_path() / "index" /
-                                                      std::format("l{}", norm_order) / to.file_path.stem() /
-                                                      "config.json";
-            QalshConfig config;
-            config.Load(qalsh_config_path);
-            updated_num_samples =
-                static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (config.approximation_ratio - 1))));
+    if (num_samples_ == 0) {
+        if (dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr) {
+            // Update the num_samples_
+        } else if ((dynamic_cast<UniformWeightsGenerator*>(weights_generator_.get()) != nullptr)) {
+            spdlog::error("You must specify num_samples for UniformWeightsGenerator.");
+            return 0.0;
         } else {
-            updated_num_samples =
-                static_cast<unsigned int>(std::ceil(1 / (error_probability_ * (approximation_ratio_ - 1))));
+            spdlog::error("Unknown WeightsGenerator type.");
+            return 0.0;
         }
     }
 
@@ -96,10 +90,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     PointSet queries;
     queries.Init(from);
-    for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
+    for (unsigned int cnt = 1; cnt <= num_samples_; cnt++) {
         unsigned int point_id = Sample::FromWeights(weights);
         estimation += (sum * ann_searcher->Search(queries.ReadPoint(point_id)).distance / weights[point_id]);
     }
 
-    return estimation / updated_num_samples;
+    return estimation / num_samples_;
 }
