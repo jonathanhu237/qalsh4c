@@ -1,5 +1,7 @@
 #include "config.h"
 
+#include <spdlog/spdlog.h>
+
 #include <fstream>
 #include <nlohmann/json.hpp>
 
@@ -53,6 +55,7 @@ void QalshConfig::Regularize(unsigned int num_points, double norm_order) {
     num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
 
     double alpha = (eta * p1 + p2) / (1 + eta);
+    num_hash_tables = std::max(num_hash_tables, static_cast<unsigned int>(1.0 / (p1 - alpha)));
     collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
 }
 
