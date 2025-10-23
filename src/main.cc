@@ -129,13 +129,18 @@ int main(int argc, char** argv) {
     double epsilon{0.0};
     sampling->add_option("-e,--epsilon", epsilon, "Epsilon for the algorithm")->default_val(Global::kQalsh4cEpsilon);
 
+    bool use_cache{false};
+    sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
+        ->default_val(false)
+        ->default_str(use_cache ? "True" : "False");
+
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
     sampling->callback([&]() {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
-        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, epsilon);
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, epsilon, use_cache);
     });
 
     // ------------------------------
