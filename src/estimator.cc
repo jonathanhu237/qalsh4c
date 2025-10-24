@@ -94,7 +94,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             double delta0 = std::exp(-static_cast<double>(m) * kl_divergence);
 
             double kappa = (c * c) * (1.0 - delta0) / (1.0 - (c * delta0));
-            double kappa_tilde = Global::kQalsh4cAlpha * kappa;
+            double kappa_tilde = alpha * kappa;
 
             double M_tilde = std::max(kappa_tilde - 1.0, 1.0);
 
