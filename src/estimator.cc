@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -90,15 +91,20 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             double q = (static_cast<double>(l) - 1.0) / static_cast<double>(m);
             double p = p1;
             double kl_divergence = (q * std::log(q / p)) + ((1.0 - q) * std::log((1.0 - q) / (1.0 - p)));
-
             double delta0 = std::exp(-static_cast<double>(m) * kl_divergence);
+
             double kappa = (c * c) * (1.0 - delta0) / (1.0 - (c * delta0));
-            double tau = Global::kQalsh4cAlpha * kappa;
-            double factor = (tau - 1.0) + ((epsilon / 3.0) * tau);
+            double kappa_tilde = Global::kQalsh4cAlpha * kappa;
+
+            double M_tilde = std::max(kappa_tilde - 1.0, 1.0);
+
+            double numerator = (2.0 * (kappa_tilde - 1.0)) + ((2.0 / 3.0) * M_tilde * epsilon);
+            double denominator = epsilon * epsilon;
 
             double inner = 1.0 - (rho / (1.0 - (1.0 / alpha)));
             double log_term = std::log(2.0 / inner);
-            double min_samples = (2.0 / (epsilon * epsilon)) * factor * log_term;
+
+            double min_samples = (numerator / denominator) * log_term;
             updated_num_samples = static_cast<unsigned int>(std::ceil(min_samples));
 
             spdlog::info("SamplingEstimator automatically selected {} samples.", updated_num_samples);
