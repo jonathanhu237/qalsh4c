@@ -16,7 +16,7 @@ data/federalist/*
 *local*
 
 # logs
-logs
+*.log
 
 # python
 __pycache__
