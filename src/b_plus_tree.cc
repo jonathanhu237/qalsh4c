@@ -158,10 +158,10 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
 
             // Add entry to the next parent level
             next_parent_level_entries.emplace_back(separator_key_for_next_level, new_internal_page_num);
-
-            // Update the parent level entries
-            parent_level_entries = next_parent_level_entries;
         }
+
+        // Move up one level after finishing the current level
+        parent_level_entries = std::move(next_parent_level_entries);
     }
 
     root_page_num_ = new_internal_page_num == 0 ? root_page_num_ : new_internal_page_num;
