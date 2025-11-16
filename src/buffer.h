@@ -41,7 +41,6 @@ std::vector<T> Buffer::ReadVector(size_t &offset, size_t count) const {
 
     offset += num_bytes_to_read;
     return result;
-    return result;
 }
 
 template <typename T>
