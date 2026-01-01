@@ -1,0 +1,41 @@
+# cmake
+build/*
+
+# clangd
+.cache/*
+
+# data
+data/*
+!data/federalist/
+data/federalist/*
+!data/federalist/A.bin
+!data/federalist/B.bin
+!data/federalist/metadata.json
+!data/gmm/
+data/gmm/*
+!data/gmm/A.bin
+!data/gmm/B.bin
+!data/gmm/metadata.json
+
+# local files
+*local*
+.DS_Store
+
+# logs
+*.log
+
+# python
+__pycache__
+
+# perf
+perf.data
+perf.data.old
+
+# Vscode
+.vscode/
+
+# local agent and workflow metadata
+.codex/
+openspec/
+AGENTS.md
+CMakeUserPresets.json

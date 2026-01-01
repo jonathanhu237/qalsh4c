@@ -1,0 +1,107 @@
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/federalist")
+set(dataset_dir "${QALSH4C_BINARY_DIR}/qalsh_weights_cache")
+set(cache_path "${dataset_dir}/l2_qalsh_weights_A.bin")
+
+file(REMOVE_RECURSE "${dataset_dir}")
+file(MAKE_DIRECTORY "${dataset_dir}")
+foreach(file_name A.bin B.bin metadata.json)
+    file(COPY "${source_data_dir}/${file_name}" DESTINATION "${dataset_dir}")
+endforeach()
+
+file(READ "${dataset_dir}/metadata.json" metadata)
+string(JSON num_points_a GET "${metadata}" num_points a)
+math(EXPR expected_cache_size "${num_points_a} * 4")
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache -n 4 qalsh -c 2
+    RESULT_VARIABLE miss_result
+    OUTPUT_VARIABLE miss_stdout
+    ERROR_VARIABLE miss_stderr
+)
+if(NOT miss_result EQUAL 0)
+    message(FATAL_ERROR "QALSH sampling cache miss run failed with exit code ${miss_result}\n${miss_stdout}\n${miss_stderr}")
+endif()
+if(NOT EXISTS "${cache_path}")
+    message(FATAL_ERROR "QALSH sampling cache miss did not create ${cache_path}")
+endif()
+file(SIZE "${cache_path}" actual_cache_size)
+if(NOT actual_cache_size EQUAL expected_cache_size)
+    message(FATAL_ERROR "QALSH cache size mismatch: expected ${expected_cache_size}, got ${actual_cache_size}")
+endif()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache -n 4 qalsh -c 2
+    RESULT_VARIABLE hit_result
+    OUTPUT_VARIABLE hit_stdout
+    ERROR_VARIABLE hit_stderr
+)
+if(NOT hit_result EQUAL 0)
+    message(FATAL_ERROR "QALSH sampling cache hit run failed with exit code ${hit_result}\n${hit_stdout}\n${hit_stderr}")
+endif()
+string(CONCAT hit_output "${hit_stdout}" "${hit_stderr}")
+if(NOT hit_output MATCHES "weights will be read from the cache")
+    message(FATAL_ERROR "QALSH sampling cache hit did not report cache read:\n${hit_output}")
+endif()
+if(hit_output MATCHES "Generating weights using QALSH")
+    message(FATAL_ERROR "QALSH sampling cache hit unexpectedly regenerated QALSH weights:\n${hit_output}")
+endif()
+if(NOT hit_output MATCHES "Using default sample count: 4")
+    message(FATAL_ERROR "Explicit QALSH sampling count did not report the default sample count:\n${hit_output}")
+endif()
+if(hit_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Explicit QALSH sampling count unexpectedly used automatic selection:\n${hit_output}")
+endif()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache -e 10 --delta 0.5 qalsh -c 2
+    RESULT_VARIABLE auto_result
+    OUTPUT_VARIABLE auto_stdout
+    ERROR_VARIABLE auto_stderr
+)
+if(NOT auto_result EQUAL 0)
+    message(FATAL_ERROR "Automatic QALSH sampling count run failed with exit code ${auto_result}\n${auto_stdout}\n${auto_stderr}")
+endif()
+string(CONCAT auto_output "${auto_stdout}" "${auto_stderr}")
+if(NOT auto_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Automatic QALSH sampling count run did not report selected samples:\n${auto_output}")
+endif()
+if(auto_output MATCHES "Generating weights using QALSH")
+    message(FATAL_ERROR "Automatic QALSH sampling count cache hit unexpectedly regenerated QALSH weights:\n${auto_output}")
+endif()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache --num-samples-ab 4 qalsh -c 2
+    RESULT_VARIABLE directional_result
+    OUTPUT_VARIABLE directional_stdout
+    ERROR_VARIABLE directional_stderr
+)
+if(NOT directional_result EQUAL 0)
+    message(FATAL_ERROR "Directional QALSH sampling count run failed with exit code ${directional_result}\n${directional_stdout}\n${directional_stderr}")
+endif()
+string(CONCAT directional_output "${directional_stdout}" "${directional_stderr}")
+if(NOT directional_output MATCHES "Using specified A->B sample count: 4")
+    message(FATAL_ERROR "Directional QALSH sampling count did not report the A->B override:\n${directional_output}")
+endif()
+if(directional_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Directional QALSH sampling count unexpectedly used automatic selection:\n${directional_output}")
+endif()
+
+file(WRITE "${cache_path}" "bad")
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache -n 4 qalsh -c 2
+    RESULT_VARIABLE short_result
+    OUTPUT_VARIABLE short_stdout
+    ERROR_VARIABLE short_stderr
+)
+if(short_result EQUAL 0)
+    message(FATAL_ERROR "Expected short QALSH cache file to fail\n${short_stdout}\n${short_stderr}")
+endif()
+string(CONCAT short_output "${short_stdout}" "${short_stderr}")
+if(NOT short_output MATCHES "unexpected size")
+    message(FATAL_ERROR "Short QALSH cache failure did not report unexpected size:\n${short_output}")
+endif()
