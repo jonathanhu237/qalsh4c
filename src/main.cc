@@ -124,7 +124,12 @@ int main(int argc, char** argv) {
     CLI::App* sampling = estimate->add_subcommand("sampling", "Estimate Chamfer distance using sampling.");
 
     unsigned int num_samples{0};
-    sampling->add_option("-n,--num-samples", num_samples, "Number of samples to use for estimation");
+    unsigned int num_samples_ab{0};
+    unsigned int num_samples_ba{0};
+
+    sampling->add_option("-n,--num-samples", num_samples, "Default number of samples for both directions");
+    sampling->add_option("--num-samples-ab", num_samples_ab, "Number of samples for A->B direction (overrides -n)");
+    sampling->add_option("--num-samples-ba", num_samples_ba, "Number of samples for B->A direction (overrides -n)");
 
     double epsilon{0.0};
     sampling->add_option("-e,--epsilon", epsilon, "Epsilon for the algorithm")->default_val(Global::kQalsh4cEpsilon);
@@ -140,7 +145,8 @@ int main(int argc, char** argv) {
         if (!weights_generator) {
             spdlog::error("Weights generator is not set. Please specify a weights generator.");
         }
-        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, epsilon, use_cache);
+        estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
+                                                        num_samples_ba, epsilon, use_cache);
     });
 
     // ------------------------------

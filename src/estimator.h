@@ -22,13 +22,15 @@ class AnnEstimator : public Estimator {
 
 class SamplingEstimator : public Estimator {
    public:
-    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples, double epsilon,
-                      bool use_cache);
+    SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples_default,
+                      unsigned int num_samples_ab, unsigned int num_samples_ba, double epsilon, bool use_cache);
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
    private:
     std::unique_ptr<WeightsGenerator> weights_generator_;
-    unsigned int num_samples_;
+    unsigned int num_samples_default_;  // Default sample count for both directions
+    unsigned int num_samples_ab_;       // Sample count for A->B direction
+    unsigned int num_samples_ba_;       // Sample count for B->A direction
     double epsilon_;
     bool use_cache_;
 };

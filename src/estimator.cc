@@ -47,10 +47,13 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // --------------------------------------------------
 // SamplingEstimator Implementation
 // --------------------------------------------------
-SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples,
-                                     double epsilon, bool use_cache)
+SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
+                                     unsigned int num_samples_default, unsigned int num_samples_ab,
+                                     unsigned int num_samples_ba, double epsilon, bool use_cache)
     : weights_generator_(std::move(weights_generator)),
-      num_samples_(num_samples),
+      num_samples_default_(num_samples_default),
+      num_samples_ab_(num_samples_ab),
+      num_samples_ba_(num_samples_ba),
       epsilon_(epsilon),
       use_cache_(use_cache) {}
 
@@ -61,8 +64,35 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         spdlog::error("The ANN searcher is not set.");
     }
 
-    // Update the num_samples_
-    double updated_num_samples = num_samples_;
+    // Determine the direction and select the appropriate sample count
+    std::string from_name = from.file_path.stem().string();
+    std::string to_name = to.file_path.stem().string();
+    bool is_ab_direction = (from_name == "A" && to_name == "B");
+    bool is_ba_direction = (from_name == "B" && to_name == "A");
+
+    if (!is_ab_direction && !is_ba_direction) {
+        spdlog::warn("Cannot determine direction from file names: {} -> {}, falling back to point count comparison",
+                     from_name, to_name);
+        is_ab_direction = (from.num_points > to.num_points);
+    }
+
+    // Select base sample count based on direction-specific parameters
+    unsigned int base_num_samples = 0;
+    if (is_ab_direction && num_samples_ab_ != 0) {
+        base_num_samples = num_samples_ab_;
+        spdlog::info("Using specified A->B sample count: {}", base_num_samples);
+    } else if (is_ba_direction && num_samples_ba_ != 0) {
+        base_num_samples = num_samples_ba_;
+        spdlog::info("Using specified B->A sample count: {}", base_num_samples);
+    } else {
+        base_num_samples = num_samples_default_;
+        if (base_num_samples != 0) {
+            spdlog::info("Using default sample count: {}", base_num_samples);
+        }
+    }
+
+    // Update the num_samples
+    double updated_num_samples = base_num_samples;
     if (updated_num_samples == 0) {
         if (dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr) {
             const double alpha = Global::kQalsh4cAlpha;
