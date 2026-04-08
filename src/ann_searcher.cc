@@ -1,7 +1,5 @@
 #include "ann_searcher.h"
 
-#include <spdlog/spdlog.h>
-
 #include <cmath>
 #include <format>
 #include <limits>
@@ -9,6 +7,7 @@
 #include <vector>
 
 #include "b_plus_tree.h"
+#include "log.h"
 #include "point_set.h"
 #include "utils.h"
 
@@ -49,7 +48,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     // Load the dot vectors.
     std::ifstream dot_vector_file(index_directory / "dot_vectors.bin", std::ios::binary);
     if (!dot_vector_file.is_open()) {
-        spdlog::error("Failed to open dot vectors file: {}", (index_directory / "dot_vectors.bin").string());
+        Log::error("Failed to open dot vectors file: {}", (index_directory / "dot_vectors.bin").string());
         return;
     }
     dot_vectors_ = PointSet::LoadPointsFromFile(index_directory / "dot_vectors.bin", qalsh_config_.num_hash_tables,

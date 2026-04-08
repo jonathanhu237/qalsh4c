@@ -1,11 +1,10 @@
 #include "weights_generator.h"
 
-#include <spdlog/spdlog.h>
-
 #include <memory>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "log.h"
 #include "point_set.h"
 
 // --------------------------------------------------
@@ -33,18 +32,18 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     std::filesystem::path weights_path = parent_directory / std::format("l{}_qalsh_weights_{}.bin", norm_order, stem);
 
     if (use_cache) {
-        spdlog::warn("The weights will be read from the cache file if it exists.");
+        Log::warn("The weights will be read from the cache file if it exists.");
         if (std::filesystem::exists(weights_path)) {
             std::ifstream ifs(weights_path);
             ifs.read(reinterpret_cast<char*>(weights.data()),
                      static_cast<std::streamoff>(sizeof(double) * from_metadata.num_points));
             return weights;
         }
-        spdlog::warn("Cache file doesn't exist. Generating the new one...");
+        Log::warn("Cache file doesn't exist. Generating the new one...");
     }
 
     // Generate weights based on QALSH algorithm.
-    spdlog::info("Generating weights using QALSH...");
+    Log::info("Generating weights using QALSH...");
     ann_searcher_->Init(to_metadata, norm_order);
 
     PointSet base;

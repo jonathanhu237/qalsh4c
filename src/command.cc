@@ -1,7 +1,5 @@
 #include "command.h"
 
-#include <spdlog/spdlog.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -17,6 +15,7 @@
 #include "b_plus_tree.h"
 #include "estimator.h"
 #include "global.h"
+#include "log.h"
 #include "point_set.h"
 #include "utils.h"
 
@@ -70,7 +69,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     config.Regularize(point_set_metadata.num_points, norm_order_);
 
     // Print the QalshConfig parameters.
-    spdlog::info(
+    Log::info(
         "QALSH Configuration:\n"
         "\tApproximation Ratio: {}\n"
         "\tBucket Width: {}\n"
@@ -83,23 +82,23 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Create the index directory if it does not exist.
     if (!std::filesystem::exists(index_directory)) {
-        spdlog::info("Creating index directory: {}", index_directory.string());
+        Log::info("Creating index directory: {}", index_directory.string());
         std::filesystem::create_directories(index_directory);
     }
 
     // Save the QALSH configuration.
-    spdlog::info("Saving QALSH configuration...");
+    Log::info("Saving QALSH configuration...");
     config.Save(index_directory / "config.json");
 
     // Create the B+ tree directory.
     std::filesystem::path b_plus_tree_directory = index_directory / "b_plus_trees";
     if (!std::filesystem::exists(b_plus_tree_directory)) {
-        spdlog::info("Creating B+ tree directory: {}", b_plus_tree_directory.string());
+        Log::info("Creating B+ tree directory: {}", b_plus_tree_directory.string());
         std::filesystem::create_directories(b_plus_tree_directory);
     }
 
     // Generate the dot vectors.
-    spdlog::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
+    Log::info("Generating dot vectors for {} hash tables...", config.num_hash_tables);
     std::vector<std::vector<double>> dot_vectors(config.num_hash_tables);
     std::function<double()> generator;
 
@@ -112,7 +111,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
         std::normal_distribution<double> dist(0.0, 1.0);
         generator = [dist, this]() mutable { return dist(gen_); };
     } else {
-        spdlog::error("Unsupported norm order: {}", norm_order_);
+        Log::error("Unsupported norm order: {}", norm_order_);
     }
 
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
@@ -121,11 +120,10 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     }
 
     // Save the dot product vectors
-    spdlog::info("Saving dot product vectors...");
+    Log::info("Saving dot product vectors...");
     std::ofstream ofs(index_directory / "dot_vectors.bin", std::ios::binary);
     if (!ofs.is_open()) {
-        spdlog::error(
-            std::format("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string()));
+        Log::error("Failed to open file for writing: {}", (index_directory / "dot_vectors.bin").string());
     }
     for (unsigned int i = 0; i < config.num_hash_tables; i++) {
         ofs.write(reinterpret_cast<const char*>(dot_vectors[i].data()),
@@ -137,7 +135,7 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
     base.Init(point_set_metadata);
 
     // Build the B+ trees for each hash table.
-    spdlog::info("Building B+ trees for each hash table...");
+    Log::info("Building B+ trees for each hash table...");
     std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
     for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
         Point point = base.ReadPoint(i);
@@ -165,7 +163,7 @@ EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, double no
 
 void EstimateCommand::Execute() {
     // Load dataset metadata
-    spdlog::info("Loading dataset metadata...");
+    Log::info("Loading dataset metadata...");
     DatasetMetadata dataset_metadata;
     dataset_metadata.Load(dataset_directory_ / "metadata.json");
 
@@ -184,11 +182,11 @@ void EstimateCommand::Execute() {
     // Calculate the distance from A to B
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Memory::Usage();
-    spdlog::info("Calculating the distance from A to B...");
+    Log::info("Calculating the distance from A to B...");
     double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_);
 
     // Calculate the distance from B to A
-    spdlog::info("Calculating the distance from B to A...");
+    Log::info("Calculating the distance from B to A...");
     double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_);
     auto end = std::chrono::high_resolution_clock::now();
     double memory_after = Memory::Usage();
@@ -203,7 +201,7 @@ void EstimateCommand::Execute() {
     } else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
         ground_truth = dataset_metadata.chamfer_distance_l2;
     } else {
-        spdlog::error("Unsupported norm order: {}", norm_order_);
+        Log::error("Unsupported norm order: {}", norm_order_);
     }
     // NOLINTEND(readability-magic-numbers)
 

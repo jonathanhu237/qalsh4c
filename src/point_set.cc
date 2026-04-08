@@ -1,6 +1,6 @@
 #include "point_set.h"
 
-#include <spdlog/spdlog.h>
+#include "log.h"
 
 void PointSet::Init(const PointSetMetadata &metadata) {
     num_points_ = metadata.num_points;
@@ -12,7 +12,7 @@ void PointSet::Init(const PointSetMetadata &metadata) {
 
     ifs_.open(metadata.file_path, std::ios::binary);
     if (!ifs_.is_open()) {
-        spdlog::error("Could not open point set file: {}", metadata.file_path.string());
+        Log::error("Could not open point set file: {}", metadata.file_path.string());
     }
 }
 
@@ -29,7 +29,7 @@ std::vector<Point> PointSet::LoadPointsFromFile(const std::filesystem::path &fil
                                                 unsigned int num_dimensions) {
     std::ifstream ifs(file_path);
     if (!ifs.is_open()) {
-        spdlog::error("Could not open base points file: {}", file_path.string());
+        Log::error("Could not open base points file: {}", file_path.string());
         return {};
     }
 

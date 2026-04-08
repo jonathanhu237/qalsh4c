@@ -1,16 +1,15 @@
 #include "config.h"
 
-#include <spdlog/spdlog.h>
-
 #include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "global.h"
+#include "log.h"
 #include "utils.h"
 
 void DatasetMetadata::Load(const std::filesystem::path &file_path) {
     if (!std::filesystem::exists(file_path)) {
-        spdlog::error("The dataset metadata file does not exists, file path: {}", file_path.string());
+        Log::error("The dataset metadata file does not exists, file path: {}", file_path.string());
     }
 
     std::ifstream ifs(file_path);
@@ -23,7 +22,7 @@ void DatasetMetadata::Load(const std::filesystem::path &file_path) {
         metadata.at("chamfer_distance_l1").get_to(chamfer_distance_l1);
         metadata.at("chamfer_distance_l2").get_to(chamfer_distance_l2);
     } catch (nlohmann::json::exception &e) {
-        spdlog::error("JSON format error: {}", e.what());
+        Log::error("JSON format error: {}", e.what());
     }
 }
 
@@ -48,7 +47,7 @@ void QalshConfig::Regularize(unsigned int num_points, double norm_order) {
         p1 = Calc::L2Probability(bucket_width / 2.0);
         p2 = Calc::L2Probability(bucket_width / (2.0 * approximation_ratio));
     } else {
-        spdlog::error("Unsupported norm order: {}", norm_order);
+        Log::error("Unsupported norm order: {}", norm_order);
     }
 
     double denominator = 2.0 * std::pow(p1 - p2, 2.0);
@@ -69,7 +68,7 @@ void QalshConfig::Save(const std::filesystem::path &file_path) {
 
     std::ofstream ofs(file_path);
     if (!ofs.is_open()) {
-        spdlog::error("Failed to open file for writing: {}", file_path.string());
+        Log::error("Failed to open file for writing: {}", file_path.string());
         return;
     }
 
@@ -78,7 +77,7 @@ void QalshConfig::Save(const std::filesystem::path &file_path) {
 
 void QalshConfig::Load(const std::filesystem::path &file_path) {
     if (!std::filesystem::exists(file_path)) {
-        spdlog::error("The QALSH config file does not exists, file path: {}", file_path.string());
+        Log::error("The QALSH config file does not exists, file path: {}", file_path.string());
     }
 
     std::ifstream ifs(file_path);
@@ -92,6 +91,6 @@ void QalshConfig::Load(const std::filesystem::path &file_path) {
         metadata.at("collision_threshold").get_to(collision_threshold);
         metadata.at("page_size").get_to(page_size);
     } catch (nlohmann::json::exception &e) {
-        spdlog::error("JSON format error: {}", e.what());
+        Log::error("JSON format error: {}", e.what());
     }
 }

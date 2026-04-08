@@ -1,7 +1,5 @@
 #include "utils.h"
 
-#include <spdlog/spdlog.h>
-
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -12,6 +10,7 @@
 #include <string>
 
 #include "global.h"
+#include "log.h"
 
 double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
     Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
@@ -24,7 +23,7 @@ double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
     if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         return static_cast<double>((v1 - v2).lpNorm<2>());
     }
-    spdlog::error("Unsupported norm order: {}", norm_order);
+    Log::error("Unsupported norm order: {}", norm_order);
     return 0.0;
 }
 

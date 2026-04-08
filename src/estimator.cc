@@ -1,7 +1,5 @@
 #include "estimator.h"
 
-#include <spdlog/spdlog.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -15,6 +13,7 @@
 #include "ann_searcher.h"
 #include "config.h"
 #include "global.h"
+#include "log.h"
 #include "point_set.h"
 #include "utils.h"
 #include "weights_generator.h"
@@ -27,7 +26,7 @@ AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_sear
 double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) {
     // Check the ANN searcher
     if (!ann_searcher_) {
-        spdlog::error("The ANN searcher is not set.");
+        Log::error("The ANN searcher is not set.");
     }
 
     ann_searcher_->Init(to, norm_order);
@@ -61,7 +60,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                                            double norm_order) {
     // Check the ANN searcher
     if (!weights_generator_) {
-        spdlog::error("The ANN searcher is not set.");
+        Log::error("The ANN searcher is not set.");
     }
 
     // Determine the direction and select the appropriate sample count
@@ -71,8 +70,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     bool is_ba_direction = (from_name == "B" && to_name == "A");
 
     if (!is_ab_direction && !is_ba_direction) {
-        spdlog::warn("Cannot determine direction from file names: {} -> {}, falling back to point count comparison",
-                     from_name, to_name);
+        Log::warn("Cannot determine direction from file names: {} -> {}, falling back to point count comparison",
+                  from_name, to_name);
         is_ab_direction = (from.num_points > to.num_points);
     }
 
@@ -80,14 +79,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     unsigned int base_num_samples = 0;
     if (is_ab_direction && num_samples_ab_ != 0) {
         base_num_samples = num_samples_ab_;
-        spdlog::info("Using specified A->B sample count: {}", base_num_samples);
+        Log::info("Using specified A->B sample count: {}", base_num_samples);
     } else if (is_ba_direction && num_samples_ba_ != 0) {
         base_num_samples = num_samples_ba_;
-        spdlog::info("Using specified B->A sample count: {}", base_num_samples);
+        Log::info("Using specified B->A sample count: {}", base_num_samples);
     } else {
         base_num_samples = num_samples_default_;
         if (base_num_samples != 0) {
-            spdlog::info("Using default sample count: {}", base_num_samples);
+            Log::info("Using default sample count: {}", base_num_samples);
         }
     }
 
@@ -114,7 +113,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
                 p1 = Calc::L2Probability(qalsh_config.bucket_width / 2.0);
             } else {
-                spdlog::error("Unsupported norm order: {}", norm_order);
+                Log::error("Unsupported norm order: {}", norm_order);
                 return 0.0;
             }
 
@@ -137,29 +136,29 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             double min_samples = (numerator / denominator) * log_term;
             updated_num_samples = static_cast<unsigned int>(std::ceil(min_samples));
 
-            spdlog::info("SamplingEstimator automatically selected {} samples.", updated_num_samples);
+            Log::info("SamplingEstimator automatically selected {} samples.", updated_num_samples);
         } else if ((dynamic_cast<UniformWeightsGenerator*>(weights_generator_.get()) != nullptr)) {
-            spdlog::error("You must specify num_samples for UniformWeightsGenerator.");
+            Log::error("You must specify num_samples for UniformWeightsGenerator.");
             return 0.0;
         } else {
-            spdlog::error("Unknown WeightsGenerator type.");
+            Log::error("Unknown WeightsGenerator type.");
             return 0.0;
         }
     }
 
     // Generate weights.
-    spdlog::info("Generating weights...");
+    Log::info("Generating weights...");
     std::vector<double> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
-        spdlog::error("Weights size does not match the number of query points in the dataset");
+        Log::error("Weights size does not match the number of query points in the dataset");
     }
 
     // Sample the points using the generated weights.
     double estimation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
-    spdlog::info("Total sum of weights: {}", sum);
+    Log::info("Total sum of weights: {}", sum);
 
     std::unique_ptr<AnnSearcher> ann_searcher;
 

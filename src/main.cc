@@ -1,6 +1,3 @@
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
-
 #include <CLI/CLI.hpp>
 #include <filesystem>
 #include <memory>
@@ -9,23 +6,12 @@
 #include "command.h"
 #include "estimator.h"
 #include "global.h"
-#include "sink.h"
+#include "log.h"
 #include "weights_generator.h"
 
 int main(int argc, char** argv) {
-    // Setup logger.
-    auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-    auto terminating_sink = std::make_shared<TerminatingSink<std::mutex>>(console_sink);
-    auto logger = std::make_shared<spdlog::logger>("qalsh_chamfer", terminating_sink);
-    spdlog::set_default_logger(logger);
-
     // Parse command-line arguments.
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
-
-    std::string log_level;
-    app.add_option("-l,--log-level", log_level, "Set the logging level")
-        ->default_val("error")
-        ->check(CLI::IsMember({"debug", "info", "warn", "error"}));
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
         ->default_str(Global::kUseFixedSeed ? "True" : "False");
@@ -34,9 +20,8 @@ int main(int argc, char** argv) {
     app.require_subcommand(1);
     app.callback([&]() {
         if (!command) {
-            spdlog::error("Command is not set. Please specify a command.");
+            Log::error("Command is not set. Please specify a command.");
         }
-        spdlog::set_level(spdlog::level::from_str(log_level));
         command->Execute();
     });
 
@@ -82,7 +67,7 @@ int main(int argc, char** argv) {
     estimate->require_subcommand(1);
     estimate->callback([&]() {
         if (!estimator) {
-            spdlog::error("Estimator is not set. Please specify a estimator.");
+            Log::error("Estimator is not set. Please specify a estimator.");
         }
         command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory);
     });
@@ -96,7 +81,7 @@ int main(int argc, char** argv) {
     ann->require_subcommand(1);
     ann->callback([&]() {
         if (!ann_searcher) {
-            spdlog::error("Ann searcher is not set. Please specify a Ann searcher.");
+            Log::error("Ann searcher is not set. Please specify a Ann searcher.");
         }
         estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
     });
@@ -143,7 +128,7 @@ int main(int argc, char** argv) {
     sampling->require_subcommand(1);
     sampling->callback([&]() {
         if (!weights_generator) {
-            spdlog::error("Weights generator is not set. Please specify a weights generator.");
+            Log::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
                                                         num_samples_ba, epsilon, use_cache);
