@@ -104,7 +104,11 @@ int main(int argc, char** argv) {
     qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(); });
+    bool candidate_limit{false};
+    qalsh_ann->add_flag("--candidate-limit", candidate_limit,
+                        "Enable early termination when candidate count reaches the limit");
+
+    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(candidate_limit); });
 
     // ------------------------------
     // sampling estimate

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "b_plus_tree.h"
+#include "global.h"
 #include "log.h"
 #include "point_set.h"
 #include "utils.h"
@@ -36,6 +37,8 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
+QalshAnnSearcher::QalshAnnSearcher(bool candidate_limit) : candidate_limit_(candidate_limit) {}
+
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
     base_.Init(metadata);
     norm_order_ = norm_order;
@@ -110,10 +113,10 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                         }
 
                         // Termination condition 2
-                        // if (candidates.size() >= Global::kNumCandidates) {
-                        //     shouldTerminate = true;
-                        //     return;
-                        // }
+                        if (candidate_limit_ && candidates.size() >= Global::kNumCandidates) {
+                            shouldTerminate = true;
+                            return;
+                        }
                     }
                 });
 
