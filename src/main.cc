@@ -45,11 +45,14 @@ int main(int argc, char** argv) {
                      std::format("Page size for the indexer (default: {} bytes)", Global::kDefaultPageSize))
         ->default_val(Global::kDefaultPageSize);
 
+    bool fast{false};
+    index->add_flag("--fast", fast, "Use in-memory sorting (faster but uses more memory)");
+
     std::filesystem::path dataset_directory;
     index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
     index->callback([&]() {
-        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory);
+        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory, fast);
     });
 
     // ------------------------------

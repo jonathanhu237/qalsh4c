@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -20,6 +21,15 @@ struct KeyPageNumPair {
 struct DotProductPointIdPair {
     double dot_product{0.0};
     unsigned int point_id{0};
+};
+
+struct DotProductPointIdPairLess {
+    bool operator()(const DotProductPointIdPair& lhs, const DotProductPointIdPair& rhs) const {
+        if (lhs.dot_product != rhs.dot_product) {
+            return lhs.dot_product < rhs.dot_product;
+        }
+        return lhs.point_id < rhs.point_id;
+    }
 };
 
 class InternalNode {
@@ -69,6 +79,7 @@ class BPlusTreeBulkLoader {
     BPlusTreeBulkLoader(const std::filesystem::path& file_path, unsigned int page_size);
 
     void Build(const std::vector<DotProductPointIdPair>& data);
+    void BuildFromStream(size_t num_entries, std::function<DotProductPointIdPair()> next);
 
    private:
     unsigned int AllocatePage();

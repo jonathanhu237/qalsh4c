@@ -87,6 +87,11 @@ BPlusTreeBulkLoader::BPlusTreeBulkLoader(const std::filesystem::path& file_path,
 }
 
 void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) {
+    size_t index = 0;
+    BuildFromStream(data.size(), [&data, &index]() { return data.at(index++); });
+}
+
+void BPlusTreeBulkLoader::BuildFromStream(size_t num_entries, std::function<DotProductPointIdPair()> next) {
     std::vector<KeyPageNumPair> parent_level_entries;
 
     // Reserve page 0 for the file header
@@ -95,23 +100,24 @@ void BPlusTreeBulkLoader::Build(const std::vector<DotProductPointIdPair>& data) 
     // Build the leaf nodes
     unsigned int prev_leaf_page_num = 0;
     unsigned int new_leaf_page_num = 0;
-    size_t data_idx = 0;
+    size_t processed_entries = 0;
 
-    while (data_idx < data.size()) {
+    while (processed_entries < num_entries) {
         LeafNode new_leaf_node(leaf_node_order_);
         new_leaf_node.prev_leaf_page_num_ = prev_leaf_page_num;
 
-        size_t chunk_end = std::min(data_idx + leaf_node_order_, data.size());
-        for (size_t i = data_idx; i < chunk_end; i++) {
-            new_leaf_node.keys_.emplace_back(data[i].dot_product);
-            new_leaf_node.values_.emplace_back(data[i].point_id);
+        size_t chunk_end = std::min(processed_entries + leaf_node_order_, num_entries);
+        for (size_t i = processed_entries; i < chunk_end; i++) {
+            DotProductPointIdPair pair = next();
+            new_leaf_node.keys_.emplace_back(pair.dot_product);
+            new_leaf_node.values_.emplace_back(pair.point_id);
             new_leaf_node.num_entries_++;
         }
-        data_idx = chunk_end;
+        processed_entries = chunk_end;
 
         // Serialize the leaf node and write it to the file
         new_leaf_page_num = AllocatePage();
-        new_leaf_node.next_leaf_page_num_ = (data_idx < data.size()) ? next_page_num_ : 0;
+        new_leaf_node.next_leaf_page_num_ = (processed_entries < num_entries) ? next_page_num_ : 0;
         new_leaf_node.Serialize(buffer_);
         WritePage(new_leaf_page_num);
 

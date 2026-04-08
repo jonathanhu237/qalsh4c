@@ -15,7 +15,7 @@ class Command {
 class IndexCommand : public Command {
    public:
     IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
-                 std::filesystem::path dataset_directory);
+                 std::filesystem::path dataset_directory, bool fast);
     void Execute() override;
 
    private:
@@ -25,6 +25,7 @@ class IndexCommand : public Command {
     double approximation_ratio_;
     unsigned int page_size_;
     std::filesystem::path dataset_directory_;
+    bool fast_;
     std::mt19937 gen_;
 };
 

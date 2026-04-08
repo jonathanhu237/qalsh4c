@@ -14,6 +14,7 @@
 
 #include "b_plus_tree.h"
 #include "estimator.h"
+#include "external_sorter.h"
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
@@ -23,11 +24,12 @@
 // IndexCommand Implementation
 // --------------------------------------------------
 IndexCommand::IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
-                           std::filesystem::path dataset_directory)
+                           std::filesystem::path dataset_directory, bool fast)
     : norm_order_(norm_order),
       approximation_ratio_(approximation_ratio),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
+      fast_(fast),
       gen_(Random::SeededGenerator()) {}
 
 void IndexCommand::Execute() {
@@ -136,21 +138,36 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 
     // Build the B+ trees for each hash table.
     Log::info("Building B+ trees for each hash table...");
-    std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
-    for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
-        Point point = base.ReadPoint(i);
-        for (unsigned int j = 0; j < config.num_hash_tables; j++) {
-            double dot_product = Calc::DotProduct(point, dot_vectors[j]);
-            data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});
+    if (fast_) {
+        std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
+        for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
+            Point point = base.ReadPoint(i);
+            for (unsigned int j = 0; j < config.num_hash_tables; j++) {
+                double dot_product = Calc::DotProduct(point, dot_vectors[j]);
+                data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});
+            }
         }
-    }
-    for (unsigned int i = 0; i < config.num_hash_tables; i++) {
-        // Sort the dot products.
-        std::ranges::sort(data[i], {}, &DotProductPointIdPair::dot_product);
+        for (unsigned int i = 0; i < config.num_hash_tables; i++) {
+            std::ranges::sort(data[i], DotProductPointIdPairLess{});
 
-        // Bulk load the B+ tree.
-        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), config.page_size);
-        bulk_loader.Build(data[i]);
+            BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), config.page_size);
+            bulk_loader.Build(data[i]);
+        }
+        return;
+    }
+
+    for (unsigned int hash_table_id = 0; hash_table_id < config.num_hash_tables; hash_table_id++) {
+        ExternalSorter sorter(b_plus_tree_directory);
+        for (unsigned int point_id = 0; point_id < point_set_metadata.num_points; point_id++) {
+            Point point = base.ReadPoint(point_id);
+            double dot_product = Calc::DotProduct(point, dot_vectors[hash_table_id]);
+            sorter.Add(DotProductPointIdPair{.dot_product = dot_product, .point_id = point_id});
+        }
+
+        sorter.Finish();
+
+        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", hash_table_id), config.page_size);
+        bulk_loader.BuildFromStream(point_set_metadata.num_points, sorter.MakeMergeReader());
     }
 }
 
