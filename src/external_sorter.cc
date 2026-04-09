@@ -8,10 +8,13 @@
 
 #include "log.h"
 
-ExternalSorter::ExternalSorter(const std::filesystem::path& temp_dir, size_t chunk_size)
-    : temp_dir_(temp_dir), chunk_size_(chunk_size) {
+ExternalSorter::ExternalSorter(const std::filesystem::path& temp_dir, std::string prefix, size_t chunk_size)
+    : temp_dir_(temp_dir), prefix_(std::move(prefix)), chunk_size_(chunk_size) {
     buffer_.reserve(chunk_size_);
 }
+
+ExternalSorter::ExternalSorter(const std::filesystem::path& temp_dir, size_t chunk_size)
+    : ExternalSorter(temp_dir, "", chunk_size) {}
 
 void ExternalSorter::Add(const DotProductPointIdPair& pair) {
     buffer_.emplace_back(pair);
@@ -87,7 +90,7 @@ ExternalSorter::~ExternalSorter() {
 void ExternalSorter::FlushRun() {
     std::ranges::sort(buffer_, DotProductPointIdPairLess{});
 
-    std::filesystem::path run_file = temp_dir_ / std::format("_run_{}.tmp", run_files_.size());
+    std::filesystem::path run_file = temp_dir_ / std::format("{}_run_{}.tmp", prefix_, run_files_.size());
     std::ofstream ofs(run_file, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
         Log::error("Failed to open run file for writing: {}", run_file.string());

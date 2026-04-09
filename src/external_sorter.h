@@ -2,12 +2,14 @@
 
 #include <filesystem>
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "b_plus_tree.h"
 
 class ExternalSorter {
    public:
+    ExternalSorter(const std::filesystem::path& temp_dir, std::string prefix, size_t chunk_size = 1'000'000);
     ExternalSorter(const std::filesystem::path& temp_dir, size_t chunk_size = 1'000'000);
 
     void Add(const DotProductPointIdPair& pair);
@@ -28,6 +30,7 @@ class ExternalSorter {
     void FlushRun();
 
     std::filesystem::path temp_dir_;
+    std::string prefix_;
     size_t chunk_size_;
     std::vector<DotProductPointIdPair> buffer_;
     std::vector<std::filesystem::path> run_files_;

@@ -15,6 +15,10 @@
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
+std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
+    return std::make_unique<LinearScanAnnSearcher>();
+}
+
 void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
     base_.Init(metadata);
     norm_order_ = norm_order;
@@ -38,6 +42,10 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
 QalshAnnSearcher::QalshAnnSearcher(bool candidate_limit) : candidate_limit_(candidate_limit) {}
+
+std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
+    return std::make_unique<QalshAnnSearcher>(candidate_limit_);
+}
 
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
     base_.Init(metadata);

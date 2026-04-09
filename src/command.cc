@@ -132,13 +132,12 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                   static_cast<std::streamsize>(dot_vectors[i].size() * sizeof(Coordinate)));
     }
 
-    // Open the point set file
-    PointSet base;
-    base.Init(point_set_metadata);
-
     // Build the B+ trees for each hash table.
     Log::info("Building B+ trees for each hash table...");
     if (fast_) {
+        PointSet base;
+        base.Init(point_set_metadata);
+
         std::vector<std::vector<DotProductPointIdPair>> data(config.num_hash_tables);
         for (unsigned int i = 0; i < point_set_metadata.num_points; i++) {
             Point point = base.ReadPoint(i);
@@ -147,17 +146,37 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
                 data[j].emplace_back(DotProductPointIdPair{.dot_product = dot_product, .point_id = i});
             }
         }
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(dynamic)
+        for (long long hash_table_index = 0; hash_table_index < static_cast<long long>(config.num_hash_tables);
+             ++hash_table_index) {
+            const unsigned int hash_table_id = static_cast<unsigned int>(hash_table_index);
+            std::ranges::sort(data[hash_table_id], DotProductPointIdPairLess{});
+
+            BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", hash_table_id),
+                                            config.page_size);
+            bulk_loader.Build(data[hash_table_id]);
+        }
+#else
         for (unsigned int i = 0; i < config.num_hash_tables; i++) {
             std::ranges::sort(data[i], DotProductPointIdPairLess{});
 
             BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", i), config.page_size);
             bulk_loader.Build(data[i]);
         }
+#endif
         return;
     }
 
-    for (unsigned int hash_table_id = 0; hash_table_id < config.num_hash_tables; hash_table_id++) {
-        ExternalSorter sorter(b_plus_tree_directory);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(dynamic)
+    for (long long hash_table_index = 0; hash_table_index < static_cast<long long>(config.num_hash_tables);
+         ++hash_table_index) {
+        const unsigned int hash_table_id = static_cast<unsigned int>(hash_table_index);
+        PointSet base;
+        base.Init(point_set_metadata);
+
+        ExternalSorter sorter(b_plus_tree_directory, std::format("ht{}", hash_table_id));
         for (unsigned int point_id = 0; point_id < point_set_metadata.num_points; point_id++) {
             Point point = base.ReadPoint(point_id);
             double dot_product = Calc::DotProduct(point, dot_vectors[hash_table_id]);
@@ -169,6 +188,24 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
         BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", hash_table_id), config.page_size);
         bulk_loader.BuildFromStream(point_set_metadata.num_points, sorter.MakeMergeReader());
     }
+#else
+    for (unsigned int hash_table_id = 0; hash_table_id < config.num_hash_tables; hash_table_id++) {
+        PointSet base;
+        base.Init(point_set_metadata);
+
+        ExternalSorter sorter(b_plus_tree_directory, std::format("ht{}", hash_table_id));
+        for (unsigned int point_id = 0; point_id < point_set_metadata.num_points; point_id++) {
+            Point point = base.ReadPoint(point_id);
+            double dot_product = Calc::DotProduct(point, dot_vectors[hash_table_id]);
+            sorter.Add(DotProductPointIdPair{.dot_product = dot_product, .point_id = point_id});
+        }
+
+        sorter.Finish();
+
+        BPlusTreeBulkLoader bulk_loader(b_plus_tree_directory / std::format("{}.bin", hash_table_id), config.page_size);
+        bulk_loader.BuildFromStream(point_set_metadata.num_points, sorter.MakeMergeReader());
+    }
+#endif
 }
 
 // --------------------------------------------------

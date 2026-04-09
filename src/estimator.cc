@@ -29,6 +29,22 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         Log::error("The ANN searcher is not set.");
     }
 
+#ifdef QALSH4C_USE_OPENMP
+    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    std::vector<double> distances(from.num_points, 0.0);
+
+#pragma omp parallel
+    {
+        std::unique_ptr<AnnSearcher> local_searcher = ann_searcher_->Clone();
+        local_searcher->Init(to, norm_order);
+
+#pragma omp for schedule(dynamic)
+        for (long long query_index = 0; query_index < static_cast<long long>(from.num_points); ++query_index) {
+            const unsigned int point_id = static_cast<unsigned int>(query_index);
+            distances[point_id] = local_searcher->Search(query_points[point_id]).distance;
+        }
+    }
+#else
     ann_searcher_->Init(to, norm_order);
 
     PointSet queries;
@@ -39,6 +55,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
         distances.emplace_back(ann_searcher_->Search(queries.ReadPoint(point_id)).distance);
     }
+#endif
 
     return std::accumulate(distances.begin(), distances.end(), 0.0);
 }
@@ -156,21 +173,43 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Sample the points using the generated weights.
-    double estimation = 0.0;
     double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
     Log::info("Total sum of weights: {}", sum);
 
-    std::unique_ptr<AnnSearcher> ann_searcher;
+    const unsigned int num_samples = static_cast<unsigned int>(updated_num_samples);
+#ifdef QALSH4C_USE_OPENMP
+    std::vector<unsigned int> sampled_ids;
+    sampled_ids.reserve(num_samples);
+    for (unsigned int sample_index = 0; sample_index < num_samples; ++sample_index) {
+        sampled_ids.push_back(Sample::FromWeights(weights));
+    }
 
-    ann_searcher = std::make_unique<LinearScanAnnSearcher>();
-    ann_searcher->Init(to, norm_order);
+    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    double estimation = 0.0;
+
+#pragma omp parallel reduction(+ : estimation)
+    {
+        LinearScanAnnSearcher ann_searcher;
+        ann_searcher.Init(to, norm_order);
+
+#pragma omp for schedule(dynamic)
+        for (long long sample_index = 0; sample_index < static_cast<long long>(sampled_ids.size()); ++sample_index) {
+            const unsigned int point_id = sampled_ids[static_cast<size_t>(sample_index)];
+            estimation += (sum * ann_searcher.Search(query_points[point_id]).distance / weights[point_id]);
+        }
+    }
+#else
+    double estimation = 0.0;
+    LinearScanAnnSearcher ann_searcher;
+    ann_searcher.Init(to, norm_order);
 
     PointSet queries;
     queries.Init(from);
-    for (unsigned int cnt = 1; cnt <= updated_num_samples; cnt++) {
+    for (unsigned int cnt = 1; cnt <= num_samples; cnt++) {
         unsigned int point_id = Sample::FromWeights(weights);
-        estimation += (sum * ann_searcher->Search(queries.ReadPoint(point_id)).distance / weights[point_id]);
+        estimation += (sum * ann_searcher.Search(queries.ReadPoint(point_id)).distance / weights[point_id]);
     }
+#endif
 
     return estimation / updated_num_samples;
 }
