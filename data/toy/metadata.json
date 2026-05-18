@@ -1,0 +1,17 @@
+{
+    "num_dimensions": 2,
+    "num_points": {
+        "a": 2,
+        "b": 2
+    },
+    "chamfer_distances": {
+        "l1": {
+            "ab": 2.0,
+            "ba": 3.0
+        },
+        "l2": {
+            "ab": 2.0,
+            "ba": 3.0
+        }
+    }
+}

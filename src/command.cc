@@ -7,6 +7,7 @@
 #include <format>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <ratio>
@@ -20,16 +21,57 @@
 #include "point_set.h"
 #include "utils.h"
 
+namespace {
+
+PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_directory,
+                                      const DatasetMetadata& dataset_metadata, const std::string& point_set_name) {
+    const bool is_a = point_set_name == "A";
+    return PointSetMetadata{
+        .file_path = dataset_directory / std::format("{}.bin", point_set_name),
+        .num_points = is_a ? dataset_metadata.num_points_a : dataset_metadata.num_points_b,
+        .num_dimensions = dataset_metadata.num_dimensions,
+    };
+}
+
+std::filesystem::path IndexDirectory(const PointSetMetadata& point_set_metadata, double norm_order) {
+    return point_set_metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order) /
+           point_set_metadata.file_path.stem();
+}
+
+void ValidateIndexExists(const PointSetMetadata& target_metadata, double norm_order,
+                         const std::filesystem::path& dataset_directory, ChamferDirection index_direction) {
+    const std::filesystem::path index_directory = IndexDirectory(target_metadata, norm_order);
+    if (std::filesystem::exists(index_directory / "config.json")) {
+        return;
+    }
+
+    Log::error(
+        "Missing index for point set {} at {}. Run: qalsh4c index -p {} -d {} --direction {}",
+        target_metadata.file_path.stem().string(), index_directory.string(), norm_order, dataset_directory.string(),
+        ChamferDirectionValue(index_direction));
+}
+
+double RelativeErrorPercentage(double estimation, double ground_truth) {
+    if (std::abs(ground_truth) < Global::kEpsilon) {
+        return std::abs(estimation) < Global::kEpsilon ? 0.0 : std::numeric_limits<double>::infinity();
+    }
+
+    return std::fabs(estimation - ground_truth) / ground_truth * 100;  // NOLINT: readability-magic-numbers
+}
+
+}  // namespace
+
 // --------------------------------------------------
 // IndexCommand Implementation
 // --------------------------------------------------
 IndexCommand::IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
-                           std::filesystem::path dataset_directory, bool fast)
+                           std::filesystem::path dataset_directory, bool fast, ChamferDirection direction)
     : norm_order_(norm_order),
       approximation_ratio_(approximation_ratio),
       page_size_(page_size),
       dataset_directory_(std::move(dataset_directory)),
       fast_(fast),
+      direction_(direction),
       gen_(Random::SeededGenerator()) {}
 
 void IndexCommand::Execute() {
@@ -41,17 +83,16 @@ void IndexCommand::Execute() {
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Memory::Usage();
 
-    // Build index for point set A.
-    BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "A.bin",
-                                .num_points = dataset_metadata.num_points_a,
-                                .num_dimensions = dataset_metadata.num_dimensions},
-               dataset_directory_ / "index" / std::format("l{}", norm_order_) / "A");
+    PointSetMetadata point_set_metadata_a = MakePointSetMetadata(dataset_directory_, dataset_metadata, "A");
+    PointSetMetadata point_set_metadata_b = MakePointSetMetadata(dataset_directory_, dataset_metadata, "B");
 
-    // Build index for point set B.
-    BuildIndex(PointSetMetadata{.file_path = dataset_directory_ / "B.bin",
-                                .num_points = dataset_metadata.num_points_b,
-                                .num_dimensions = dataset_metadata.num_dimensions},
-               dataset_directory_ / "index" / std::format("l{}", norm_order_) / "B");
+    if (direction_ == ChamferDirection::kBa || direction_ == ChamferDirection::kBoth) {
+        BuildIndex(point_set_metadata_a, IndexDirectory(point_set_metadata_a, norm_order_));
+    }
+
+    if (direction_ == ChamferDirection::kAb || direction_ == ChamferDirection::kBoth) {
+        BuildIndex(point_set_metadata_b, IndexDirectory(point_set_metadata_b, norm_order_));
+    }
 
     // End to record the time and memory.
     auto end = std::chrono::high_resolution_clock::now();
@@ -212,8 +253,11 @@ void IndexCommand::BuildIndex(const PointSetMetadata& point_set_metadata,
 // EstimateCommand Implementation
 // --------------------------------------------------
 EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order,
-                                 std::filesystem::path dataset_directory)
-    : estimator_(std::move(estimator)), norm_order_(norm_order), dataset_directory_(std::move(dataset_directory)) {}
+                                 std::filesystem::path dataset_directory, ChamferDirection direction)
+    : estimator_(std::move(estimator)),
+      norm_order_(norm_order),
+      dataset_directory_(std::move(dataset_directory)),
+      direction_(direction) {}
 
 void EstimateCommand::Execute() {
     // Load dataset metadata
@@ -222,51 +266,49 @@ void EstimateCommand::Execute() {
     dataset_metadata.Load(dataset_directory_ / "metadata.json");
 
     // Construct point set metadata
-    PointSetMetadata point_set_metadata_a = {
-        .file_path = dataset_directory_ / "A.bin",
-        .num_points = dataset_metadata.num_points_a,
-        .num_dimensions = dataset_metadata.num_dimensions,
-    };
-    PointSetMetadata point_set_metadata_b = {
-        .file_path = dataset_directory_ / "B.bin",
-        .num_points = dataset_metadata.num_points_b,
-        .num_dimensions = dataset_metadata.num_dimensions,
-    };
+    PointSetMetadata point_set_metadata_a = MakePointSetMetadata(dataset_directory_, dataset_metadata, "A");
+    PointSetMetadata point_set_metadata_b = MakePointSetMetadata(dataset_directory_, dataset_metadata, "B");
 
-    // Calculate the distance from A to B
     auto start = std::chrono::high_resolution_clock::now();
     double memory_before = Memory::Usage();
-    Log::info("Calculating the distance from A to B...");
-    double distance_ab = estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_);
+    double estimation{0.0};
 
-    // Calculate the distance from B to A
-    Log::info("Calculating the distance from B to A...");
-    double distance_ba = estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_);
+    if (direction_ == ChamferDirection::kAb || direction_ == ChamferDirection::kBoth) {
+        if (estimator_->RequiresIndex()) {
+            ValidateIndexExists(point_set_metadata_b, norm_order_, dataset_directory_,
+                                direction_ == ChamferDirection::kBoth ? ChamferDirection::kBoth
+                                                                      : ChamferDirection::kAb);
+        }
+        Log::info("Calculating the distance from A to B...");
+        estimation += estimator_->EstimateDistance(point_set_metadata_a, point_set_metadata_b, norm_order_);
+    }
+
+    if (direction_ == ChamferDirection::kBa || direction_ == ChamferDirection::kBoth) {
+        if (estimator_->RequiresIndex()) {
+            ValidateIndexExists(point_set_metadata_a, norm_order_, dataset_directory_,
+                                direction_ == ChamferDirection::kBoth ? ChamferDirection::kBoth
+                                                                      : ChamferDirection::kBa);
+        }
+        Log::info("Calculating the distance from B to A...");
+        estimation += estimator_->EstimateDistance(point_set_metadata_b, point_set_metadata_a, norm_order_);
+    }
+
     auto end = std::chrono::high_resolution_clock::now();
     double memory_after = Memory::Usage();
 
     // Output the result.
-    double estimation = distance_ab + distance_ba;
-    double ground_truth{0.0};
-
-    // NOLINTBEGIN(readability-magic-numbers)
-    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
-        ground_truth = dataset_metadata.chamfer_distance_l1;
-    } else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
-        ground_truth = dataset_metadata.chamfer_distance_l2;
-    } else {
-        Log::error("Unsupported norm order: {}", norm_order_);
-    }
-    // NOLINTEND(readability-magic-numbers)
-
-    double relative_error_percentage =
-        std::fabs(estimation - ground_truth) / ground_truth * 100;  // NOLINT: readability-magic-numbers
+    double ground_truth = dataset_metadata.GroundTruth(norm_order_, direction_);
+    double relative_error_percentage = RelativeErrorPercentage(estimation, ground_truth);
     double elapsed_time = std::chrono::duration<double, std::milli>(end - start).count();
     double memory_usage = memory_after - memory_before;
 
     std::cout << std::format(
+        "Direction: {}\n"
+        "Estimated Distance: {:.6f}\n"
+        "Ground Truth: {:.6f}\n"
         "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n"
         "Relative Error: {:.2f}%\n",
-        elapsed_time, memory_usage, relative_error_percentage);
+        ChamferDirectionLabel(direction_), estimation, ground_truth, elapsed_time, memory_usage,
+        relative_error_percentage);
 }

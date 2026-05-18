@@ -1,11 +1,53 @@
 #include "config.h"
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "global.h"
 #include "log.h"
 #include "utils.h"
+
+ChamferDirection ParseChamferDirection(const std::string &value) {
+    if (value == "ab") {
+        return ChamferDirection::kAb;
+    }
+    if (value == "ba") {
+        return ChamferDirection::kBa;
+    }
+    if (value == "both") {
+        return ChamferDirection::kBoth;
+    }
+
+    Log::error("Unsupported Chamfer direction: {}", value);
+}
+
+std::string ChamferDirectionValue(ChamferDirection direction) {
+    switch (direction) {
+        case ChamferDirection::kAb:
+            return "ab";
+        case ChamferDirection::kBa:
+            return "ba";
+        case ChamferDirection::kBoth:
+            return "both";
+    }
+
+    Log::error("Unsupported Chamfer direction.");
+}
+
+std::string ChamferDirectionLabel(ChamferDirection direction) {
+    switch (direction) {
+        case ChamferDirection::kAb:
+            return "A -> B";
+        case ChamferDirection::kBa:
+            return "B -> A";
+        case ChamferDirection::kBoth:
+            return "A <-> B";
+    }
+
+    Log::error("Unsupported Chamfer direction.");
+}
 
 void DatasetMetadata::Load(const std::filesystem::path &file_path) {
     if (!std::filesystem::exists(file_path)) {
@@ -16,18 +58,46 @@ void DatasetMetadata::Load(const std::filesystem::path &file_path) {
     nlohmann::json metadata = nlohmann::json::parse(ifs);
 
     try {
-        metadata.at("num_points_a").get_to(num_points_a);
-        metadata.at("num_points_b").get_to(num_points_b);
+        metadata.at("num_points").at("a").get_to(num_points_a);
+        metadata.at("num_points").at("b").get_to(num_points_b);
         metadata.at("num_dimensions").get_to(num_dimensions);
-        metadata.at("chamfer_distance_l1").get_to(chamfer_distance_l1);
-        metadata.at("chamfer_distance_l2").get_to(chamfer_distance_l2);
+        metadata.at("chamfer_distances").at("l1").at("ab").get_to(chamfer_distance_l1_ab);
+        metadata.at("chamfer_distances").at("l1").at("ba").get_to(chamfer_distance_l1_ba);
+        metadata.at("chamfer_distances").at("l2").at("ab").get_to(chamfer_distance_l2_ab);
+        metadata.at("chamfer_distances").at("l2").at("ba").get_to(chamfer_distance_l2_ba);
     } catch (nlohmann::json::exception &e) {
         Log::error("JSON format error: {}", e.what());
     }
 }
 
+double DatasetMetadata::GroundTruth(double norm_order, ChamferDirection direction) const {
+    double distance_ab{0.0};
+    double distance_ba{0.0};
+
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
+        distance_ab = chamfer_distance_l1_ab;
+        distance_ba = chamfer_distance_l1_ba;
+    } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
+        distance_ab = chamfer_distance_l2_ab;
+        distance_ba = chamfer_distance_l2_ba;
+    } else {
+        Log::error("Unsupported norm order: {}", norm_order);
+    }
+
+    switch (direction) {
+        case ChamferDirection::kAb:
+            return distance_ab;
+        case ChamferDirection::kBa:
+            return distance_ba;
+        case ChamferDirection::kBoth:
+            return distance_ab + distance_ba;
+    }
+
+    Log::error("Unsupported Chamfer direction.");
+}
+
 void QalshConfig::Regularize(unsigned int num_points, double norm_order) {
-    double beta = Global::kNumCandidates / static_cast<double>(num_points);
+    double beta = std::min(Global::kNumCandidates / static_cast<double>(num_points), 1.0);
     error_probability = Global::kQalshDefaultErrorProbability;
     double term1 = std::sqrt(std::log(2.0 / beta));
     double term2 = std::sqrt(std::log(1.0 / error_probability));

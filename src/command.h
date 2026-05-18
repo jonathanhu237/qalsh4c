@@ -4,6 +4,7 @@
 #include <memory>
 #include <random>
 
+#include "config.h"
 #include "estimator.h"
 
 class Command {
@@ -15,7 +16,7 @@ class Command {
 class IndexCommand : public Command {
    public:
     IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
-                 std::filesystem::path dataset_directory, bool fast);
+                 std::filesystem::path dataset_directory, bool fast, ChamferDirection direction);
     void Execute() override;
 
    private:
@@ -26,16 +27,19 @@ class IndexCommand : public Command {
     unsigned int page_size_;
     std::filesystem::path dataset_directory_;
     bool fast_;
+    ChamferDirection direction_;
     std::mt19937 gen_;
 };
 
 class EstimateCommand : public Command {
    public:
-    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory);
+    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory,
+                    ChamferDirection direction);
     void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;
     double norm_order_;
     std::filesystem::path dataset_directory_;
+    ChamferDirection direction_;
 };

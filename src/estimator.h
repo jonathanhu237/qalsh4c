@@ -8,12 +8,14 @@
 class Estimator {
    public:
     virtual ~Estimator() = default;
+    [[nodiscard]] virtual bool RequiresIndex() const = 0;
     virtual double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) = 0;
 };
 
 class AnnEstimator : public Estimator {
    public:
     AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher);
+    [[nodiscard]] bool RequiresIndex() const override;
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
    private:
@@ -24,6 +26,7 @@ class SamplingEstimator : public Estimator {
    public:
     SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples_default,
                       unsigned int num_samples_ab, unsigned int num_samples_ba, double epsilon, bool use_cache);
+    [[nodiscard]] bool RequiresIndex() const override;
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
    private:

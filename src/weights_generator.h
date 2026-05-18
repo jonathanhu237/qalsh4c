@@ -11,6 +11,7 @@
 class WeightsGenerator {
    public:
     virtual ~WeightsGenerator() = default;
+    [[nodiscard]] virtual bool RequiresIndex() const = 0;
     virtual std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                          double norm_order, bool use_cache) = 0;
 };
@@ -21,6 +22,7 @@ class WeightsGenerator {
 class UniformWeightsGenerator : public WeightsGenerator {
    public:
     UniformWeightsGenerator() = default;
+    [[nodiscard]] bool RequiresIndex() const override;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  double norm_order, bool use_cache) override;
 };
@@ -31,6 +33,7 @@ class UniformWeightsGenerator : public WeightsGenerator {
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
     QalshWeightsGenerator();
+    [[nodiscard]] bool RequiresIndex() const override;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  double norm_order, bool use_cache) override;
 

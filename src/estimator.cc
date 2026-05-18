@@ -23,6 +23,10 @@
 // --------------------------------------------------
 AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
 
+bool AnnEstimator::RequiresIndex() const {
+    return ann_searcher_ && ann_searcher_->RequiresIndex();
+}
+
 double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) {
     // Check the ANN searcher
     if (!ann_searcher_) {
@@ -72,6 +76,10 @@ SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_g
       num_samples_ba_(num_samples_ba),
       epsilon_(epsilon),
       use_cache_(use_cache) {}
+
+bool SamplingEstimator::RequiresIndex() const {
+    return weights_generator_ && weights_generator_->RequiresIndex();
+}
 
 double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
                                            double norm_order) {

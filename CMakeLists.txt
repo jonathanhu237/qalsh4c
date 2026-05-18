@@ -127,6 +127,31 @@ if(BUILD_TESTING)
     )
 
     add_test(
+        NAME qalsh4c_direction_help
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_direction_help.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_direction_estimate
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_direction_estimate.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_direction_index
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_direction_index.cmake
+    )
+
+    add_test(
         NAME qalsh_ann_help
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>

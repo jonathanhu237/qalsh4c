@@ -11,6 +11,11 @@ data/federalist/*
 !data/federalist/A.bin
 !data/federalist/B.bin
 !data/federalist/metadata.json
+!data/toy/
+data/toy/*
+!data/toy/A.bin
+!data/toy/B.bin
+!data/toy/metadata.json
 
 # local files
 *local*

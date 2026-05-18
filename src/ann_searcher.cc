@@ -15,6 +15,10 @@
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
+bool LinearScanAnnSearcher::RequiresIndex() const {
+    return false;
+}
+
 std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
     return std::make_unique<LinearScanAnnSearcher>();
 }
@@ -42,6 +46,10 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
 QalshAnnSearcher::QalshAnnSearcher(bool candidate_limit) : candidate_limit_(candidate_limit) {}
+
+bool QalshAnnSearcher::RequiresIndex() const {
+    return true;
+}
 
 std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
     return std::make_unique<QalshAnnSearcher>(candidate_limit_);

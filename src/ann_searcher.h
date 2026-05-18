@@ -22,6 +22,7 @@ struct CompareAnnResult {
 class AnnSearcher {
    public:
     virtual ~AnnSearcher() = default;
+    [[nodiscard]] virtual bool RequiresIndex() const = 0;
     [[nodiscard]] virtual std::unique_ptr<AnnSearcher> Clone() const = 0;
     virtual void Init(const PointSetMetadata& metadata, double norm_order) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
@@ -33,6 +34,7 @@ class AnnSearcher {
 class LinearScanAnnSearcher : public AnnSearcher {
    public:
     LinearScanAnnSearcher() = default;
+    [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
@@ -48,6 +50,7 @@ class LinearScanAnnSearcher : public AnnSearcher {
 class QalshAnnSearcher : public AnnSearcher {
    public:
     explicit QalshAnnSearcher(bool candidate_limit = false);
+    [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;

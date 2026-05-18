@@ -48,11 +48,17 @@ int main(int argc, char** argv) {
     bool fast{false};
     index->add_flag("--fast", fast, "Use in-memory sorting (faster but uses more memory)");
 
+    std::string direction_value{"ab"};
+    index->add_option("--direction", direction_value, "Chamfer direction: ab, ba, or both")
+        ->default_val("ab")
+        ->check(CLI::IsMember({"ab", "ba", "both"}));
+
     std::filesystem::path dataset_directory;
     index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
     index->callback([&]() {
-        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory, fast);
+        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory, fast,
+                                                 ParseChamferDirection(direction_value));
     });
 
     // ------------------------------
@@ -66,13 +72,18 @@ int main(int argc, char** argv) {
 
     estimate->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
 
+    estimate->add_option("--direction", direction_value, "Chamfer direction: ab, ba, or both")
+        ->default_val("ab")
+        ->check(CLI::IsMember({"ab", "ba", "both"}));
+
     std::unique_ptr<Estimator> estimator;
     estimate->require_subcommand(1);
     estimate->callback([&]() {
         if (!estimator) {
             Log::error("Estimator is not set. Please specify a estimator.");
         }
-        command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory);
+        command = std::make_unique<EstimateCommand>(std::move(estimator), norm_order, dataset_directory,
+                                                    ParseChamferDirection(direction_value));
     });
 
     // ------------------------------

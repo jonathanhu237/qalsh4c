@@ -10,6 +10,10 @@
 // --------------------------------------------------
 // UniformWeightsGenerator Implementation
 // --------------------------------------------------
+bool UniformWeightsGenerator::RequiresIndex() const {
+    return false;
+}
+
 std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                       [[maybe_unused]] const PointSetMetadata& to_metadata,
                                                       [[maybe_unused]] double norm_order,
@@ -22,6 +26,10 @@ std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // QalshWeightsGenerator Implementation
 // --------------------------------------------------
 QalshWeightsGenerator::QalshWeightsGenerator() : ann_searcher_(std::make_unique<QalshAnnSearcher>()) {}
+
+bool QalshWeightsGenerator::RequiresIndex() const {
+    return true;
+}
 
 std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                     const PointSetMetadata& to_metadata, double norm_order,
