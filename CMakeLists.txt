@@ -18,13 +18,10 @@ find_package(OpenMP COMPONENTS CXX)
 
 add_executable(qalsh4c 
     src/ann_searcher.cc
-    src/b_plus_tree.cc
-    src/buffer.cc
     src/command.cc
     src/config.cc
     src/dataset.cc
     src/estimator.cc
-    src/external_sorter.cc
     src/global.cc
     src/main.cc
     src/point_set.cc
@@ -78,8 +75,6 @@ if(BUILD_TESTING)
         qalsh_ann_candidate_limit_test
         tests/qalsh_ann_candidate_limit_test.cc
         src/ann_searcher.cc
-        src/b_plus_tree.cc
-        src/buffer.cc
         src/config.cc
         src/global.cc
         src/point_set.cc
@@ -93,8 +88,6 @@ if(BUILD_TESTING)
         ann_searcher_clone_test
         tests/ann_searcher_clone_test.cc
         src/ann_searcher.cc
-        src/b_plus_tree.cc
-        src/buffer.cc
         src/config.cc
         src/global.cc
         src/point_set.cc
@@ -169,15 +162,6 @@ if(BUILD_TESTING)
     )
 
     add_test(
-        NAME qalsh4c_index_modes
-        COMMAND ${CMAKE_COMMAND}
-            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
-            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_index_modes.cmake
-    )
-
-    add_test(
         NAME qalsh4c_direction_help
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
@@ -194,19 +178,19 @@ if(BUILD_TESTING)
     )
 
     add_test(
-        NAME qalsh4c_direction_index
-        COMMAND ${CMAKE_COMMAND}
-            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
-            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_direction_index.cmake
-    )
-
-    add_test(
         NAME qalsh_ann_help
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh_ann_help.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_qalsh_sampling_weights
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_qalsh_sampling_weights.cmake
     )
 
     add_test(

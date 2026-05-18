@@ -91,7 +91,7 @@ Existing datasets can be backfilled later:
   --ground-truth l1:ab,l1:ba
 ```
 
-Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Overwriting a dataset removes any stale `index/` directory. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
+Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
 
 Known raw datasets can be converted with:
 
@@ -104,16 +104,6 @@ Known raw datasets can be converted with:
 ```
 
 Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. MNIST conversion reads a local IDX image file and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
-
-## Index
-
-To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset under $\ell_2$ norm:
-
-```bash
-./build/dev/qalsh4c index -p 2 -d data/toy --direction both
-```
-
-The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and builds the target-side `B` index for `A -> B` estimation; `ba` builds the target-side `A` index; `both` builds both indexes. Once the index is built, you can find the index files in the `./data/toy/index/l2` directory.
 
 ## Estimate
 
@@ -131,3 +121,22 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ba ann linear_scan
 ./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction both ann linear_scan
 ```
+
+QALSH estimates now build the selected direction's target-side ordered projection arrays in memory during `estimate`; there is no separate index command or disk index preparation step. Single-direction estimates build only the target side needed for that direction, and `--direction both` runs the two directions sequentially:
+
+```bash
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction ab ann qalsh
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction both ann qalsh
+```
+
+For repeated QALSH sampling experiments, save generated weights once and load them in later runs:
+
+```bash
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction ab \
+  sampling -n 100 qalsh --save-weights ./weights/toy-l2-ab
+
+./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ab \
+  sampling -n 100 qalsh --load-weights ./weights/toy-l2-ab
+```
+
+Saved QALSH weights use a directory containing `metadata.json` and `weights.bin`. The loader validates the direction, norm, dataset identity, and QALSH configuration before using them.

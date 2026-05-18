@@ -16,5 +16,19 @@ function(check_help command_name)
     endif()
 endfunction()
 
-check_help(index)
 check_help(estimate)
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --help
+    RESULT_VARIABLE root_help_result
+    OUTPUT_VARIABLE root_help_stdout
+    ERROR_VARIABLE root_help_stderr
+)
+if(NOT root_help_result EQUAL 0)
+    message(FATAL_ERROR "Running root help failed with exit code ${root_help_result}")
+endif()
+
+string(CONCAT root_help_output "${root_help_stdout}" "${root_help_stderr}")
+if(root_help_output MATCHES "(^|[\n ])index[ ]")
+    message(FATAL_ERROR "Did not expect index subcommand in root help output")
+endif()

@@ -26,41 +26,10 @@ int main(int argc, char** argv) {
         command->Execute();
     });
 
-    // ------------------------------
-    // index
-    // ------------------------------
-    CLI::App* index = app.add_subcommand("index", "Index a dataset for QALSH algorithm");
-
     double norm_order{0.0};
-    index->add_option("-p, --norm-order", norm_order, "Norm order")
-        ->required()
-        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
-
-    double approximation_ratio{0.0};
-    index->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
-        ->default_val(Global::kDefaultApproximationRatio);
-
-    unsigned int page_size{0};
-    index
-        ->add_option("-B,--page-size", page_size,
-                     std::format("Page size for the indexer (default: {} bytes)", Global::kDefaultPageSize))
-        ->default_val(Global::kDefaultPageSize);
-
-    bool fast{false};
-    index->add_flag("--fast", fast, "Use in-memory sorting (faster but uses more memory)");
-
     std::string direction_value{"ab"};
-    index->add_option("--direction", direction_value, "Chamfer direction: ab, ba, or both")
-        ->default_val("ab")
-        ->check(CLI::IsMember({"ab", "ba", "both"}));
-
     std::filesystem::path dataset_directory;
-    index->add_option("-d,--dataset-directory", dataset_directory, "Directory for the dataset")->required();
-
-    index->callback([&]() {
-        command = std::make_unique<IndexCommand>(norm_order, approximation_ratio, page_size, dataset_directory, fast,
-                                                 ParseChamferDirection(direction_value));
-    });
+    double qalsh_approximation_ratio{Global::kDefaultApproximationRatio};
 
     // ------------------------------
     // estimate
@@ -113,14 +82,15 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
 
-    qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
+    qalsh_ann->add_option("-c, --approximation-ratio", qalsh_approximation_ratio, "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
     bool candidate_limit{false};
     qalsh_ann->add_flag("--candidate-limit", candidate_limit,
                         "Enable early termination when candidate count reaches the limit");
 
-    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(candidate_limit); });
+    qalsh_ann->callback(
+        [&] { ann_searcher = std::make_unique<QalshAnnSearcher>(candidate_limit, qalsh_approximation_ratio); });
 
     // ------------------------------
     // sampling estimate
@@ -138,11 +108,6 @@ int main(int argc, char** argv) {
     double epsilon{0.0};
     sampling->add_option("-e,--epsilon", epsilon, "Epsilon for the algorithm")->default_val(Global::kQalsh4cEpsilon);
 
-    bool use_cache{false};
-    sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
-        ->default_val(false)
-        ->default_str(use_cache ? "True" : "False");
-
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
     sampling->callback([&]() {
@@ -150,7 +115,7 @@ int main(int argc, char** argv) {
             Log::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
-                                                        num_samples_ba, epsilon, use_cache);
+                                                        num_samples_ba, epsilon);
     });
 
     // ------------------------------
@@ -163,7 +128,31 @@ int main(int argc, char** argv) {
     // qalsh sampling estimate
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
-    qalsh_sampling->callback([&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(); });
+    qalsh_sampling
+        ->add_option("-c, --approximation-ratio", qalsh_approximation_ratio, "Approximation ratio for QALSH")
+        ->default_val(Global::kDefaultApproximationRatio);
+    std::filesystem::path save_weights_directory;
+    std::filesystem::path load_weights_directory;
+    CLI::Option* save_weights_option =
+        qalsh_sampling->add_option("--save-weights", save_weights_directory, "Directory to save generated QALSH weights");
+    CLI::Option* load_weights_option =
+        qalsh_sampling->add_option("--load-weights", load_weights_directory, "Directory to load generated QALSH weights");
+    save_weights_option->excludes(load_weights_option);
+    load_weights_option->excludes(save_weights_option);
+    qalsh_sampling->callback([&]() {
+        std::optional<std::filesystem::path> save_weights =
+            save_weights_option->count() > 0 ? std::optional<std::filesystem::path>(save_weights_directory)
+                                             : std::nullopt;
+        std::optional<std::filesystem::path> load_weights =
+            load_weights_option->count() > 0 ? std::optional<std::filesystem::path>(load_weights_directory)
+                                             : std::nullopt;
+        if ((save_weights.has_value() || load_weights.has_value()) &&
+            ParseChamferDirection(direction_value) == ChamferDirection::kBoth) {
+            Log::error("QALSH weight save/load is only supported for --direction ab or --direction ba.");
+        }
+        weights_generator =
+            std::make_unique<QalshWeightsGenerator>(qalsh_approximation_ratio, save_weights, load_weights);
+    });
 
     // ------------------------------
     // dataset

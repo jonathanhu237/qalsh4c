@@ -1,8 +1,11 @@
 #pragma once
 
+#include <filesystem>
+#include <optional>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "config.h"
 #include "point_set.h"
 
 // --------------------------------------------------
@@ -13,7 +16,8 @@ class WeightsGenerator {
     virtual ~WeightsGenerator() = default;
     [[nodiscard]] virtual bool RequiresIndex() const = 0;
     virtual std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                         double norm_order, bool use_cache) = 0;
+                                         double norm_order) = 0;
+    [[nodiscard]] virtual std::optional<QalshConfig> GetQalshConfig() const;
 };
 
 // --------------------------------------------------
@@ -24,7 +28,7 @@ class UniformWeightsGenerator : public WeightsGenerator {
     UniformWeightsGenerator() = default;
     [[nodiscard]] bool RequiresIndex() const override;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
+                                 double norm_order) override;
 };
 
 // --------------------------------------------------
@@ -32,11 +36,16 @@ class UniformWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
-    QalshWeightsGenerator();
+    QalshWeightsGenerator(double approximation_ratio, std::optional<std::filesystem::path> save_weights_directory,
+                          std::optional<std::filesystem::path> load_weights_directory);
     [[nodiscard]] bool RequiresIndex() const override;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
+                                 double norm_order) override;
+    [[nodiscard]] std::optional<QalshConfig> GetQalshConfig() const override;
 
    private:
-    std::unique_ptr<AnnSearcher> ann_searcher_;
+    double approximation_ratio_{0.0};
+    std::optional<std::filesystem::path> save_weights_directory_;
+    std::optional<std::filesystem::path> load_weights_directory_;
+    std::optional<QalshConfig> qalsh_config_;
 };

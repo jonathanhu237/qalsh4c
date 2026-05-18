@@ -35,6 +35,20 @@ run_estimate("ab" "ab" "A -> B" "2.000000")
 run_estimate("ba" "ba" "B -> A" "3.000000")
 run_estimate("both" "both" "A <-> B" "5.000000")
 
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${source_data_dir}" --direction both ann qalsh
+    RESULT_VARIABLE qalsh_estimate_result
+    OUTPUT_VARIABLE qalsh_estimate_stdout
+    ERROR_VARIABLE qalsh_estimate_stderr
+)
+if(NOT qalsh_estimate_result EQUAL 0)
+    message(FATAL_ERROR "QALSH estimate without prebuilt index failed with exit code ${qalsh_estimate_result}\n${qalsh_estimate_stdout}\n${qalsh_estimate_stderr}")
+endif()
+string(CONCAT qalsh_estimate_output "${qalsh_estimate_stdout}" "${qalsh_estimate_stderr}")
+check_contains("${qalsh_estimate_output}" "Building in-memory QALSH index" "qalsh-online")
+check_contains("${qalsh_estimate_stdout}" "Direction: A <-> B" "qalsh-online")
+check_contains("${qalsh_estimate_stdout}" "Estimated Distance: 5.000000" "qalsh-online")
+
 set(zero_data_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth")
 set(zero_raw_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth_raw")
 file(REMOVE_RECURSE "${zero_data_dir}")
