@@ -11,25 +11,30 @@ To build the project, you need to have the following dependencies installed:
 - [GCC](https://gcc.gnu.org/): version 13.3.0 or higher
 
 CMake downloads pinned versions of CLI11, Eigen, and nlohmann-json during the
-first configure step. OpenMP is optional and enabled automatically when CMake can
-find a compatible local runtime.
+first configure step for each build directory. OpenMP is optional and enabled
+automatically when CMake can find a compatible local runtime.
 
-To build the project in release mode, run the following commands:
+Use the `dev` preset for day-to-day development. It builds
+`./build/dev/qalsh4c` with debug symbols, warnings, ASan/UBSan, tests enabled,
+and `compile_commands.json`:
 
 ```bash
-cmake --preset release && cmake --build --preset release-build
+cmake --workflow --preset dev
 ```
 
-Besides the release build, you can also build the project in debug mode:
+Run the dev test suite separately:
 
 ```bash
-cmake --preset debug && cmake --build --preset debug-build
+ctest --preset dev
 ```
 
-or in relWithDebInfo mode:
+Use the `release` preset for performance experiments and production runs. It
+builds `./build/release/qalsh4c` with tests disabled and
+`-O3 -DNDEBUG -march=native`; the resulting binary is optimized for the local
+CPU and may not be portable to other machines:
 
 ```bash
-cmake --preset relWithDebInfo && cmake --build --preset relWithDebInfo-build
+cmake --workflow --preset release
 ```
 
 ## Toy Dataset
@@ -67,7 +72,7 @@ Datasets are prepared through the C++ CLI. A dataset directory contains `A.bin`,
 Ground truth is not computed unless requested. Use a single comma-separated `--ground-truth` value with selectors from `l1:ab`, `l1:ba`, `l2:ab`, and `l2:ba`:
 
 ```bash
-./build/qalsh4c dataset generate gmm \
+./build/dev/qalsh4c dataset generate gmm \
   --num-points-a 1000 \
   --num-points-b 1000 \
   --num-dimensions 256 \
@@ -81,7 +86,7 @@ Ground truth is not computed unless requested. Use a single comma-separated `--g
 Existing datasets can be backfilled later:
 
 ```bash
-./build/qalsh4c dataset ground-truth \
+./build/dev/qalsh4c dataset ground-truth \
   -d data/generated \
   --ground-truth l1:ab,l1:ba
 ```
@@ -91,11 +96,11 @@ Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json`
 Known raw datasets can be converted with:
 
 ```bash
-./build/qalsh4c dataset convert mnist --images train-images-idx3-ubyte -o data/mnist
-./build/qalsh4c dataset convert p53 --raw-dir raw/p53 -o data/p53
-./build/qalsh4c dataset convert sift --raw-dir raw/sift -o data/sift
-./build/qalsh4c dataset convert gist --raw-dir raw/gist -o data/gist
-./build/qalsh4c dataset convert trevi --raw-dir raw/trevi -o data/trevi
+./build/dev/qalsh4c dataset convert mnist --images train-images-idx3-ubyte -o data/mnist
+./build/dev/qalsh4c dataset convert p53 --raw-dir raw/p53 -o data/p53
+./build/dev/qalsh4c dataset convert sift --raw-dir raw/sift -o data/sift
+./build/dev/qalsh4c dataset convert gist --raw-dir raw/gist -o data/gist
+./build/dev/qalsh4c dataset convert trevi --raw-dir raw/trevi -o data/trevi
 ```
 
 Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. MNIST conversion reads a local IDX image file and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
@@ -105,7 +110,7 @@ Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` f
 To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset under $\ell_2$ norm:
 
 ```bash
-./build/qalsh4c index -p 2 -d data/toy --direction both
+./build/dev/qalsh4c index -p 2 -d data/toy --direction both
 ```
 
 The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and builds the target-side `B` index for `A -> B` estimation; `ba` builds the target-side `A` index; `both` builds both indexes. Once the index is built, you can find the index files in the `./data/toy/index/l2` directory.
@@ -122,7 +127,7 @@ We provide four methods for estimating the Chamfer distance:
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the toy dataset to check the exact directed distances without building an index:
 
 ```bash
-./build/qalsh4c estimate -p 2 -d ./data/toy --direction ab ann linear_scan
-./build/qalsh4c estimate -p 2 -d ./data/toy --direction ba ann linear_scan
-./build/qalsh4c estimate -p 2 -d ./data/toy --direction both ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ab ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ba ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction both ann linear_scan
 ```
