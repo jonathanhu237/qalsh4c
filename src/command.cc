@@ -9,6 +9,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <random>
 #include <ratio>
 #include <utility>
@@ -297,18 +298,56 @@ void EstimateCommand::Execute() {
     double memory_after = Memory::Usage();
 
     // Output the result.
-    double ground_truth = dataset_metadata.GroundTruth(norm_order_, direction_);
-    double relative_error_percentage = RelativeErrorPercentage(estimation, ground_truth);
+    std::optional<double> ground_truth = dataset_metadata.GroundTruth(norm_order_, direction_);
     double elapsed_time = std::chrono::duration<double, std::milli>(end - start).count();
     double memory_usage = memory_after - memory_before;
+
+    if (ground_truth.has_value()) {
+        double relative_error_percentage = RelativeErrorPercentage(estimation, *ground_truth);
+        std::cout << std::format(
+            "Direction: {}\n"
+            "Estimated Distance: {:.6f}\n"
+            "Ground Truth: {:.6f}\n"
+            "Time Consumed: {:.3f} ms\n"
+            "Memory Usage: {:.2f} MB\n"
+            "Relative Error: {:.2f}%\n",
+            ChamferDirectionLabel(direction_), estimation, *ground_truth, elapsed_time, memory_usage,
+            relative_error_percentage);
+        return;
+    }
 
     std::cout << std::format(
         "Direction: {}\n"
         "Estimated Distance: {:.6f}\n"
-        "Ground Truth: {:.6f}\n"
+        "Ground Truth: unavailable\n"
         "Time Consumed: {:.3f} ms\n"
         "Memory Usage: {:.2f} MB\n"
-        "Relative Error: {:.2f}%\n",
-        ChamferDirectionLabel(direction_), estimation, ground_truth, elapsed_time, memory_usage,
-        relative_error_percentage);
+        "Relative Error: unavailable\n",
+        ChamferDirectionLabel(direction_), estimation, elapsed_time, memory_usage);
+}
+
+// --------------------------------------------------
+// Dataset Commands Implementation
+// --------------------------------------------------
+DatasetGenerateGmmCommand::DatasetGenerateGmmCommand(DatasetPrep::GmmOptions options)
+    : options_(std::move(options)) {}
+
+void DatasetGenerateGmmCommand::Execute() {
+    DatasetPrep::GenerateGmmDataset(options_);
+    std::cout << std::format("Dataset Directory: {}\n", options_.output.output_directory.string());
+}
+
+DatasetConvertCommand::DatasetConvertCommand(DatasetPrep::ConvertOptions options) : options_(std::move(options)) {}
+
+void DatasetConvertCommand::Execute() {
+    DatasetPrep::ConvertDataset(options_);
+    std::cout << std::format("Dataset Directory: {}\n", options_.output.output_directory.string());
+}
+
+DatasetGroundTruthCommand::DatasetGroundTruthCommand(DatasetPrep::GroundTruthOptions options)
+    : options_(std::move(options)) {}
+
+void DatasetGroundTruthCommand::Execute() {
+    DatasetPrep::ComputeDatasetGroundTruth(options_);
+    std::cout << std::format("Dataset Directory: {}\n", options_.dataset_directory.string());
 }

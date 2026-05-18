@@ -1,6 +1,7 @@
 #include <CLI/CLI.hpp>
 #include <filesystem>
 #include <memory>
+#include <optional>
 
 #include "ann_searcher.h"
 #include "command.h"
@@ -163,6 +164,164 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
     qalsh_sampling->callback([&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(); });
+
+    // ------------------------------
+    // dataset
+    // ------------------------------
+    CLI::App* dataset = app.add_subcommand("dataset", "Prepare datasets for QALSH4C.");
+    dataset->require_subcommand(1);
+
+    CLI::App* dataset_generate = dataset->add_subcommand("generate", "Generate synthetic datasets.");
+    dataset_generate->require_subcommand(1);
+
+    CLI::App* dataset_gmm = dataset_generate->add_subcommand("gmm", "Generate a Gaussian mixture dataset.");
+    unsigned int gmm_num_points_a{1000};
+    unsigned int gmm_num_points_b{1000};
+    unsigned int gmm_num_dimensions{256};
+    double gmm_outlier_fraction{0.1};
+    double gmm_outlier_scale{4096.0};
+    std::filesystem::path gmm_output_directory;
+    std::string gmm_ground_truth_specs;
+    bool gmm_overwrite{false};
+    bool gmm_no_progress{false};
+    unsigned int gmm_seed{0};
+    dataset_gmm->add_option("-a,--num-points-a", gmm_num_points_a, "Number of points in point set A")
+        ->default_val(gmm_num_points_a);
+    dataset_gmm->add_option("-b,--num-points-b", gmm_num_points_b, "Number of points in point set B")
+        ->default_val(gmm_num_points_b);
+    dataset_gmm->add_option("--num-dimensions", gmm_num_dimensions, "Number of dimensions")
+        ->default_val(gmm_num_dimensions);
+    dataset_gmm->add_option("--outlier-fraction", gmm_outlier_fraction, "Fraction of outlier points")
+        ->default_val(gmm_outlier_fraction);
+    dataset_gmm->add_option("--outlier-scale", gmm_outlier_scale, "Outlier covariance scale")
+        ->default_val(gmm_outlier_scale);
+    dataset_gmm->add_option("-o,--output-directory", gmm_output_directory, "Dataset output directory")->required();
+    dataset_gmm->add_option("--ground-truth", gmm_ground_truth_specs,
+                            "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba");
+    dataset_gmm->add_flag("--overwrite", gmm_overwrite, "Overwrite existing dataset files and remove old indexes");
+    dataset_gmm->add_flag("--no-progress", gmm_no_progress, "Disable progress reporting");
+    CLI::Option* gmm_seed_option = dataset_gmm->add_option("--seed", gmm_seed, "Seed for reproducible generation");
+    dataset_gmm->callback([&]() {
+        DatasetPrep::GmmOptions options{
+            .output = {.output_directory = gmm_output_directory,
+                       .ground_truth_specs = gmm_ground_truth_specs,
+                       .overwrite = gmm_overwrite,
+                       .show_progress = !gmm_no_progress},
+            .num_points_a = gmm_num_points_a,
+            .num_points_b = gmm_num_points_b,
+            .num_dimensions = gmm_num_dimensions,
+            .outlier_fraction = gmm_outlier_fraction,
+            .outlier_scale = gmm_outlier_scale,
+            .seed = gmm_seed_option->count() > 0 ? std::optional<unsigned int>(gmm_seed) : std::nullopt,
+        };
+        command = std::make_unique<DatasetGenerateGmmCommand>(std::move(options));
+    });
+
+    CLI::App* dataset_convert = dataset->add_subcommand("convert", "Convert known raw datasets.");
+    dataset_convert->require_subcommand(1);
+
+    std::filesystem::path convert_output_directory;
+    std::filesystem::path convert_raw_directory;
+    std::filesystem::path convert_images_file;
+    std::string convert_ground_truth_specs;
+    bool convert_overwrite{false};
+    bool convert_no_progress{false};
+    bool convert_no_shuffle{false};
+    unsigned int convert_num_points_a{0};
+    unsigned int convert_seed{0};
+
+    auto add_common_convert_options = [&](CLI::App* convert_app, bool needs_raw_dir, bool needs_images) {
+        convert_app->add_option("-o,--output-directory", convert_output_directory, "Dataset output directory")
+            ->required();
+        convert_app->add_option("--ground-truth", convert_ground_truth_specs,
+                                "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba");
+        convert_app->add_flag("--overwrite", convert_overwrite,
+                              "Overwrite existing dataset files and remove old indexes");
+        convert_app->add_flag("--no-progress", convert_no_progress, "Disable progress reporting");
+        convert_app->add_flag("--no-shuffle", convert_no_shuffle, "Split points in loaded order");
+        convert_app->add_option("--num-points-a", convert_num_points_a, "Number of points to place in point set A");
+        convert_app->add_option("--seed", convert_seed, "Seed for reproducible shuffle");
+        if (needs_raw_dir) {
+            convert_app->add_option("--raw-dir", convert_raw_directory, "Raw dataset directory")->required();
+        }
+        if (needs_images) {
+            convert_app->add_option("--images", convert_images_file, "MNIST IDX image file")->required();
+        }
+    };
+
+    auto make_convert_options = [&](DatasetPrep::DatasetKind kind, const CLI::App* convert_app) {
+        DatasetPrep::ConvertOptions options{
+            .output = {.output_directory = convert_output_directory,
+                       .ground_truth_specs = convert_ground_truth_specs,
+                       .overwrite = convert_overwrite,
+                       .show_progress = !convert_no_progress},
+            .kind = kind,
+            .raw_directory = convert_raw_directory,
+            .images_file = convert_images_file,
+            .num_points_a = (*convert_app)["--num-points-a"]->count() > 0
+                                ? std::optional<unsigned int>(convert_num_points_a)
+                                : std::nullopt,
+            .seed = (*convert_app)["--seed"]->count() > 0 ? std::optional<unsigned int>(convert_seed) : std::nullopt,
+            .shuffle = !convert_no_shuffle,
+        };
+        return options;
+    };
+
+    CLI::App* convert_mnist = dataset_convert->add_subcommand("mnist", "Convert local MNIST IDX images.");
+    add_common_convert_options(convert_mnist, false, true);
+    convert_mnist->callback([&]() {
+        command =
+            std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kMnist, convert_mnist));
+    });
+
+    CLI::App* convert_p53 = dataset_convert->add_subcommand("p53", "Convert local P53 K9.data.");
+    add_common_convert_options(convert_p53, true, false);
+    convert_p53->callback([&]() {
+        command =
+            std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kP53, convert_p53));
+    });
+
+    CLI::App* convert_sift = dataset_convert->add_subcommand("sift", "Convert local SIFT fvecs files.");
+    add_common_convert_options(convert_sift, true, false);
+    convert_sift->callback([&]() {
+        command =
+            std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kSift, convert_sift));
+    });
+
+    CLI::App* convert_gist = dataset_convert->add_subcommand("gist", "Convert local GIST fvecs files.");
+    add_common_convert_options(convert_gist, true, false);
+    convert_gist->callback([&]() {
+        command =
+            std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kGist, convert_gist));
+    });
+
+    CLI::App* convert_trevi = dataset_convert->add_subcommand("trevi", "Convert local Trevi BMP patches.");
+    add_common_convert_options(convert_trevi, true, false);
+    convert_trevi->callback([&]() {
+        command =
+            std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kTrevi, convert_trevi));
+    });
+
+    CLI::App* dataset_ground_truth =
+        dataset->add_subcommand("ground-truth", "Compute selected ground-truth fields for an existing dataset.");
+    std::filesystem::path ground_truth_dataset_directory;
+    std::string ground_truth_specs;
+    bool ground_truth_overwrite{false};
+    bool ground_truth_no_progress{false};
+    dataset_ground_truth->add_option("-d,--dataset-directory", ground_truth_dataset_directory, "Dataset directory")
+        ->required();
+    dataset_ground_truth->add_option("--ground-truth", ground_truth_specs,
+                                     "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba")
+        ->required();
+    dataset_ground_truth->add_flag("--overwrite", ground_truth_overwrite, "Overwrite existing ground-truth values");
+    dataset_ground_truth->add_flag("--no-progress", ground_truth_no_progress, "Disable progress reporting");
+    dataset_ground_truth->callback([&]() {
+        DatasetPrep::GroundTruthOptions options{.dataset_directory = ground_truth_dataset_directory,
+                                                .ground_truth_specs = ground_truth_specs,
+                                                .overwrite = ground_truth_overwrite,
+                                                .show_progress = !ground_truth_no_progress};
+        command = std::make_unique<DatasetGroundTruthCommand>(std::move(options));
+    });
 
     CLI11_PARSE(app, argc, argv);
 

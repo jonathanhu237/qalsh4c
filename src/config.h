@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 enum class ChamferDirection {
@@ -17,13 +18,14 @@ struct DatasetMetadata {
     unsigned int num_points_a{0};
     unsigned int num_points_b{0};
     unsigned int num_dimensions{0};
-    double chamfer_distance_l1_ab{0.0};
-    double chamfer_distance_l1_ba{0.0};
-    double chamfer_distance_l2_ab{0.0};
-    double chamfer_distance_l2_ba{0.0};
+    std::optional<double> chamfer_distance_l1_ab;
+    std::optional<double> chamfer_distance_l1_ba;
+    std::optional<double> chamfer_distance_l2_ab;
+    std::optional<double> chamfer_distance_l2_ba;
 
     void Load(const std::filesystem::path &file_path);
-    double GroundTruth(double norm_order, ChamferDirection direction) const;
+    void Save(const std::filesystem::path &file_path) const;
+    std::optional<double> GroundTruth(double norm_order, ChamferDirection direction) const;
 };
 
 struct QalshConfig {

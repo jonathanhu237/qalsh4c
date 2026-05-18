@@ -37,6 +37,66 @@ The repository includes a small `data/toy` dataset that uses the current metadat
 - `B -> A`: `3.000000`
 - `A <-> B`: `5.000000`
 
+## Dataset Preparation
+
+Datasets are prepared through the C++ CLI. A dataset directory contains `A.bin`, `B.bin`, and `metadata.json`; point files store row-major `double` values, and metadata stores point counts plus optional directed ground truth fields:
+
+```json
+{
+  "num_dimensions": 2,
+  "num_points": {
+    "a": 2,
+    "b": 2
+  },
+  "chamfer_distances": {
+    "l1": {
+      "ab": null,
+      "ba": null
+    },
+    "l2": {
+      "ab": 2.0,
+      "ba": null
+    }
+  }
+}
+```
+
+Ground truth is not computed unless requested. Use a single comma-separated `--ground-truth` value with selectors from `l1:ab`, `l1:ba`, `l2:ab`, and `l2:ba`:
+
+```bash
+./build/qalsh4c dataset generate gmm \
+  --num-points-a 1000 \
+  --num-points-b 1000 \
+  --num-dimensions 256 \
+  --outlier-fraction 0.1 \
+  --outlier-scale 4096 \
+  --seed 42 \
+  --ground-truth l2:ab,l2:ba \
+  -o data/generated
+```
+
+Existing datasets can be backfilled later:
+
+```bash
+./build/qalsh4c dataset ground-truth \
+  -d data/generated \
+  --ground-truth l1:ab,l1:ba
+```
+
+Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Overwriting a dataset removes any stale `index/` directory. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
+
+Known raw datasets can be converted with:
+
+```bash
+./build/qalsh4c dataset convert mnist --images train-images-idx3-ubyte -o data/mnist
+./build/qalsh4c dataset convert p53 --raw-dir raw/p53 -o data/p53
+./build/qalsh4c dataset convert sift --raw-dir raw/sift -o data/sift
+./build/qalsh4c dataset convert gist --raw-dir raw/gist -o data/gist
+./build/qalsh4c dataset convert trevi --raw-dir raw/trevi -o data/trevi
+```
+
+Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. MNIST conversion reads a local IDX image file and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
+
 ## Index
 
 To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset under $\ell_2$ norm:

@@ -36,10 +36,19 @@ run_estimate("ba" "ba" "B -> A" "3.000000")
 run_estimate("both" "both" "A <-> B" "5.000000")
 
 set(zero_data_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth")
+set(zero_raw_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth_raw")
 file(REMOVE_RECURSE "${zero_data_dir}")
-file(MAKE_DIRECTORY "${zero_data_dir}")
+file(REMOVE_RECURSE "${zero_raw_dir}")
+file(MAKE_DIRECTORY "${zero_raw_dir}")
+file(WRITE "${zero_raw_dir}/K9.data" "0,0,1,2\n0,0,3,4\n")
 execute_process(
-    COMMAND python3 -c "from pathlib import Path; import json, struct; d=Path('${zero_data_dir}'); data=struct.pack('2d', 0.0, 0.0); (d/'A.bin').write_bytes(data); (d/'B.bin').write_bytes(data); (d/'metadata.json').write_text(json.dumps({'num_dimensions': 2, 'num_points': {'a': 1, 'b': 1}, 'chamfer_distances': {'l1': {'ab': 0.0, 'ba': 0.0}, 'l2': {'ab': 0.0, 'ba': 0.0}}}, indent=4))"
+    COMMAND "${QALSH4C_BIN}" dataset convert p53
+        --raw-dir "${zero_raw_dir}"
+        --num-points-a 1
+        --no-shuffle
+        --ground-truth l2:ab
+        --no-progress
+        -o "${zero_data_dir}"
     RESULT_VARIABLE zero_data_result
     OUTPUT_VARIABLE zero_data_stdout
     ERROR_VARIABLE zero_data_stderr

@@ -5,6 +5,7 @@
 #include <random>
 
 #include "config.h"
+#include "dataset.h"
 #include "estimator.h"
 
 class Command {
@@ -42,4 +43,31 @@ class EstimateCommand : public Command {
     double norm_order_;
     std::filesystem::path dataset_directory_;
     ChamferDirection direction_;
+};
+
+class DatasetGenerateGmmCommand : public Command {
+   public:
+    explicit DatasetGenerateGmmCommand(DatasetPrep::GmmOptions options);
+    void Execute() override;
+
+   private:
+    DatasetPrep::GmmOptions options_;
+};
+
+class DatasetConvertCommand : public Command {
+   public:
+    explicit DatasetConvertCommand(DatasetPrep::ConvertOptions options);
+    void Execute() override;
+
+   private:
+    DatasetPrep::ConvertOptions options_;
+};
+
+class DatasetGroundTruthCommand : public Command {
+   public:
+    explicit DatasetGroundTruthCommand(DatasetPrep::GroundTruthOptions options);
+    void Execute() override;
+
+   private:
+    DatasetPrep::GroundTruthOptions options_;
 };

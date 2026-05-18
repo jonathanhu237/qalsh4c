@@ -24,6 +24,7 @@ add_executable(qalsh4c
     src/buffer.cc
     src/command.cc
     src/config.cc
+    src/dataset.cc
     src/estimator.cc
     src/external_sorter.cc
     src/global.cc
@@ -110,6 +111,58 @@ if(BUILD_TESTING)
     add_test(NAME log_error_test COMMAND log_error_test)
     set_tests_properties(log_error_test PROPERTIES WILL_FAIL TRUE)
 
+    add_executable(
+        dataset_core_test
+        tests/dataset_core_test.cc
+        src/config.cc
+        src/dataset.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+    )
+    target_include_directories(dataset_core_test PRIVATE src)
+    target_link_libraries(dataset_core_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(dataset_core_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(dataset_core_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME dataset_core_test COMMAND dataset_core_test)
+
+    add_executable(
+        dataset_loader_test
+        tests/dataset_loader_test.cc
+        src/config.cc
+        src/dataset.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+    )
+    target_include_directories(dataset_loader_test PRIVATE src)
+    target_link_libraries(dataset_loader_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(dataset_loader_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(dataset_loader_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME dataset_loader_test COMMAND dataset_loader_test)
+
+    add_executable(
+        dataset_bad_bmp_test
+        tests/dataset_bad_bmp_test.cc
+        src/config.cc
+        src/dataset.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+    )
+    target_include_directories(dataset_bad_bmp_test PRIVATE src)
+    target_link_libraries(dataset_bad_bmp_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(dataset_bad_bmp_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(dataset_bad_bmp_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME dataset_bad_bmp_test COMMAND dataset_bad_bmp_test)
+    set_tests_properties(dataset_bad_bmp_test PROPERTIES WILL_FAIL TRUE)
+
     add_test(
         NAME qalsh4c_help
         COMMAND ${CMAKE_COMMAND}
@@ -156,5 +209,46 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh_ann_help.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_dataset_generate
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_dataset_generate.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_dataset_ground_truth
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_dataset_ground_truth.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_dataset_overwrite
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_dataset_overwrite.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_dataset_invalid
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_dataset_invalid.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_dataset_convert_seed
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_dataset_convert_seed.cmake
     )
 endif()

@@ -9,6 +9,33 @@
 #include "log.h"
 #include "utils.h"
 
+namespace {
+
+std::optional<double> ReadOptionalDouble(const nlohmann::json& value) {
+    if (value.is_null()) {
+        return std::nullopt;
+    }
+    return value.get<double>();
+}
+
+void WriteOptionalDouble(nlohmann::json& metadata, const std::string& norm, const std::string& direction,
+                         const std::optional<double>& value) {
+    if (value.has_value()) {
+        metadata["chamfer_distances"][norm][direction] = *value;
+    } else {
+        metadata["chamfer_distances"][norm][direction] = nullptr;
+    }
+}
+
+std::optional<double> SumOptional(const std::optional<double>& left, const std::optional<double>& right) {
+    if (!left.has_value() || !right.has_value()) {
+        return std::nullopt;
+    }
+    return *left + *right;
+}
+
+}  // namespace
+
 ChamferDirection ParseChamferDirection(const std::string &value) {
     if (value == "ab") {
         return ChamferDirection::kAb;
@@ -61,18 +88,35 @@ void DatasetMetadata::Load(const std::filesystem::path &file_path) {
         metadata.at("num_points").at("a").get_to(num_points_a);
         metadata.at("num_points").at("b").get_to(num_points_b);
         metadata.at("num_dimensions").get_to(num_dimensions);
-        metadata.at("chamfer_distances").at("l1").at("ab").get_to(chamfer_distance_l1_ab);
-        metadata.at("chamfer_distances").at("l1").at("ba").get_to(chamfer_distance_l1_ba);
-        metadata.at("chamfer_distances").at("l2").at("ab").get_to(chamfer_distance_l2_ab);
-        metadata.at("chamfer_distances").at("l2").at("ba").get_to(chamfer_distance_l2_ba);
+        chamfer_distance_l1_ab = ReadOptionalDouble(metadata.at("chamfer_distances").at("l1").at("ab"));
+        chamfer_distance_l1_ba = ReadOptionalDouble(metadata.at("chamfer_distances").at("l1").at("ba"));
+        chamfer_distance_l2_ab = ReadOptionalDouble(metadata.at("chamfer_distances").at("l2").at("ab"));
+        chamfer_distance_l2_ba = ReadOptionalDouble(metadata.at("chamfer_distances").at("l2").at("ba"));
     } catch (nlohmann::json::exception &e) {
         Log::error("JSON format error: {}", e.what());
     }
 }
 
-double DatasetMetadata::GroundTruth(double norm_order, ChamferDirection direction) const {
-    double distance_ab{0.0};
-    double distance_ba{0.0};
+void DatasetMetadata::Save(const std::filesystem::path &file_path) const {
+    nlohmann::json metadata;
+    metadata["num_dimensions"] = num_dimensions;
+    metadata["num_points"]["a"] = num_points_a;
+    metadata["num_points"]["b"] = num_points_b;
+    WriteOptionalDouble(metadata, "l1", "ab", chamfer_distance_l1_ab);
+    WriteOptionalDouble(metadata, "l1", "ba", chamfer_distance_l1_ba);
+    WriteOptionalDouble(metadata, "l2", "ab", chamfer_distance_l2_ab);
+    WriteOptionalDouble(metadata, "l2", "ba", chamfer_distance_l2_ba);
+
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open()) {
+        Log::error("Failed to open file for writing: {}", file_path.string());
+    }
+    ofs << metadata.dump(4);
+}
+
+std::optional<double> DatasetMetadata::GroundTruth(double norm_order, ChamferDirection direction) const {
+    std::optional<double> distance_ab;
+    std::optional<double> distance_ba;
 
     if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         distance_ab = chamfer_distance_l1_ab;
@@ -90,7 +134,7 @@ double DatasetMetadata::GroundTruth(double norm_order, ChamferDirection directio
         case ChamferDirection::kBa:
             return distance_ba;
         case ChamferDirection::kBoth:
-            return distance_ab + distance_ba;
+            return SumOptional(distance_ab, distance_ba);
     }
 
     Log::error("Unsupported Chamfer direction.");

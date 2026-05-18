@@ -27,7 +27,7 @@ Point PointSet::ReadPoint(unsigned int point_id) {
 
 std::vector<Point> PointSet::LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
                                                 unsigned int num_dimensions) {
-    std::ifstream ifs(file_path);
+    std::ifstream ifs(file_path, std::ios::binary);
     if (!ifs.is_open()) {
         Log::error("Could not open base points file: {}", file_path.string());
         return {};
