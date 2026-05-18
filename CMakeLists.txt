@@ -7,9 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CTest)
 
-find_package(CLI11 CONFIG REQUIRED)
-find_package(Eigen3 CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+include(cmake/Dependencies.cmake)
 
 if(APPLE AND EXISTS "/opt/homebrew/opt/libomp/lib/libomp.dylib")
     set(OpenMP_CXX_INCLUDE_DIR "/opt/homebrew/opt/libomp/include")
