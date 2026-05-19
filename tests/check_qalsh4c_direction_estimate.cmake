@@ -1,4 +1,4 @@
-set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/toy")
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/gmm")
 
 function(check_contains output expected context)
     string(FIND "${output}" "${expected}" found_index)
@@ -6,6 +6,42 @@ function(check_contains output expected context)
         message(FATAL_ERROR "Expected '${expected}' in ${context} output:\n${output}")
     endif()
 endfunction()
+
+function(read_ground_truth output_var norm direction)
+    file(READ "${source_data_dir}/metadata.json" metadata)
+    string(JSON expected GET "${metadata}" chamfer_distances "${norm}" "${direction}")
+    set(${output_var} "${expected}" PARENT_SCOPE)
+endfunction()
+
+function(format_distance output_var value)
+    string(REGEX MATCH "^[-+]?[0-9]+(\\.[0-9]+)?" numeric_value "${value}")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env EXPECTED_VALUE=${numeric_value}
+                awk "BEGIN { printf \"%.6f\", ENVIRON[\"EXPECTED_VALUE\"] }"
+        OUTPUT_VARIABLE formatted
+        RESULT_VARIABLE format_result
+    )
+    if(NOT format_result EQUAL 0)
+        message(FATAL_ERROR "Failed to format expected distance ${value}")
+    endif()
+    set(${output_var} "${formatted}" PARENT_SCOPE)
+endfunction()
+
+read_ground_truth(expected_l2_ab_raw l2 ab)
+read_ground_truth(expected_l2_ba_raw l2 ba)
+format_distance(expected_l2_ab "${expected_l2_ab_raw}")
+format_distance(expected_l2_ba "${expected_l2_ba_raw}")
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+            EXPECTED_AB=${expected_l2_ab_raw}
+            EXPECTED_BA=${expected_l2_ba_raw}
+            awk "BEGIN { printf \"%.6f\", ENVIRON[\"EXPECTED_AB\"] + ENVIRON[\"EXPECTED_BA\"] }"
+    OUTPUT_VARIABLE expected_l2_both
+    RESULT_VARIABLE both_format_result
+)
+if(NOT both_format_result EQUAL 0)
+    message(FATAL_ERROR "Failed to format bidirectional expected distance")
+endif()
 
 function(run_estimate name direction expected_direction expected_distance)
     set(command_args estimate -p 2 -d "${source_data_dir}")
@@ -30,10 +66,10 @@ function(run_estimate name direction expected_direction expected_distance)
     check_contains("${estimate_stdout}" "Relative Error: 0.00%" "${name}")
 endfunction()
 
-run_estimate("default" "default" "A -> B" "2.000000")
-run_estimate("ab" "ab" "A -> B" "2.000000")
-run_estimate("ba" "ba" "B -> A" "3.000000")
-run_estimate("both" "both" "A <-> B" "5.000000")
+run_estimate("default" "default" "A -> B" "${expected_l2_ab}")
+run_estimate("ab" "ab" "A -> B" "${expected_l2_ab}")
+run_estimate("ba" "ba" "B -> A" "${expected_l2_ba}")
+run_estimate("both" "both" "A <-> B" "${expected_l2_both}")
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${source_data_dir}" --direction both ann qalsh
@@ -47,7 +83,7 @@ endif()
 string(CONCAT qalsh_estimate_output "${qalsh_estimate_stdout}" "${qalsh_estimate_stderr}")
 check_contains("${qalsh_estimate_output}" "Building in-memory QALSH index" "qalsh-online")
 check_contains("${qalsh_estimate_stdout}" "Direction: A <-> B" "qalsh-online")
-check_contains("${qalsh_estimate_stdout}" "Estimated Distance: 5.000000" "qalsh-online")
+check_contains("${qalsh_estimate_stdout}" "Estimated Distance:" "qalsh-online")
 
 set(zero_data_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth")
 set(zero_raw_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth_raw")

@@ -1,4 +1,4 @@
-set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/toy")
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/gmm")
 set(weights_dir "${QALSH4C_BINARY_DIR}/qalsh_sampling_weights")
 
 file(REMOVE_RECURSE "${weights_dir}")
@@ -13,6 +13,10 @@ execute_process(
 if(NOT save_result EQUAL 0)
     message(FATAL_ERROR "Saving QALSH weights failed with exit code ${save_result}\n${save_stdout}\n${save_stderr}")
 endif()
+if(NOT save_stdout MATCHES "Estimated Distance: ([0-9]+\\.[0-9]+)")
+    message(FATAL_ERROR "Expected saved weights run to print an estimated distance:\n${save_stdout}")
+endif()
+set(saved_estimate "${CMAKE_MATCH_1}")
 
 if(NOT EXISTS "${weights_dir}/metadata.json")
     message(FATAL_ERROR "Expected QALSH weights metadata at ${weights_dir}/metadata.json")
@@ -39,8 +43,8 @@ execute_process(
 if(NOT load_result EQUAL 0)
     message(FATAL_ERROR "Loading QALSH weights failed with exit code ${load_result}\n${load_stdout}\n${load_stderr}")
 endif()
-if(NOT load_stdout MATCHES "Estimated Distance: 2.000000")
-    message(FATAL_ERROR "Expected loaded weights estimate to match toy A-to-B distance:\n${load_stdout}")
+if(NOT load_stdout MATCHES "Estimated Distance: ${saved_estimate}")
+    message(FATAL_ERROR "Expected loaded weights estimate to match saved weights estimate ${saved_estimate}:\n${load_stdout}")
 endif()
 if(load_stdout MATCHES "Building in-memory QALSH index")
     message(FATAL_ERROR "Loading QALSH weights should skip in-memory QALSH weight generation:\n${load_stdout}")

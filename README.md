@@ -49,15 +49,9 @@ cmake --workflow --preset release
 
 ## Sample Datasets
 
-The repository includes a small `data/toy` dataset that uses the current metadata schema. It has known directed Chamfer distances under both $\ell_1$ and $\ell_2$:
+The repository includes committed canonical sample datasets:
 
-- `A -> B`: `2.000000`
-- `B -> A`: `3.000000`
-- `A <-> B`: `5.000000`
-
-The repository also includes committed canonical sample datasets:
-
-- `data/gmm`: synthetic Gaussian-mixture sample generated with 128 points in A, 128 points in B, 32 dimensions, seed `42`, and all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
+- `data/gmm`: synthetic Gaussian-mixture sample generated with 1024 points in A, 1024 points in B, 128 dimensions, seed `42`, and all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
 - `data/federalist`: 300-dimensional Federalist sample with 1880 points in A and 1178 points in B, with all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
 
 ## Dataset Preparation
@@ -140,29 +134,29 @@ We provide four methods for estimating the Chamfer distance:
 - Uniform Sampling
 - QALSH Sampling
 
-The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the toy dataset to check the exact directed distances without building an index:
+The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the GMM sample dataset to check the exact directed distances without building an index:
 
 ```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ab ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ba ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction both ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ab ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ba ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction both ann linear_scan
 ```
 
 QALSH estimates now build the selected direction's target-side ordered projection arrays in memory during `estimate`; there is no separate index command or disk index preparation step. Single-direction estimates build only the target side needed for that direction, and `--direction both` runs the two directions sequentially:
 
 ```bash
-./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction ab ann qalsh
-./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction both ann qalsh
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/gmm --direction ab ann qalsh
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/gmm --direction both ann qalsh
 ```
 
 For repeated QALSH sampling experiments, save generated weights once and load them in later runs:
 
 ```bash
-./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/toy --direction ab \
-  sampling -n 100 qalsh --save-weights ./weights/toy-l2-ab
+./build/dev/qalsh4c --use-fixed-seed estimate -p 2 -d ./data/gmm --direction ab \
+  sampling -n 100 qalsh --save-weights ./weights/gmm-l2-ab
 
-./build/dev/qalsh4c estimate -p 2 -d ./data/toy --direction ab \
-  sampling -n 100 qalsh --load-weights ./weights/toy-l2-ab
+./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ab \
+  sampling -n 100 qalsh --load-weights ./weights/gmm-l2-ab
 ```
 
 Saved QALSH weights use a directory containing `metadata.json` and `weights.bin`. The loader validates the direction, norm, dataset identity, and QALSH configuration before using them.
