@@ -47,13 +47,18 @@ CPU and may not be portable to other machines:
 cmake --workflow --preset release
 ```
 
-## Toy Dataset
+## Sample Datasets
 
 The repository includes a small `data/toy` dataset that uses the current metadata schema. It has known directed Chamfer distances under both $\ell_1$ and $\ell_2$:
 
 - `A -> B`: `2.000000`
 - `B -> A`: `3.000000`
 - `A <-> B`: `5.000000`
+
+The repository also includes committed canonical sample datasets:
+
+- `data/gmm`: synthetic Gaussian-mixture sample generated with 128 points in A, 128 points in B, 32 dimensions, seed `42`, and all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
+- `data/federalist`: 300-dimensional Federalist sample with 1880 points in A and 1178 points in B, with all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
 
 ## Dataset Preparation
 

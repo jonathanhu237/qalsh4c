@@ -11,6 +11,11 @@ data/federalist/*
 !data/federalist/A.bin
 !data/federalist/B.bin
 !data/federalist/metadata.json
+!data/gmm/
+data/gmm/*
+!data/gmm/A.bin
+!data/gmm/B.bin
+!data/gmm/metadata.json
 !data/toy/
 data/toy/*
 !data/toy/A.bin

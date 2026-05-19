@@ -1,17 +1,17 @@
 {
+    "chamfer_distances": {
+        "l1": {
+            "ab": 37563.82433719933,
+            "ba": 22028.105089452118
+        },
+        "l2": {
+            "ab": 2719.1324666331534,
+            "ba": 1597.465749949447
+        }
+    },
     "num_dimensions": 300,
     "num_points": {
         "a": 1880,
         "b": 1178
-    },
-    "chamfer_distances": {
-        "l1": {
-            "ab": null,
-            "ba": null
-        },
-        "l2": {
-            "ab": null,
-            "ba": null
-        }
     }
 }
