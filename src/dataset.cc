@@ -21,6 +21,7 @@
 #include <string_view>
 #include <utility>
 
+#include "dataset_cuda.h"
 #include "global.h"
 #include "log.h"
 #include "utils.h"
@@ -163,6 +164,18 @@ std::string TaskKey(const GroundTruthTask& task) {
     return std::format("{}:{}", norm, ChamferDirectionValue(task.direction));
 }
 
+std::string GroundTruthDeviceValue(GroundTruthDevice ground_truth_device) {
+    switch (ground_truth_device) {
+        case GroundTruthDevice::kAuto:
+            return "auto";
+        case GroundTruthDevice::kCpu:
+            return "cpu";
+        case GroundTruthDevice::kCuda:
+            return "cuda";
+    }
+    Log::error("Unsupported ground-truth device.");
+}
+
 std::optional<double>& MetadataField(DatasetMetadata& metadata, const GroundTruthTask& task) {
     if (std::abs(task.norm_order - 1.0) < Global::kEpsilon) {
         if (task.direction == ChamferDirection::kAb) {
@@ -242,15 +255,17 @@ DatasetMetadata MakeMetadata(const std::vector<Point>& a, const std::vector<Poin
 }
 
 void ComputeTasks(const std::vector<Point>& a, const std::vector<Point>& b, const std::vector<GroundTruthTask>& tasks,
-                  DatasetMetadata& metadata, bool show_progress, bool overwrite) {
+                  DatasetMetadata& metadata, bool show_progress, bool overwrite,
+                  GroundTruthDevice ground_truth_device) {
     for (const GroundTruthTask& task : tasks) {
         std::optional<double>& target = MetadataField(metadata, task);
         if (target.has_value() && !overwrite) {
             Log::error("Ground truth {} already exists. Use --overwrite to recompute it.", TaskKey(task));
         }
-        const double value = ComputeDirectedChamfer(FromPoints(a, b, task.direction), ToPoints(a, b, task.direction),
-                                                    task.norm_order, std::format("Ground truth {}", TaskKey(task)),
-                                                    show_progress);
+        const double value =
+            ComputeDirectedChamfer(FromPoints(a, b, task.direction), ToPoints(a, b, task.direction), task.norm_order,
+                                   std::format("Ground truth {}", TaskKey(task)), show_progress,
+                                   ground_truth_device);
         target = value;
     }
 }
@@ -263,7 +278,7 @@ void WritePreparedDataset(const std::vector<Point>& a, const std::vector<Point>&
     WritePointSet(options.output_directory / "A.bin", a);
     WritePointSet(options.output_directory / "B.bin", b);
     DatasetMetadata metadata = MakeMetadata(a, b);
-    ComputeTasks(a, b, tasks, metadata, options.show_progress, true);
+    ComputeTasks(a, b, tasks, metadata, options.show_progress, true, options.ground_truth_device);
     metadata.Save(options.output_directory / "metadata.json");
 }
 
@@ -702,6 +717,20 @@ std::vector<Point> SampleGmm(unsigned int num_points, unsigned int num_dimension
 
 }  // namespace
 
+GroundTruthDevice ParseGroundTruthDevice(std::string_view value) {
+    const std::string trimmed = Trim(value);
+    if (trimmed == "auto") {
+        return GroundTruthDevice::kAuto;
+    }
+    if (trimmed == "cpu") {
+        return GroundTruthDevice::kCpu;
+    }
+    if (trimmed == "cuda") {
+        return GroundTruthDevice::kCuda;
+    }
+    Log::error("Unsupported ground-truth device '{}'. Use one of: auto,cpu,cuda.", trimmed);
+}
+
 std::vector<GroundTruthTask> ParseGroundTruthTasks(const std::string& specs) {
     std::vector<GroundTruthTask> tasks;
     std::set<std::string> seen;
@@ -746,39 +775,67 @@ void WritePointSet(const std::filesystem::path& file_path, const std::vector<Poi
 }
 
 double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
-                              const std::string& label, bool show_progress) {
+                              const std::string& label, bool show_progress,
+                              GroundTruthDevice ground_truth_device) {
     ValidatePair(from, to);
-    ProgressReporter progress(label, from.size(), show_progress);
-    std::vector<double> distances(from.size(), 0.0);
-    std::atomic<unsigned long long> completed{0};
+
+    auto compute_cpu = [&]() {
+        ProgressReporter progress(label, from.size(), show_progress);
+        std::vector<double> distances(from.size(), 0.0);
+        std::atomic<unsigned long long> completed{0};
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
-    for (long long source_index = 0; source_index < static_cast<long long>(from.size()); ++source_index) {
-        const Point& source = from[static_cast<size_t>(source_index)];
-        double min_distance = std::numeric_limits<double>::max();
-        for (const Point& target : to) {
-            min_distance = std::min(min_distance, Calc::LpDistance(source, target, norm_order));
+        for (long long source_index = 0; source_index < static_cast<long long>(from.size()); ++source_index) {
+            const Point& source = from[static_cast<size_t>(source_index)];
+            double min_distance = std::numeric_limits<double>::max();
+            for (const Point& target : to) {
+                min_distance = std::min(min_distance, Calc::LpDistance(source, target, norm_order));
+            }
+            distances[static_cast<size_t>(source_index)] = min_distance;
+            const unsigned long long done = completed.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (done % 128 == 0 || done == from.size()) {
+                progress.Set(done);
+            }
         }
-        distances[static_cast<size_t>(source_index)] = min_distance;
-        const unsigned long long done = completed.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (done % 128 == 0 || done == from.size()) {
-            progress.Set(done);
-        }
-    }
 #else
-    for (size_t source_index = 0; source_index < from.size(); ++source_index) {
-        double min_distance = std::numeric_limits<double>::max();
-        for (const Point& target : to) {
-            min_distance = std::min(min_distance, Calc::LpDistance(from[source_index], target, norm_order));
+        for (size_t source_index = 0; source_index < from.size(); ++source_index) {
+            double min_distance = std::numeric_limits<double>::max();
+            for (const Point& target : to) {
+                min_distance = std::min(min_distance, Calc::LpDistance(from[source_index], target, norm_order));
+            }
+            distances[source_index] = min_distance;
+            progress.Set(source_index + 1);
         }
-        distances[source_index] = min_distance;
-        progress.Set(source_index + 1);
-    }
 #endif
 
-    progress.Finish();
-    return std::accumulate(distances.begin(), distances.end(), 0.0);
+        progress.Finish();
+        return std::accumulate(distances.begin(), distances.end(), 0.0);
+    };
+
+    if (ground_truth_device == GroundTruthDevice::kCpu) {
+        return compute_cpu();
+    }
+
+    ProgressReporter cuda_progress(std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda)),
+                                   from.size(), show_progress);
+    CudaChamferResult cuda_result =
+        ComputeDirectedChamferCuda(from, to, norm_order, [&](size_t completed) { cuda_progress.Set(completed); });
+
+    if (cuda_result.status == CudaChamferStatus::kSuccess) {
+        cuda_progress.Finish();
+        return cuda_result.value;
+    }
+
+    if (cuda_result.status == CudaChamferStatus::kFailed) {
+        Log::error("CUDA ground-truth computation failed: {}", cuda_result.message);
+    }
+    if (ground_truth_device == GroundTruthDevice::kCuda) {
+        Log::error("CUDA ground-truth computation required but unavailable: {}", cuda_result.message);
+    }
+
+    Log::warn("CUDA ground-truth computation unavailable ({}); falling back to CPU.", cuda_result.message);
+    return compute_cpu();
 }
 
 void GenerateGmmDataset(const GmmOptions& options) {
@@ -807,7 +864,7 @@ void ComputeDatasetGroundTruth(const GroundTruthOptions& options) {
     std::vector<Point> b = PointSet::LoadPointsFromFile(options.dataset_directory / "B.bin", metadata.num_points_b,
                                                         metadata.num_dimensions);
     ComputeTasks(a, b, ParseGroundTruthTasks(options.ground_truth_specs), metadata, options.show_progress,
-                 options.overwrite);
+                 options.overwrite, options.ground_truth_device);
     metadata.Save(options.dataset_directory / "metadata.json");
 }
 

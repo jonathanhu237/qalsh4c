@@ -14,6 +14,16 @@ CMake downloads pinned versions of CLI11, Eigen, and nlohmann-json during the
 first configure step for each build directory. OpenMP is optional and enabled
 automatically when CMake can find a compatible local runtime.
 
+CUDA ground-truth acceleration is optional. `QALSH4C_ENABLE_CUDA` accepts
+`AUTO`, `ON`, or `OFF` and defaults to `AUTO`; `AUTO` builds CUDA support when a
+CUDA compiler is available and otherwise builds a CPU-only binary. Use `ON` to
+require CUDA at configure time:
+
+```bash
+cmake --preset release -DQALSH4C_ENABLE_CUDA=ON
+cmake --build --preset release
+```
+
 Use the `dev` preset for day-to-day development. It builds
 `./build/dev/qalsh4c` with debug symbols, warnings, ASan/UBSan, tests enabled,
 and `compile_commands.json`:
@@ -90,6 +100,17 @@ Existing datasets can be backfilled later:
   -d data/generated \
   --ground-truth l1:ab,l1:ba
 ```
+
+Ground-truth computation supports `--ground-truth-device auto|cpu|cuda` on
+generation, conversion, and backfill commands. The default `auto` mode uses the
+optional CUDA backend when the binary was built with CUDA and the default CUDA
+device can start the computation; otherwise it falls back to CPU before CUDA
+work begins. Use `cpu` to force the existing CPU/OpenMP path, or `cuda` to
+require CUDA and fail if CUDA support or device memory is unavailable. CUDA
+acceleration only applies to exact directed Chamfer ground-truth calculation;
+raw dataset parsing, shuffling, and writing remain CPU-side. The CUDA backend
+uses double precision and batches source points from runtime free-memory
+information while keeping target points resident on the default CUDA device.
 
 Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
 

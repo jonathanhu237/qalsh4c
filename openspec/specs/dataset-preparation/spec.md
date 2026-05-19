@@ -186,3 +186,82 @@ The repository SHALL remove the Python dataset scripts after their workflows are
 #### Scenario: Scripts directory is absent
 - **WHEN** the change is complete
 - **THEN** the repository no longer contains the Python dataset preparation scripts under `scripts/`
+
+### Requirement: Ground-truth computation supports backend selection
+The system SHALL allow dataset preparation commands that compute exact ground truth to select a computation backend using `--ground-truth-device auto|cpu|cuda`, defaulting to `auto`.
+
+#### Scenario: Ground-truth backend option is available for generation
+- **WHEN** the user requests help for `dataset generate gmm`
+- **THEN** the help output includes `--ground-truth-device`
+
+#### Scenario: Ground-truth backend option is available for conversion
+- **WHEN** the user requests help for a `dataset convert` subcommand
+- **THEN** the help output includes `--ground-truth-device`
+
+#### Scenario: Ground-truth backend option is available for backfill
+- **WHEN** the user requests help for `dataset ground-truth`
+- **THEN** the help output includes `--ground-truth-device`
+
+#### Scenario: CPU backend can be forced
+- **WHEN** the user computes selected ground truth with `--ground-truth-device cpu`
+- **THEN** the system computes exact directed Chamfer ground truth using the CPU implementation
+
+#### Scenario: CUDA backend can be required
+- **WHEN** the user computes selected ground truth with `--ground-truth-device cuda`
+- **THEN** the system attempts to compute exact directed Chamfer ground truth using CUDA
+- **AND** exits with an error if CUDA is not available or cannot start the computation
+
+#### Scenario: Auto backend falls back before CUDA starts
+- **WHEN** the user computes selected ground truth with `--ground-truth-device auto`
+- **AND** CUDA is not available or cannot start the computation
+- **THEN** the system computes exact directed Chamfer ground truth using the CPU implementation
+
+### Requirement: CUDA ground-truth computation preserves exact Chamfer semantics
+The CUDA backend SHALL compute the same exact directed Chamfer definition as the CPU backend for supported norms using double-precision point values.
+
+#### Scenario: CUDA computes L1 directed Chamfer
+- **WHEN** CUDA ground-truth computation is selected for `l1:ab`
+- **THEN** the system stores `sum_{a in A} min_{b in B} distance_l1(a,b)` in `chamfer_distances.l1.ab`
+
+#### Scenario: CUDA computes L2 directed Chamfer
+- **WHEN** CUDA ground-truth computation is selected for `l2:ba`
+- **THEN** the system stores `sum_{b in B} min_{a in A} distance_l2(b,a)` in `chamfer_distances.l2.ba`
+
+#### Scenario: CUDA results match CPU within floating-point tolerance
+- **WHEN** the same canonical dataset ground truth is computed with CPU and CUDA
+- **THEN** the CUDA result matches the CPU result within an appropriate floating-point tolerance
+
+### Requirement: CUDA ground-truth computation batches source points by available GPU memory
+The CUDA backend SHALL derive a source-point batch size from runtime CUDA memory availability instead of requiring all source points to fit on the GPU at once.
+
+#### Scenario: Source set exceeds remaining GPU memory
+- **WHEN** the target point set fits on the CUDA device
+- **AND** the full source point set would exceed the configured CUDA memory budget
+- **THEN** the system processes source points in multiple CUDA batches
+
+#### Scenario: Target set cannot fit on CUDA device in auto mode
+- **WHEN** `--ground-truth-device auto` is selected
+- **AND** the target point set plus at least one source point cannot fit within the CUDA memory budget
+- **THEN** the system falls back to CPU before starting CUDA computation
+
+#### Scenario: Target set cannot fit on CUDA device in cuda mode
+- **WHEN** `--ground-truth-device cuda` is selected
+- **AND** the target point set plus at least one source point cannot fit within the CUDA memory budget
+- **THEN** the system exits with an error that indicates CUDA memory is insufficient
+
+### Requirement: CUDA support is optional at build time
+The system SHALL build and run without CUDA support while enabling CUDA acceleration when the build is configured with CUDA.
+
+#### Scenario: Non-CUDA build accepts auto backend
+- **WHEN** a binary built without CUDA support computes ground truth with `--ground-truth-device auto`
+- **THEN** the system uses the CPU implementation
+
+#### Scenario: Non-CUDA build rejects required CUDA backend
+- **WHEN** a binary built without CUDA support computes ground truth with `--ground-truth-device cuda`
+- **THEN** the system exits with an error explaining that CUDA support is not compiled in
+
+#### Scenario: CUDA build uses the default CUDA device
+- **WHEN** a binary built with CUDA support computes ground truth with `--ground-truth-device cuda`
+- **THEN** the system uses the CUDA runtime default device
+- **AND** does not require a command-line CUDA device id
+

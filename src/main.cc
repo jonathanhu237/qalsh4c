@@ -171,6 +171,7 @@ int main(int argc, char** argv) {
     double gmm_outlier_scale{4096.0};
     std::filesystem::path gmm_output_directory;
     std::string gmm_ground_truth_specs;
+    std::string gmm_ground_truth_device{"auto"};
     bool gmm_overwrite{false};
     bool gmm_no_progress{false};
     unsigned int gmm_seed{0};
@@ -187,6 +188,10 @@ int main(int argc, char** argv) {
     dataset_gmm->add_option("-o,--output-directory", gmm_output_directory, "Dataset output directory")->required();
     dataset_gmm->add_option("--ground-truth", gmm_ground_truth_specs,
                             "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba");
+    dataset_gmm->add_option("--ground-truth-device", gmm_ground_truth_device,
+                            "Ground-truth compute device: auto, cpu, or cuda")
+        ->default_val("auto")
+        ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
     dataset_gmm->add_flag("--overwrite", gmm_overwrite, "Overwrite existing dataset files and remove old indexes");
     dataset_gmm->add_flag("--no-progress", gmm_no_progress, "Disable progress reporting");
     CLI::Option* gmm_seed_option = dataset_gmm->add_option("--seed", gmm_seed, "Seed for reproducible generation");
@@ -195,7 +200,8 @@ int main(int argc, char** argv) {
             .output = {.output_directory = gmm_output_directory,
                        .ground_truth_specs = gmm_ground_truth_specs,
                        .overwrite = gmm_overwrite,
-                       .show_progress = !gmm_no_progress},
+                       .show_progress = !gmm_no_progress,
+                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(gmm_ground_truth_device)},
             .num_points_a = gmm_num_points_a,
             .num_points_b = gmm_num_points_b,
             .num_dimensions = gmm_num_dimensions,
@@ -213,6 +219,7 @@ int main(int argc, char** argv) {
     std::filesystem::path convert_raw_directory;
     std::filesystem::path convert_images_file;
     std::string convert_ground_truth_specs;
+    std::string convert_ground_truth_device{"auto"};
     bool convert_overwrite{false};
     bool convert_no_progress{false};
     bool convert_no_shuffle{false};
@@ -224,6 +231,10 @@ int main(int argc, char** argv) {
             ->required();
         convert_app->add_option("--ground-truth", convert_ground_truth_specs,
                                 "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba");
+        convert_app->add_option("--ground-truth-device", convert_ground_truth_device,
+                                "Ground-truth compute device: auto, cpu, or cuda")
+            ->default_val("auto")
+            ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
         convert_app->add_flag("--overwrite", convert_overwrite,
                               "Overwrite existing dataset files and remove old indexes");
         convert_app->add_flag("--no-progress", convert_no_progress, "Disable progress reporting");
@@ -243,7 +254,8 @@ int main(int argc, char** argv) {
             .output = {.output_directory = convert_output_directory,
                        .ground_truth_specs = convert_ground_truth_specs,
                        .overwrite = convert_overwrite,
-                       .show_progress = !convert_no_progress},
+                       .show_progress = !convert_no_progress,
+                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(convert_ground_truth_device)},
             .kind = kind,
             .raw_directory = convert_raw_directory,
             .images_file = convert_images_file,
@@ -295,6 +307,7 @@ int main(int argc, char** argv) {
         dataset->add_subcommand("ground-truth", "Compute selected ground-truth fields for an existing dataset.");
     std::filesystem::path ground_truth_dataset_directory;
     std::string ground_truth_specs;
+    std::string ground_truth_device{"auto"};
     bool ground_truth_overwrite{false};
     bool ground_truth_no_progress{false};
     dataset_ground_truth->add_option("-d,--dataset-directory", ground_truth_dataset_directory, "Dataset directory")
@@ -302,13 +315,19 @@ int main(int argc, char** argv) {
     dataset_ground_truth->add_option("--ground-truth", ground_truth_specs,
                                      "Comma-separated selectors: l1:ab,l1:ba,l2:ab,l2:ba")
         ->required();
+    dataset_ground_truth->add_option("--ground-truth-device", ground_truth_device,
+                                     "Ground-truth compute device: auto, cpu, or cuda")
+        ->default_val("auto")
+        ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
     dataset_ground_truth->add_flag("--overwrite", ground_truth_overwrite, "Overwrite existing ground-truth values");
     dataset_ground_truth->add_flag("--no-progress", ground_truth_no_progress, "Disable progress reporting");
     dataset_ground_truth->callback([&]() {
         DatasetPrep::GroundTruthOptions options{.dataset_directory = ground_truth_dataset_directory,
                                                 .ground_truth_specs = ground_truth_specs,
                                                 .overwrite = ground_truth_overwrite,
-                                                .show_progress = !ground_truth_no_progress};
+                                                .show_progress = !ground_truth_no_progress,
+                                                .ground_truth_device =
+                                                    DatasetPrep::ParseGroundTruthDevice(ground_truth_device)};
         command = std::make_unique<DatasetGroundTruthCommand>(std::move(options));
     });
 

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string_view>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,12 @@ enum class DatasetKind {
     kTrevi,
 };
 
+enum class GroundTruthDevice {
+    kAuto,
+    kCpu,
+    kCuda,
+};
+
 struct GroundTruthTask {
     double norm_order{0.0};
     ChamferDirection direction{ChamferDirection::kAb};
@@ -28,6 +35,7 @@ struct CommonOutputOptions {
     std::string ground_truth_specs;
     bool overwrite{false};
     bool show_progress{true};
+    GroundTruthDevice ground_truth_device{GroundTruthDevice::kAuto};
 };
 
 struct GmmOptions {
@@ -55,13 +63,16 @@ struct GroundTruthOptions {
     std::string ground_truth_specs;
     bool overwrite{false};
     bool show_progress{true};
+    GroundTruthDevice ground_truth_device{GroundTruthDevice::kAuto};
 };
 
+GroundTruthDevice ParseGroundTruthDevice(std::string_view value);
 std::vector<GroundTruthTask> ParseGroundTruthTasks(const std::string& specs);
 
 void WritePointSet(const std::filesystem::path& file_path, const std::vector<Point>& points);
 double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
-                              const std::string& label, bool show_progress);
+                              const std::string& label, bool show_progress,
+                              GroundTruthDevice ground_truth_device = GroundTruthDevice::kCpu);
 
 void GenerateGmmDataset(const GmmOptions& options);
 void ConvertDataset(const ConvertOptions& options);
