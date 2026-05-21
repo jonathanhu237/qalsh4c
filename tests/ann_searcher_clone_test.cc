@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "b_plus_tree.h"
 #include "config.h"
 
 namespace {
@@ -20,7 +21,7 @@ void WritePointFile(const std::filesystem::path& path, const std::vector<Point>&
 int main() {
     const std::filesystem::path temp_dir = std::filesystem::current_path() / "ann_searcher_clone_test_tmp";
     std::filesystem::remove_all(temp_dir);
-    std::filesystem::create_directories(temp_dir);
+    std::filesystem::create_directories(temp_dir / "index" / "l2" / "base" / "b_plus_trees");
 
     std::vector<Point> base_points(150, Point{1000.0});
     for (unsigned int point_id = 0; point_id < 149; ++point_id) {
@@ -29,21 +30,7 @@ int main() {
     base_points[149][0] = 1.5;
     WritePointFile(temp_dir / "base.bin", base_points);
 
-    const PointSetMetadata metadata{
-        .file_path = temp_dir / "base.bin",
-        .num_points = static_cast<unsigned int>(base_points.size()),
-        .num_dimensions = 1,
-    };
-    std::vector<ProjectionPointIdPair> data;
-    data.reserve(base_points.size());
-    for (unsigned int point_id = 0; point_id < base_points.size(); ++point_id) {
-        data.push_back(ProjectionPointIdPair{
-            .dot_product = static_cast<double>(point_id + 1),
-            .point_id = point_id,
-        });
-    }
-    auto index = std::make_shared<InMemoryQalshIndex>();
-    index->config = QalshConfig{
+    QalshConfig config{
         .approximation_ratio = 2.0,
         .bucket_width = 1000.0,
         .error_probability = 0.1,
@@ -51,11 +38,29 @@ int main() {
         .collision_threshold = 1,
         .page_size = 128,
     };
-    index->metadata = metadata;
-    index->points = base_points;
-    index->dot_vectors = {Point{1.0}};
-    index->tables = {std::move(data)};
+    config.Save(temp_dir / "index" / "l2" / "base" / "config.json");
 
+    const std::vector<Point> dot_vectors = {Point{1.0}};
+    WritePointFile(temp_dir / "index" / "l2" / "base" / "dot_vectors.bin", dot_vectors);
+
+    std::vector<DotProductPointIdPair> data;
+    data.reserve(base_points.size());
+    for (unsigned int point_id = 0; point_id < base_points.size(); ++point_id) {
+        data.push_back(DotProductPointIdPair{
+            .dot_product = static_cast<double>(point_id + 1),
+            .point_id = point_id,
+        });
+    }
+    {
+        BPlusTreeBulkLoader loader(temp_dir / "index" / "l2" / "base" / "b_plus_trees" / "0.bin", config.page_size);
+        loader.Build(data);
+    }
+
+    const PointSetMetadata metadata{
+        .file_path = temp_dir / "base.bin",
+        .num_points = static_cast<unsigned int>(base_points.size()),
+        .num_dimensions = 1,
+    };
     const Point query_point{0.0};
 
     LinearScanAnnSearcher linear;
@@ -67,7 +72,7 @@ int main() {
         return 1;
     }
 
-    QalshAnnSearcher limited(index, true);
+    QalshAnnSearcher limited(true);
     limited.Init(metadata, 2.0);
     std::unique_ptr<AnnSearcher> limited_clone = limited.Clone();
     limited_clone->Init(metadata, 2.0);
@@ -76,7 +81,7 @@ int main() {
         return 1;
     }
 
-    QalshAnnSearcher unlimited(index, false);
+    QalshAnnSearcher unlimited(false);
     unlimited.Init(metadata, 2.0);
     std::unique_ptr<AnnSearcher> unlimited_clone = unlimited.Clone();
     unlimited_clone->Init(metadata, 2.0);

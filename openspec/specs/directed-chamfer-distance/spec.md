@@ -22,6 +22,34 @@ The system SHALL allow users to select the Chamfer estimation direction with `--
 - **WHEN** the user runs `estimate --direction both`
 - **THEN** the system estimates bidirectional Chamfer distance as the sum of the A-to-B and B-to-A directed components
 
+### Requirement: Index command supports direction-aware indexing
+
+The system SHALL allow users to select the estimation direction prepared by `index` with `--direction ab|ba|both`, defaulting to `ab`.
+
+#### Scenario: Index for A to B
+
+- **WHEN** the user runs `index --direction ab`
+- **THEN** the system builds only the B point-set index required for A-to-B estimation
+
+#### Scenario: Index for B to A
+
+- **WHEN** the user runs `index --direction ba`
+- **THEN** the system builds only the A point-set index required for B-to-A estimation
+
+#### Scenario: Index for both directions
+
+- **WHEN** the user runs `index --direction both`
+- **THEN** the system builds both A and B point-set indexes
+
+### Requirement: QALSH-backed estimation requires the selected direction index
+
+The system SHALL fail QALSH-backed estimation when the index required by the selected direction is missing.
+
+#### Scenario: Required target index is missing
+
+- **WHEN** the user runs a QALSH-backed estimate for a direction whose target-side index does not exist
+- **THEN** the system exits with an error that identifies the missing index and suggests the corresponding `index --direction` command
+
 ### Requirement: Metadata stores directional ground truth
 
 The system SHALL read dataset metadata from a structured schema that stores point counts and optional directional ground truth values for each supported norm.

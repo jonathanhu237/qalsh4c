@@ -3,9 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <format>
 #include <memory>
 #include <numeric>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -35,7 +36,6 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
     std::vector<double> distances(from.num_points, 0.0);
-    ann_searcher_->Init(to, norm_order);
 
 #pragma omp parallel
     {
@@ -69,12 +69,13 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
                                      unsigned int num_samples_default, unsigned int num_samples_ab,
-                                     unsigned int num_samples_ba, double epsilon)
+                                     unsigned int num_samples_ba, double epsilon, bool use_cache)
     : weights_generator_(std::move(weights_generator)),
       num_samples_default_(num_samples_default),
       num_samples_ab_(num_samples_ab),
       num_samples_ba_(num_samples_ba),
-      epsilon_(epsilon) {}
+      epsilon_(epsilon),
+      use_cache_(use_cache) {}
 
 bool SamplingEstimator::RequiresIndex() const {
     return weights_generator_ && weights_generator_->RequiresIndex();
@@ -114,33 +115,28 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         }
     }
 
-    // Generate weights.
-    Log::info("Generating weights...");
-    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order);
-
-    // Update the num_samples.
+    // Update the num_samples
     double updated_num_samples = base_num_samples;
     if (updated_num_samples == 0) {
         if (dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr) {
-            std::optional<QalshConfig> qalsh_config = weights_generator_->GetQalshConfig();
-            if (!qalsh_config.has_value()) {
-                Log::error("QALSH config is unavailable for automatic sample count selection.");
-                return 0.0;
-            }
-
             const double alpha = Global::kQalsh4cAlpha;
             const double rho = Global::kQalsh4cRho;
             const double epsilon = epsilon_;
 
-            const unsigned int m = qalsh_config->num_hash_tables;
-            const unsigned int l = qalsh_config->collision_threshold;
-            const double c = qalsh_config->approximation_ratio;
+            std::filesystem::path index_directory =
+                to.file_path.parent_path() / "index" / std::format("l{}", norm_order) / to.file_path.stem();
+            QalshConfig qalsh_config;
+            qalsh_config.Load(index_directory / "config.json");
+
+            const unsigned int m = qalsh_config.num_hash_tables;
+            const unsigned int l = qalsh_config.collision_threshold;
+            const double c = qalsh_config.approximation_ratio;
 
             double p1 = 0.0;
             if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-                p1 = Calc::L1Probability(qalsh_config->bucket_width / 2.0);
+                p1 = Calc::L1Probability(qalsh_config.bucket_width / 2.0);
             } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-                p1 = Calc::L2Probability(qalsh_config->bucket_width / 2.0);
+                p1 = Calc::L2Probability(qalsh_config.bucket_width / 2.0);
             } else {
                 Log::error("Unsupported norm order: {}", norm_order);
                 return 0.0;
@@ -174,6 +170,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             return 0.0;
         }
     }
+
+    // Generate weights.
+    Log::info("Generating weights...");
+    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {

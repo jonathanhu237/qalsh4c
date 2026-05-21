@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <random>
 
 #include "config.h"
 #include "dataset.h"
@@ -11,6 +12,24 @@ class Command {
    public:
     virtual ~Command() = default;
     virtual void Execute() = 0;
+};
+
+class IndexCommand : public Command {
+   public:
+    IndexCommand(double norm_order, double approximation_ratio, unsigned int page_size,
+                 std::filesystem::path dataset_directory, bool fast, ChamferDirection direction);
+    void Execute() override;
+
+   private:
+    void BuildIndex(const PointSetMetadata& point_set_metadata, const std::filesystem::path& index_directory);
+
+    double norm_order_;
+    double approximation_ratio_;
+    unsigned int page_size_;
+    std::filesystem::path dataset_directory_;
+    bool fast_;
+    ChamferDirection direction_;
+    std::mt19937 gen_;
 };
 
 class EstimateCommand : public Command {
