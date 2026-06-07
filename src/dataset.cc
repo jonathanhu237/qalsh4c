@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <condition_variable>
 #include <cstdio>
 #include <format>
 #include <fstream>
@@ -19,6 +20,7 @@
 #include <set>
 #include <sstream>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #include "dataset_cuda.h"
@@ -45,7 +47,6 @@ namespace {
 
 constexpr unsigned int kTreviPatchSize = 64;
 constexpr unsigned int kMnistImageMagic = 2051;
-constexpr size_t kCudaProgressBatchPoints = 1024;
 
 using Clock = std::chrono::steady_clock;
 
@@ -85,14 +86,21 @@ class ProgressReporter {
           start_(std::chrono::steady_clock::now()),
           last_render_(start_) {}
 
+    ~ProgressReporter() {
+        StopHeartbeat();
+    }
+
     void Start() {
         if (!enabled_ || started_) {
             return;
         }
-        std::scoped_lock lock(mutex_);
-        started_ = true;
-        current_ = 0;
-        Render(true);
+        {
+            std::scoped_lock lock(mutex_);
+            started_ = true;
+            current_ = 0;
+            Render(true);
+        }
+        StartHeartbeat();
     }
 
     void Set(unsigned long long current) {
@@ -108,6 +116,7 @@ class ProgressReporter {
         if (!enabled_) {
             return;
         }
+        StopHeartbeat();
         std::scoped_lock lock(mutex_);
         current_ = total_;
         Render(true);
@@ -117,6 +126,38 @@ class ProgressReporter {
     }
 
    private:
+    void StartHeartbeat() {
+        std::scoped_lock lock(heartbeat_mutex_);
+        if (heartbeat_thread_.joinable()) {
+            return;
+        }
+        heartbeat_stop_ = false;
+        heartbeat_thread_ = std::thread([this]() {
+            std::unique_lock heartbeat_lock(heartbeat_mutex_);
+            while (!heartbeat_cv_.wait_for(heartbeat_lock, std::chrono::seconds(1),
+                                           [this] { return heartbeat_stop_; })) {
+                heartbeat_lock.unlock();
+                {
+                    std::scoped_lock render_lock(mutex_);
+                    Render(false);
+                }
+                heartbeat_lock.lock();
+            }
+        });
+    }
+
+    void StopHeartbeat() {
+        {
+            std::scoped_lock lock(heartbeat_mutex_);
+            if (!heartbeat_thread_.joinable()) {
+                return;
+            }
+            heartbeat_stop_ = true;
+        }
+        heartbeat_cv_.notify_all();
+        heartbeat_thread_.join();
+    }
+
     void Render(bool force) {
         const auto now = std::chrono::steady_clock::now();
         const double elapsed = std::chrono::duration<double>(now - start_).count();
@@ -124,12 +165,12 @@ class ProgressReporter {
         if (!force && since_last < 0.2) {
             return;
         }
-        last_render_ = now;
 
         const double percent = total_ == 0 ? 100.0 : (static_cast<double>(current_) / static_cast<double>(total_)) * 100.0;
         const double rate = elapsed <= 0.0 ? 0.0 : static_cast<double>(current_) / elapsed;
 
         if (interactive_) {
+            last_render_ = now;
             constexpr unsigned int bar_width = 24;
             const auto filled = static_cast<unsigned int>(std::round(percent / 100.0 * bar_width));
             std::string bar(filled, '#');
@@ -142,6 +183,7 @@ class ProgressReporter {
 
         const unsigned int bucket = static_cast<unsigned int>(percent / 5.0);
         if (force || bucket > last_logged_bucket_ || since_last >= 5.0) {
+            last_render_ = now;
             last_logged_bucket_ = bucket;
             Log::info("{}: {:.1f}% {}/{} {:.1f}/s elapsed {}", label_, percent, current_, total_, rate,
                       FormatDuration(elapsed));
@@ -158,6 +200,10 @@ class ProgressReporter {
     std::chrono::steady_clock::time_point start_;
     std::chrono::steady_clock::time_point last_render_;
     std::mutex mutex_;
+    std::mutex heartbeat_mutex_;
+    std::condition_variable heartbeat_cv_;
+    std::thread heartbeat_thread_;
+    bool heartbeat_stop_{false};
 };
 
 std::string Trim(std::string_view value) {
@@ -919,9 +965,6 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
     const std::string cuda_label = std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda));
     ProgressReporter cuda_progress(cuda_label, from.size(), show_progress);
     CudaChamferOptions cuda_options;
-    if (show_progress) {
-        cuda_options.max_source_batch_points = kCudaProgressBatchPoints;
-    }
     cuda_options.stage_callback = [&](std::string_view message) {
         LogStage(show_progress, "{}: {}.", cuda_label, message);
     };
