@@ -40,19 +40,3 @@ class QalshWeightsGenerator : public WeightsGenerator {
    private:
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };
-
-// --------------------------------------------------
-// QuadtreeWeightsGenerator Definition
-// --------------------------------------------------
-class QuadtreeWeightsGenerator : public WeightsGenerator {
-   public:
-    static constexpr unsigned int kDefaultMaxLevels = 3;
-
-    explicit QuadtreeWeightsGenerator(unsigned int max_levels = kDefaultMaxLevels);
-    [[nodiscard]] bool RequiresIndex() const override;
-    std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
-
-   private:
-    unsigned int max_levels_{kDefaultMaxLevels};
-};

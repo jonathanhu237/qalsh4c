@@ -165,9 +165,6 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         } else if ((dynamic_cast<UniformWeightsGenerator*>(weights_generator_.get()) != nullptr)) {
             Log::error("You must specify num_samples for UniformWeightsGenerator.");
             return 0.0;
-        } else if ((dynamic_cast<QuadtreeWeightsGenerator*>(weights_generator_.get()) != nullptr)) {
-            Log::error("You must specify num_samples for QuadtreeWeightsGenerator.");
-            return 0.0;
         } else {
             Log::error("Unknown WeightsGenerator type.");
             return 0.0;
