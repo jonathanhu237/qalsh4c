@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -180,6 +181,7 @@ int main(int argc, char** argv) {
     std::filesystem::path gmm_output_directory;
     std::string gmm_ground_truth_specs;
     std::string gmm_ground_truth_device{"auto"};
+    size_t gmm_cuda_batch_size{0};
     bool gmm_overwrite{false};
     bool gmm_no_progress{false};
     unsigned int gmm_seed{0};
@@ -200,6 +202,9 @@ int main(int argc, char** argv) {
                             "Ground-truth compute device: auto, cpu, or cuda")
         ->default_val("auto")
         ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
+    dataset_gmm->add_option("--cuda-batch-size", gmm_cuda_batch_size,
+                            "Maximum CUDA source batch points for ground-truth computation (0 = auto)")
+        ->default_val(gmm_cuda_batch_size);
     dataset_gmm->add_flag("--overwrite", gmm_overwrite, "Overwrite existing dataset files and remove old indexes");
     dataset_gmm->add_flag("--no-progress", gmm_no_progress, "Disable progress reporting");
     CLI::Option* gmm_seed_option = dataset_gmm->add_option("--seed", gmm_seed, "Seed for reproducible generation");
@@ -209,7 +214,8 @@ int main(int argc, char** argv) {
                        .ground_truth_specs = gmm_ground_truth_specs,
                        .overwrite = gmm_overwrite,
                        .show_progress = !gmm_no_progress,
-                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(gmm_ground_truth_device)},
+                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(gmm_ground_truth_device),
+                       .cuda_batch_size = gmm_cuda_batch_size},
             .num_points_a = gmm_num_points_a,
             .num_points_b = gmm_num_points_b,
             .num_dimensions = gmm_num_dimensions,
@@ -228,6 +234,7 @@ int main(int argc, char** argv) {
     std::filesystem::path convert_images_file;
     std::string convert_ground_truth_specs;
     std::string convert_ground_truth_device{"auto"};
+    size_t convert_cuda_batch_size{0};
     bool convert_overwrite{false};
     bool convert_no_progress{false};
     bool convert_no_shuffle{false};
@@ -243,6 +250,9 @@ int main(int argc, char** argv) {
                                 "Ground-truth compute device: auto, cpu, or cuda")
             ->default_val("auto")
             ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
+        convert_app->add_option("--cuda-batch-size", convert_cuda_batch_size,
+                                "Maximum CUDA source batch points for ground-truth computation (0 = auto)")
+            ->default_val(convert_cuda_batch_size);
         convert_app->add_flag("--overwrite", convert_overwrite,
                               "Overwrite existing dataset files and remove old indexes");
         convert_app->add_flag("--no-progress", convert_no_progress, "Disable progress reporting");
@@ -263,7 +273,8 @@ int main(int argc, char** argv) {
                        .ground_truth_specs = convert_ground_truth_specs,
                        .overwrite = convert_overwrite,
                        .show_progress = !convert_no_progress,
-                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(convert_ground_truth_device)},
+                       .ground_truth_device = DatasetPrep::ParseGroundTruthDevice(convert_ground_truth_device),
+                       .cuda_batch_size = convert_cuda_batch_size},
             .kind = kind,
             .raw_directory = convert_raw_directory,
             .images_file = convert_images_file,
@@ -316,6 +327,7 @@ int main(int argc, char** argv) {
     std::filesystem::path ground_truth_dataset_directory;
     std::string ground_truth_specs;
     std::string ground_truth_device{"auto"};
+    size_t ground_truth_cuda_batch_size{0};
     bool ground_truth_overwrite{false};
     bool ground_truth_no_progress{false};
     dataset_ground_truth->add_option("-d,--dataset-directory", ground_truth_dataset_directory, "Dataset directory")
@@ -327,6 +339,9 @@ int main(int argc, char** argv) {
                                      "Ground-truth compute device: auto, cpu, or cuda")
         ->default_val("auto")
         ->check(CLI::IsMember({"auto", "cpu", "cuda"}));
+    dataset_ground_truth->add_option("--cuda-batch-size", ground_truth_cuda_batch_size,
+                                     "Maximum CUDA source batch points for ground-truth computation (0 = auto)")
+        ->default_val(ground_truth_cuda_batch_size);
     dataset_ground_truth->add_flag("--overwrite", ground_truth_overwrite, "Overwrite existing ground-truth values");
     dataset_ground_truth->add_flag("--no-progress", ground_truth_no_progress, "Disable progress reporting");
     dataset_ground_truth->callback([&]() {
@@ -335,7 +350,8 @@ int main(int argc, char** argv) {
                                                 .overwrite = ground_truth_overwrite,
                                                 .show_progress = !ground_truth_no_progress,
                                                 .ground_truth_device =
-                                                    DatasetPrep::ParseGroundTruthDevice(ground_truth_device)};
+                                                    DatasetPrep::ParseGroundTruthDevice(ground_truth_device),
+                                                .cuda_batch_size = ground_truth_cuda_batch_size};
         command = std::make_unique<DatasetGroundTruthCommand>(std::move(options));
     });
 

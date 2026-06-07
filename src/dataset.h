@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string_view>
@@ -36,6 +37,7 @@ struct CommonOutputOptions {
     bool overwrite{false};
     bool show_progress{true};
     GroundTruthDevice ground_truth_device{GroundTruthDevice::kAuto};
+    size_t cuda_batch_size{0};
 };
 
 struct GmmOptions {
@@ -64,6 +66,7 @@ struct GroundTruthOptions {
     bool overwrite{false};
     bool show_progress{true};
     GroundTruthDevice ground_truth_device{GroundTruthDevice::kAuto};
+    size_t cuda_batch_size{0};
 };
 
 GroundTruthDevice ParseGroundTruthDevice(std::string_view value);
@@ -72,7 +75,8 @@ std::vector<GroundTruthTask> ParseGroundTruthTasks(const std::string& specs);
 void WritePointSet(const std::filesystem::path& file_path, const std::vector<Point>& points);
 double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
                               const std::string& label, bool show_progress,
-                              GroundTruthDevice ground_truth_device = GroundTruthDevice::kCpu);
+                              GroundTruthDevice ground_truth_device = GroundTruthDevice::kCpu,
+                              size_t cuda_batch_size = 0);
 
 void GenerateGmmDataset(const GmmOptions& options);
 void ConvertDataset(const ConvertOptions& options);

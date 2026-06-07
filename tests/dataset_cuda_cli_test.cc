@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
             << " --seed 31"
             << " --ground-truth l2:ba"
             << " --ground-truth-device cuda"
+            << " --cuda-batch-size 1"
             << " --no-progress"
             << " -o " << Quote(dataset_dir)
             << " > " << Quote(stdout_path)

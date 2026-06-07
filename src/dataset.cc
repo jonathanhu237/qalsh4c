@@ -334,7 +334,7 @@ DatasetMetadata MakeMetadata(const std::vector<Point>& a, const std::vector<Poin
 
 void ComputeTasks(const std::vector<Point>& a, const std::vector<Point>& b, const std::vector<GroundTruthTask>& tasks,
                   DatasetMetadata& metadata, bool show_progress, bool overwrite,
-                  GroundTruthDevice ground_truth_device) {
+                  GroundTruthDevice ground_truth_device, size_t cuda_batch_size) {
     if (tasks.empty()) {
         LogStage(show_progress, "No ground-truth selectors requested.");
         return;
@@ -350,7 +350,7 @@ void ComputeTasks(const std::vector<Point>& a, const std::vector<Point>& b, cons
         const double value =
             ComputeDirectedChamfer(FromPoints(a, b, task.direction), ToPoints(a, b, task.direction), task.norm_order,
                                    std::format("Ground truth {}", TaskKey(task)), show_progress,
-                                   ground_truth_device);
+                                   ground_truth_device, cuda_batch_size);
         target = value;
         LogStage(show_progress, "Computed ground truth {} = {} in {}.", TaskKey(task), value, FormatElapsed(start));
     }
@@ -385,7 +385,8 @@ void WritePreparedDataset(const std::vector<Point>& a, const std::vector<Point>&
     WritePointSetWithStage(options.output_directory / "A.bin", a, "A.bin", options.show_progress);
     WritePointSetWithStage(options.output_directory / "B.bin", b, "B.bin", options.show_progress);
     DatasetMetadata metadata = MakeMetadata(a, b);
-    ComputeTasks(a, b, tasks, metadata, options.show_progress, true, options.ground_truth_device);
+    ComputeTasks(a, b, tasks, metadata, options.show_progress, true, options.ground_truth_device,
+                 options.cuda_batch_size);
     const Clock::time_point metadata_start = Clock::now();
     LogStage(options.show_progress, "Writing metadata.json to {}.", (options.output_directory / "metadata.json").string());
     metadata.Save(options.output_directory / "metadata.json");
@@ -918,7 +919,7 @@ void WritePointSet(const std::filesystem::path& file_path, const std::vector<Poi
 
 double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
                               const std::string& label, bool show_progress,
-                              GroundTruthDevice ground_truth_device) {
+                              GroundTruthDevice ground_truth_device, size_t cuda_batch_size) {
     ValidatePair(from, to);
 
     auto compute_cpu = [&]() {
@@ -964,6 +965,7 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
     const std::string cuda_label = std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda));
     ProgressReporter cuda_progress(cuda_label, from.size(), show_progress);
     CudaChamferOptions cuda_options;
+    cuda_options.max_source_batch_points = cuda_batch_size;
     cuda_options.stage_callback = [&](std::string_view message) {
         LogStage(show_progress, "{}: {}.", cuda_label, message);
     };
@@ -1043,7 +1045,7 @@ void ComputeDatasetGroundTruth(const GroundTruthOptions& options) {
                                                         metadata.num_dimensions);
     LogStage(options.show_progress, "Loaded B.bin in {}.", FormatElapsed(load_b_start));
     ComputeTasks(a, b, ParseGroundTruthTasks(options.ground_truth_specs), metadata, options.show_progress,
-                 options.overwrite, options.ground_truth_device);
+                 options.overwrite, options.ground_truth_device, options.cuda_batch_size);
     const Clock::time_point metadata_start = Clock::now();
     LogStage(options.show_progress, "Writing updated metadata.json.");
     metadata.Save(options.dataset_directory / "metadata.json");

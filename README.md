@@ -110,6 +110,10 @@ acceleration only applies to exact directed Chamfer ground-truth calculation;
 raw dataset parsing, shuffling, and writing remain CPU-side. The CUDA backend
 uses double precision and batches source points from runtime free-memory
 information while keeping target points resident on the default CUDA device.
+Use `--cuda-batch-size N` to explicitly cap CUDA source batch size for
+ground-truth computation; the default `0` keeps the automatic maximum batch.
+Smaller batches can make progress updates more granular on large datasets, but
+may add kernel-launch and transfer overhead.
 
 Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Overwriting a dataset removes any stale `index/` directory. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
 
