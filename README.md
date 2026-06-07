@@ -121,14 +121,14 @@ Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json`
 Known raw datasets can be converted with:
 
 ```bash
-./build/dev/qalsh4c dataset convert mnist --images train-images-idx3-ubyte -o data/mnist
+./build/dev/qalsh4c dataset convert mnist --raw-dir raw/mnist -o data/mnist
 ./build/dev/qalsh4c dataset convert p53 --raw-dir raw/p53 -o data/p53
 ./build/dev/qalsh4c dataset convert sift --raw-dir raw/sift -o data/sift
 ./build/dev/qalsh4c dataset convert gist --raw-dir raw/gist -o data/gist
 ./build/dev/qalsh4c dataset convert trevi --raw-dir raw/trevi -o data/trevi
 ```
 
-Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. SIFT and GIST conversion read only `sift_base.fvecs` and `gist_base.fvecs`; `learn` and `query` files are kept as raw inputs but are not mixed into the prepared dataset. MNIST conversion reads a local IDX image file and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
+Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. SIFT and GIST conversion read only `sift_base.fvecs` and `gist_base.fvecs`; `learn` and `query` files are kept as raw inputs but are not mixed into the prepared dataset. MNIST conversion reads `train-images-idx3-ubyte` and `t10k-images-idx3-ubyte` from the raw directory and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
 
 ## Index
 

@@ -466,6 +466,21 @@ std::vector<Point> LoadMnistImages(const std::filesystem::path& image_file, bool
     return points;
 }
 
+std::vector<Point> LoadMnist(const std::filesystem::path& raw_directory, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading full MNIST image set from {}.", raw_directory.string());
+    std::vector<Point> points = LoadMnistImages(raw_directory / "train-images-idx3-ubyte", show_progress);
+    std::vector<Point> test_points = LoadMnistImages(raw_directory / "t10k-images-idx3-ubyte", show_progress);
+    if (!points.empty() && !test_points.empty() && points.front().size() != test_points.front().size()) {
+        Log::error("Cannot append MNIST train and test images with different dimensions.");
+    }
+    points.reserve(points.size() + test_points.size());
+    std::move(test_points.begin(), test_points.end(), std::back_inserter(points));
+    LogStage(show_progress, "Loaded full MNIST image set: {}, elapsed {}.", PointSetDescription(points),
+             FormatElapsed(start));
+    return points;
+}
+
 std::vector<Point> LoadP53(const std::filesystem::path& raw_directory, bool show_progress) {
     const std::filesystem::path file_path = raw_directory / "K9.data";
     const Clock::time_point start = Clock::now();
@@ -718,7 +733,7 @@ std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory, bool sh
 std::vector<Point> LoadSourcePoints(const ConvertOptions& options, bool show_progress) {
     switch (options.kind) {
         case DatasetKind::kMnist:
-            return LoadMnistImages(options.images_file, show_progress);
+            return LoadMnist(options.raw_directory, show_progress);
         case DatasetKind::kP53:
             return LoadP53(options.raw_directory, show_progress);
         case DatasetKind::kSift:

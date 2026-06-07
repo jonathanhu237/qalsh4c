@@ -116,15 +116,18 @@ int main() {
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
 
-    WriteMnist(root / "mnist-images");
+    const std::filesystem::path mnist_dir = root / "mnist-raw";
+    std::filesystem::create_directories(mnist_dir);
+    WriteMnist(mnist_dir / "train-images-idx3-ubyte");
+    WriteMnist(mnist_dir / "t10k-images-idx3-ubyte");
     DatasetPrep::ConvertDataset(DatasetPrep::ConvertOptions{
         .output = OutputOptions(root / "mnist-out"),
         .kind = DatasetPrep::DatasetKind::kMnist,
-        .images_file = root / "mnist-images",
-        .num_points_a = 2,
+        .raw_directory = mnist_dir,
+        .num_points_a = 3,
         .shuffle = false,
     });
-    if (!CheckMetadata(root / "mnist-out", 4, 2, 2)) {
+    if (!CheckMetadata(root / "mnist-out", 4, 3, 5)) {
         return 1;
     }
 

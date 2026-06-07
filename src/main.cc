@@ -287,8 +287,8 @@ int main(int argc, char** argv) {
         return options;
     };
 
-    CLI::App* convert_mnist = dataset_convert->add_subcommand("mnist", "Convert local MNIST IDX images.");
-    add_common_convert_options(convert_mnist, false, true);
+    CLI::App* convert_mnist = dataset_convert->add_subcommand("mnist", "Convert local full MNIST IDX image set.");
+    add_common_convert_options(convert_mnist, true, false);
     convert_mnist->callback([&]() {
         command =
             std::make_unique<DatasetConvertCommand>(make_convert_options(DatasetPrep::DatasetKind::kMnist, convert_mnist));
