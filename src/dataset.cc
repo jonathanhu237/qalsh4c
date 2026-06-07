@@ -45,6 +45,7 @@ namespace {
 
 constexpr unsigned int kTreviPatchSize = 64;
 constexpr unsigned int kMnistImageMagic = 2051;
+constexpr size_t kCudaProgressBatchPoints = 1024;
 
 using Clock = std::chrono::steady_clock;
 
@@ -918,6 +919,9 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
     const std::string cuda_label = std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda));
     ProgressReporter cuda_progress(cuda_label, from.size(), show_progress);
     CudaChamferOptions cuda_options;
+    if (show_progress) {
+        cuda_options.max_source_batch_points = kCudaProgressBatchPoints;
+    }
     cuda_options.stage_callback = [&](std::string_view message) {
         LogStage(show_progress, "{}: {}.", cuda_label, message);
     };
