@@ -708,11 +708,10 @@ std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory, bool sh
 
     std::vector<Point> patches;
     size_t file_index = 0;
+    ProgressReporter progress("Loading Trevi BMP patches", bmp_files.size(), show_progress);
+    progress.Start();
     for (const std::filesystem::path& bmp_file : bmp_files) {
         ++file_index;
-        const Clock::time_point file_start = Clock::now();
-        const size_t patches_before = patches.size();
-        LogStage(show_progress, "Loading Trevi BMP {}/{}: {}.", file_index, bmp_files.size(), bmp_file.string());
         BmpImage image = LoadBmp(bmp_file);
         for (unsigned int y = 0; y + kTreviPatchSize <= image.height; y += kTreviPatchSize) {
             for (unsigned int x = 0; x + kTreviPatchSize <= image.width; x += kTreviPatchSize) {
@@ -727,9 +726,9 @@ std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory, bool sh
                 patches.push_back(std::move(patch));
             }
         }
-        LogStage(show_progress, "Loaded Trevi BMP {}/{}: {} patches, elapsed {}.", file_index, bmp_files.size(),
-                 patches.size() - patches_before, FormatElapsed(file_start));
+        progress.Set(file_index);
     }
+    progress.Finish();
     ValidatePoints(patches, "Trevi patches");
     LogStage(show_progress, "Loaded Trevi patches: {}, elapsed {}.", PointSetDescription(patches),
              FormatElapsed(start));
