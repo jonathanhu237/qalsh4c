@@ -46,6 +46,34 @@ namespace {
 constexpr unsigned int kTreviPatchSize = 64;
 constexpr unsigned int kMnistImageMagic = 2051;
 
+using Clock = std::chrono::steady_clock;
+
+std::string FormatDuration(double seconds) {
+    const auto whole = static_cast<unsigned long long>(seconds);
+    const unsigned long long hours = whole / 3600;
+    const unsigned long long minutes = (whole % 3600) / 60;
+    const unsigned long long secs = whole % 60;
+    return std::format("{:02}:{:02}:{:02}", hours, minutes, secs);
+}
+
+std::string FormatElapsed(Clock::time_point start) {
+    return FormatDuration(std::chrono::duration<double>(Clock::now() - start).count());
+}
+
+template <typename... Args>
+void LogStage(bool enabled, std::format_string<Args...> fmt, Args&&... args) {
+    if (enabled) {
+        Log::info(fmt, std::forward<Args>(args)...);
+    }
+}
+
+std::string PointSetDescription(const std::vector<Point>& points) {
+    if (points.empty()) {
+        return "0 points";
+    }
+    return std::format("{} points, {} dimensions", points.size(), points.front().size());
+}
+
 class ProgressReporter {
    public:
     ProgressReporter(std::string label, unsigned long long total, bool enabled)
@@ -55,6 +83,16 @@ class ProgressReporter {
           interactive_(enabled && ISATTY(FILENO(stderr)) != 0),
           start_(std::chrono::steady_clock::now()),
           last_render_(start_) {}
+
+    void Start() {
+        if (!enabled_ || started_) {
+            return;
+        }
+        std::scoped_lock lock(mutex_);
+        started_ = true;
+        current_ = 0;
+        Render(true);
+    }
 
     void Set(unsigned long long current) {
         if (!enabled_) {
@@ -78,14 +116,6 @@ class ProgressReporter {
     }
 
    private:
-    static std::string FormatDuration(double seconds) {
-        const auto whole = static_cast<unsigned long long>(seconds);
-        const unsigned long long hours = whole / 3600;
-        const unsigned long long minutes = (whole % 3600) / 60;
-        const unsigned long long secs = whole % 60;
-        return std::format("{:02}:{:02}:{:02}", hours, minutes, secs);
-    }
-
     void Render(bool force) {
         const auto now = std::chrono::steady_clock::now();
         const double elapsed = std::chrono::duration<double>(now - start_).count();
@@ -121,6 +151,7 @@ class ProgressReporter {
     unsigned long long total_;
     bool enabled_;
     bool interactive_;
+    bool started_{false};
     unsigned long long current_{0};
     unsigned int last_logged_bucket_{0};
     std::chrono::steady_clock::time_point start_;
@@ -257,29 +288,61 @@ DatasetMetadata MakeMetadata(const std::vector<Point>& a, const std::vector<Poin
 void ComputeTasks(const std::vector<Point>& a, const std::vector<Point>& b, const std::vector<GroundTruthTask>& tasks,
                   DatasetMetadata& metadata, bool show_progress, bool overwrite,
                   GroundTruthDevice ground_truth_device) {
+    if (tasks.empty()) {
+        LogStage(show_progress, "No ground-truth selectors requested.");
+        return;
+    }
     for (const GroundTruthTask& task : tasks) {
         std::optional<double>& target = MetadataField(metadata, task);
         if (target.has_value() && !overwrite) {
             Log::error("Ground truth {} already exists. Use --overwrite to recompute it.", TaskKey(task));
         }
+        const Clock::time_point start = Clock::now();
+        LogStage(show_progress, "Computing ground truth {} with device mode {}.", TaskKey(task),
+                 GroundTruthDeviceValue(ground_truth_device));
         const double value =
             ComputeDirectedChamfer(FromPoints(a, b, task.direction), ToPoints(a, b, task.direction), task.norm_order,
                                    std::format("Ground truth {}", TaskKey(task)), show_progress,
                                    ground_truth_device);
         target = value;
+        LogStage(show_progress, "Computed ground truth {} = {} in {}.", TaskKey(task), value, FormatElapsed(start));
     }
+}
+
+void WritePointSetToFile(const std::filesystem::path& file_path, const std::vector<Point>& points) {
+    ValidatePoints(points, file_path.stem().string());
+    std::ofstream ofs(file_path, std::ios::binary);
+    if (!ofs.is_open()) {
+        Log::error("Failed to open point set file for writing: {}", file_path.string());
+    }
+    for (const Point& point : points) {
+        ofs.write(reinterpret_cast<const char*>(point.data()),
+                  static_cast<std::streamsize>(point.size() * sizeof(Coordinate)));
+    }
+}
+
+void WritePointSetWithStage(const std::filesystem::path& file_path, const std::vector<Point>& points,
+                            std::string_view label, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Writing {} to {} ({}).", label, file_path.string(), PointSetDescription(points));
+    WritePointSetToFile(file_path, points);
+    LogStage(show_progress, "Wrote {} in {}.", label, FormatElapsed(start));
 }
 
 void WritePreparedDataset(const std::vector<Point>& a, const std::vector<Point>& b, const CommonOutputOptions& options,
                           std::optional<unsigned int> seed_for_order = std::nullopt) {
     (void)seed_for_order;
     std::vector<GroundTruthTask> tasks = ParseGroundTruthTasks(options.ground_truth_specs);
+    LogStage(options.show_progress, "Preparing dataset output directory {}.", options.output_directory.string());
     PrepareOutputDirectory(options.output_directory, options.overwrite);
-    WritePointSet(options.output_directory / "A.bin", a);
-    WritePointSet(options.output_directory / "B.bin", b);
+    WritePointSetWithStage(options.output_directory / "A.bin", a, "A.bin", options.show_progress);
+    WritePointSetWithStage(options.output_directory / "B.bin", b, "B.bin", options.show_progress);
     DatasetMetadata metadata = MakeMetadata(a, b);
     ComputeTasks(a, b, tasks, metadata, options.show_progress, true, options.ground_truth_device);
+    const Clock::time_point metadata_start = Clock::now();
+    LogStage(options.show_progress, "Writing metadata.json to {}.", (options.output_directory / "metadata.json").string());
     metadata.Save(options.output_directory / "metadata.json");
+    LogStage(options.show_progress, "Wrote metadata.json in {}.", FormatElapsed(metadata_start));
 }
 
 uint32_t ReadBigEndianU32(std::ifstream& ifs) {
@@ -316,7 +379,9 @@ int32_t ReadLittleEndianI32(std::ifstream& ifs) {
     return static_cast<int32_t>(ReadLittleEndianU32(ifs));
 }
 
-std::vector<Point> LoadMnistImages(const std::filesystem::path& image_file) {
+std::vector<Point> LoadMnistImages(const std::filesystem::path& image_file, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading MNIST images from {}.", image_file.string());
     std::ifstream ifs(image_file, std::ios::binary);
     if (!ifs.is_open()) {
         Log::error("Failed to open MNIST IDX image file: {}", image_file.string());
@@ -348,11 +413,15 @@ std::vector<Point> LoadMnistImages(const std::filesystem::path& image_file) {
         }
         points.push_back(std::move(point));
     }
+    LogStage(show_progress, "Loaded MNIST images: {} points, {} dimensions, elapsed {}.", points.size(), dimensions,
+             FormatElapsed(start));
     return points;
 }
 
-std::vector<Point> LoadP53(const std::filesystem::path& raw_directory) {
+std::vector<Point> LoadP53(const std::filesystem::path& raw_directory, bool show_progress) {
     const std::filesystem::path file_path = raw_directory / "K9.data";
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading P53 data from {}.", file_path.string());
     std::ifstream ifs(file_path);
     if (!ifs.is_open()) {
         Log::error("Failed to open P53 file: {}", file_path.string());
@@ -408,10 +477,13 @@ std::vector<Point> LoadP53(const std::filesystem::path& raw_directory) {
         points.push_back(std::move(point));
     }
     ValidatePoints(points, "P53 source");
+    LogStage(show_progress, "Loaded P53 data: {}, elapsed {}.", PointSetDescription(points), FormatElapsed(start));
     return points;
 }
 
-std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path) {
+std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading fvecs file {}.", file_path.string());
     std::ifstream ifs(file_path, std::ios::binary);
     if (!ifs.is_open()) {
         Log::error("Failed to open fvecs file: {}", file_path.string());
@@ -450,6 +522,8 @@ std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path) {
         points.push_back(std::move(point));
     }
     ValidatePoints(points, std::format("fvecs source {}", file_path.string()));
+    LogStage(show_progress, "Loaded fvecs file {}: {}, elapsed {}.", file_path.filename().string(),
+             PointSetDescription(points), FormatElapsed(start));
     return points;
 }
 
@@ -461,11 +535,16 @@ void AppendPoints(std::vector<Point>& target, std::vector<Point> source) {
     std::move(source.begin(), source.end(), std::back_inserter(target));
 }
 
-std::vector<Point> LoadFvecsDataset(const std::filesystem::path& raw_directory, std::string_view prefix) {
+std::vector<Point> LoadFvecsDataset(const std::filesystem::path& raw_directory, std::string_view prefix,
+                                    bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading {} fvecs dataset from {}.", prefix, raw_directory.string());
     std::vector<Point> points;
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_base.fvecs", prefix)));
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_learn.fvecs", prefix)));
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_query.fvecs", prefix)));
+    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_base.fvecs", prefix), show_progress));
+    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_learn.fvecs", prefix), show_progress));
+    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_query.fvecs", prefix), show_progress));
+    LogStage(show_progress, "Loaded {} fvecs dataset: {}, elapsed {}.", prefix, PointSetDescription(points),
+             FormatElapsed(start));
     return points;
 }
 
@@ -565,7 +644,9 @@ std::string LowercaseExtension(const std::filesystem::path& path) {
     return extension;
 }
 
-std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory) {
+std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Loading Trevi BMP patches from {}.", raw_directory.string());
     std::vector<std::filesystem::path> bmp_files;
     for (const auto& entry : std::filesystem::directory_iterator(raw_directory)) {
         if (entry.is_regular_file() && LowercaseExtension(entry.path()) == ".bmp") {
@@ -576,9 +657,15 @@ std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory) {
     if (bmp_files.empty()) {
         Log::error("No .bmp files found in directory: {}", raw_directory.string());
     }
+    LogStage(show_progress, "Found {} Trevi BMP files.", bmp_files.size());
 
     std::vector<Point> patches;
+    size_t file_index = 0;
     for (const std::filesystem::path& bmp_file : bmp_files) {
+        ++file_index;
+        const Clock::time_point file_start = Clock::now();
+        const size_t patches_before = patches.size();
+        LogStage(show_progress, "Loading Trevi BMP {}/{}: {}.", file_index, bmp_files.size(), bmp_file.string());
         BmpImage image = LoadBmp(bmp_file);
         for (unsigned int y = 0; y + kTreviPatchSize <= image.height; y += kTreviPatchSize) {
             for (unsigned int x = 0; x + kTreviPatchSize <= image.width; x += kTreviPatchSize) {
@@ -593,34 +680,49 @@ std::vector<Point> LoadTrevi(const std::filesystem::path& raw_directory) {
                 patches.push_back(std::move(patch));
             }
         }
+        LogStage(show_progress, "Loaded Trevi BMP {}/{}: {} patches, elapsed {}.", file_index, bmp_files.size(),
+                 patches.size() - patches_before, FormatElapsed(file_start));
     }
     ValidatePoints(patches, "Trevi patches");
+    LogStage(show_progress, "Loaded Trevi patches: {}, elapsed {}.", PointSetDescription(patches),
+             FormatElapsed(start));
     return patches;
 }
 
-std::vector<Point> LoadSourcePoints(const ConvertOptions& options) {
+std::vector<Point> LoadSourcePoints(const ConvertOptions& options, bool show_progress) {
     switch (options.kind) {
         case DatasetKind::kMnist:
-            return LoadMnistImages(options.images_file);
+            return LoadMnistImages(options.images_file, show_progress);
         case DatasetKind::kP53:
-            return LoadP53(options.raw_directory);
+            return LoadP53(options.raw_directory, show_progress);
         case DatasetKind::kSift:
-            return LoadFvecsDataset(options.raw_directory, "sift");
+            return LoadFvecsDataset(options.raw_directory, "sift", show_progress);
         case DatasetKind::kGist:
-            return LoadFvecsDataset(options.raw_directory, "gist");
+            return LoadFvecsDataset(options.raw_directory, "gist", show_progress);
         case DatasetKind::kTrevi:
-            return LoadTrevi(options.raw_directory);
+            return LoadTrevi(options.raw_directory, show_progress);
     }
     Log::error("Unsupported dataset kind.");
 }
 
 std::pair<std::vector<Point>, std::vector<Point>> SplitPoints(std::vector<Point> points,
                                                               std::optional<unsigned int> num_points_a, bool shuffle,
-                                                              std::optional<unsigned int> seed) {
+                                                              std::optional<unsigned int> seed, bool show_progress) {
+    const Clock::time_point start = Clock::now();
+    LogStage(show_progress, "Preparing source split for {}.", PointSetDescription(points));
     ValidatePoints(points, "Source dataset");
     if (shuffle) {
+        const Clock::time_point shuffle_start = Clock::now();
+        if (seed.has_value()) {
+            LogStage(show_progress, "Shuffling source points with seed {}.", *seed);
+        } else {
+            LogStage(show_progress, "Shuffling source points with random seed.");
+        }
         std::mt19937 gen = MakeGenerator(seed);
         std::ranges::shuffle(points, gen);
+        LogStage(show_progress, "Shuffled source points in {}.", FormatElapsed(shuffle_start));
+    } else {
+        LogStage(show_progress, "Skipping shuffle; preserving source order.");
     }
 
     const size_t split = num_points_a.has_value() ? *num_points_a : points.size() / 2;
@@ -635,6 +737,8 @@ std::pair<std::vector<Point>, std::vector<Point>> SplitPoints(std::vector<Point>
     b.reserve(points.size() - split);
     std::move(points.begin(), points.begin() + static_cast<std::ptrdiff_t>(split), std::back_inserter(a));
     std::move(points.begin() + static_cast<std::ptrdiff_t>(split), points.end(), std::back_inserter(b));
+    LogStage(show_progress, "Split source points into A={} and B={} in {}.", a.size(), b.size(),
+             FormatElapsed(start));
     return {std::move(a), std::move(b)};
 }
 
@@ -763,15 +867,7 @@ std::vector<GroundTruthTask> ParseGroundTruthTasks(const std::string& specs) {
 }
 
 void WritePointSet(const std::filesystem::path& file_path, const std::vector<Point>& points) {
-    ValidatePoints(points, file_path.stem().string());
-    std::ofstream ofs(file_path, std::ios::binary);
-    if (!ofs.is_open()) {
-        Log::error("Failed to open point set file for writing: {}", file_path.string());
-    }
-    for (const Point& point : points) {
-        ofs.write(reinterpret_cast<const char*>(point.data()),
-                  static_cast<std::streamsize>(point.size() * sizeof(Coordinate)));
-    }
+    WritePointSetToFile(file_path, points);
 }
 
 double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
@@ -780,7 +876,9 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
     ValidatePair(from, to);
 
     auto compute_cpu = [&]() {
+        LogStage(show_progress, "{}: running CPU exact scan.", label);
         ProgressReporter progress(label, from.size(), show_progress);
+        progress.Start();
         std::vector<double> distances(from.size(), 0.0);
         std::atomic<unsigned long long> completed{0};
 
@@ -817,10 +915,16 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
         return compute_cpu();
     }
 
-    ProgressReporter cuda_progress(std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda)),
-                                   from.size(), show_progress);
+    const std::string cuda_label = std::format("{} ({})", label, GroundTruthDeviceValue(GroundTruthDevice::kCuda));
+    ProgressReporter cuda_progress(cuda_label, from.size(), show_progress);
+    CudaChamferOptions cuda_options;
+    cuda_options.stage_callback = [&](std::string_view message) {
+        LogStage(show_progress, "{}: {}.", cuda_label, message);
+    };
+    cuda_options.progress_start_callback = [&]() { cuda_progress.Start(); };
     CudaChamferResult cuda_result =
-        ComputeDirectedChamferCuda(from, to, norm_order, [&](size_t completed) { cuda_progress.Set(completed); });
+        ComputeDirectedChamferCuda(from, to, norm_order, [&](size_t completed) { cuda_progress.Set(completed); },
+                                   cuda_options);
 
     if (cuda_result.status == CudaChamferStatus::kSuccess) {
         cuda_progress.Finish();
@@ -839,33 +943,66 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
 }
 
 void GenerateGmmDataset(const GmmOptions& options) {
+    const Clock::time_point total_start = Clock::now();
+    LogStage(options.output.show_progress,
+             "Generating GMM dataset: A={} points, B={} points, dimensions={}, outlier_fraction={}, outlier_scale={}.",
+             options.num_points_a, options.num_points_b, options.num_dimensions, options.outlier_fraction,
+             options.outlier_scale);
     std::mt19937 gen = MakeGenerator(options.seed);
+    const Clock::time_point a_start = Clock::now();
+    LogStage(options.output.show_progress, "Sampling GMM point set A.");
     std::vector<Point> a = SampleGmm(options.num_points_a, options.num_dimensions, options.outlier_fraction,
                                      options.outlier_scale, gen);
+    LogStage(options.output.show_progress, "Sampled GMM point set A: {}, elapsed {}.", PointSetDescription(a),
+             FormatElapsed(a_start));
+    const Clock::time_point b_start = Clock::now();
+    LogStage(options.output.show_progress, "Sampling GMM point set B.");
     std::vector<Point> b = SampleGmm(options.num_points_b, options.num_dimensions, options.outlier_fraction,
                                      options.outlier_scale, gen);
+    LogStage(options.output.show_progress, "Sampled GMM point set B: {}, elapsed {}.", PointSetDescription(b),
+             FormatElapsed(b_start));
     WritePreparedDataset(a, b, options.output);
+    LogStage(options.output.show_progress, "Generated GMM dataset in {}.", FormatElapsed(total_start));
 }
 
 void ConvertDataset(const ConvertOptions& options) {
-    std::vector<Point> source_points = LoadSourcePoints(options);
-    auto [a, b] = SplitPoints(std::move(source_points), options.num_points_a, options.shuffle, options.seed);
+    const Clock::time_point total_start = Clock::now();
+    LogStage(options.output.show_progress, "Converting raw dataset to {}.", options.output.output_directory.string());
+    std::vector<Point> source_points = LoadSourcePoints(options, options.output.show_progress);
+    auto [a, b] =
+        SplitPoints(std::move(source_points), options.num_points_a, options.shuffle, options.seed,
+                    options.output.show_progress);
     WritePreparedDataset(a, b, options.output);
+    LogStage(options.output.show_progress, "Converted raw dataset in {}.", FormatElapsed(total_start));
 }
 
 void ComputeDatasetGroundTruth(const GroundTruthOptions& options) {
     if (options.ground_truth_specs.empty()) {
         Log::error("--ground-truth is required for dataset ground-truth.");
     }
+    const Clock::time_point total_start = Clock::now();
+    LogStage(options.show_progress, "Loading prepared dataset from {}.", options.dataset_directory.string());
     DatasetMetadata metadata;
     metadata.Load(options.dataset_directory / "metadata.json");
+    const Clock::time_point load_a_start = Clock::now();
+    LogStage(options.show_progress, "Loading A.bin ({} points, {} dimensions).", metadata.num_points_a,
+             metadata.num_dimensions);
     std::vector<Point> a = PointSet::LoadPointsFromFile(options.dataset_directory / "A.bin", metadata.num_points_a,
                                                         metadata.num_dimensions);
+    LogStage(options.show_progress, "Loaded A.bin in {}.", FormatElapsed(load_a_start));
+    const Clock::time_point load_b_start = Clock::now();
+    LogStage(options.show_progress, "Loading B.bin ({} points, {} dimensions).", metadata.num_points_b,
+             metadata.num_dimensions);
     std::vector<Point> b = PointSet::LoadPointsFromFile(options.dataset_directory / "B.bin", metadata.num_points_b,
                                                         metadata.num_dimensions);
+    LogStage(options.show_progress, "Loaded B.bin in {}.", FormatElapsed(load_b_start));
     ComputeTasks(a, b, ParseGroundTruthTasks(options.ground_truth_specs), metadata, options.show_progress,
                  options.overwrite, options.ground_truth_device);
+    const Clock::time_point metadata_start = Clock::now();
+    LogStage(options.show_progress, "Writing updated metadata.json.");
     metadata.Save(options.dataset_directory / "metadata.json");
+    LogStage(options.show_progress, "Wrote updated metadata.json in {}.", FormatElapsed(metadata_start));
+    LogStage(options.show_progress, "Computed dataset ground truth in {}.", FormatElapsed(total_start));
 }
 
 }  // namespace DatasetPrep

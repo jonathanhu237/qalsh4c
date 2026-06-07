@@ -127,13 +127,13 @@ Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` f
 
 ## Index
 
-To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/toy` dataset under $\ell_2$ norm:
+To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/federalist` dataset under $\ell_2$ norm:
 
 ```bash
-./build/dev/qalsh4c index -p 2 -d data/toy --direction both
+./build/dev/qalsh4c index -p 2 -d data/federalist --direction both
 ```
 
-The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and builds the target-side `B` index for `A -> B` estimation; `ba` builds the target-side `A` index; `both` builds both indexes. Once the index is built, you can find the index files in the `./data/toy/index/l2` directory.
+The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and builds the target-side `B` index for `A -> B` estimation; `ba` builds the target-side `A` index; `both` builds both indexes. Once the index is built, you can find the index files in the `./data/federalist/index/l2` directory.
 
 ## Estimate
 

@@ -1,6 +1,6 @@
 set(default_dir "${QALSH4C_BINARY_DIR}/index_mode_default")
 set(fast_dir "${QALSH4C_BINARY_DIR}/index_mode_fast")
-set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/toy")
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/federalist")
 
 file(REMOVE_RECURSE "${default_dir}" "${fast_dir}")
 file(MAKE_DIRECTORY "${default_dir}" "${fast_dir}")

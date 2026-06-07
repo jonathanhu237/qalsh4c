@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "point_set.h"
@@ -24,6 +25,8 @@ struct CudaChamferResult {
 struct CudaChamferOptions {
     size_t max_source_batch_points{0};
     size_t memory_budget_bytes_override{0};
+    std::function<void(std::string_view)> stage_callback;
+    std::function<void()> progress_start_callback;
 };
 
 using CudaProgressCallback = std::function<void(size_t)>;

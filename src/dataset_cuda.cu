@@ -9,6 +9,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -68,8 +69,28 @@ std::string CudaErrorMessage(const std::string& prefix, cudaError_t error) {
 
 std::string FormatBytes(size_t bytes) {
     std::ostringstream oss;
-    oss << bytes << " bytes";
+    constexpr double kib = 1024.0;
+    constexpr double mib = kib * 1024.0;
+    constexpr double gib = mib * 1024.0;
+    const double value = static_cast<double>(bytes);
+    oss.setf(std::ios::fixed, std::ios::floatfield);
+    oss.precision(2);
+    if (value >= gib) {
+        oss << (value / gib) << " GiB";
+    } else if (value >= mib) {
+        oss << (value / mib) << " MiB";
+    } else if (value >= kib) {
+        oss << (value / kib) << " KiB";
+    } else {
+        oss << bytes << " bytes";
+    }
     return oss.str();
+}
+
+void ReportStage(const CudaChamferOptions& options, std::string_view message) {
+    if (options.stage_callback) {
+        options.stage_callback(message);
+    }
 }
 
 bool CheckedMultiply(size_t left, size_t right, size_t& output) {
@@ -185,6 +206,7 @@ CudaChamferResult ComputeBatchCapacity(size_t free_bytes, size_t num_source_poin
 CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, const std::vector<Point>& to,
                                              double norm_order, const CudaProgressCallback& progress_callback,
                                              CudaChamferOptions options) {
+    ReportStage(options, "querying CUDA devices");
     int device_count = 0;
     cudaError_t error = cudaGetDeviceCount(&device_count);
     if (error != cudaSuccess || device_count == 0) {
@@ -199,6 +221,7 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
     }
 
     const size_t num_dimensions = from.front().size();
+    ReportStage(options, "querying CUDA memory");
     size_t free_bytes = 0;
     size_t total_bytes = 0;
     error = cudaMemGetInfo(&free_bytes, &total_bytes);
@@ -214,14 +237,24 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
     if (capacity.status != CudaChamferStatus::kSuccess) {
         return capacity;
     }
+    {
+        std::ostringstream oss;
+        oss << "source=" << from.size() << " points, target=" << to.size()
+            << " points, dimensions=" << num_dimensions << ", initial batch=" << batch_size
+            << ", free memory=" << FormatBytes(free_bytes) << ", total memory=" << FormatBytes(total_bytes);
+        ReportStage(options, oss.str());
+    }
 
+    ReportStage(options, "flattening target points");
     std::vector<double> target_host = FlattenPoints(to, 0, to.size(), num_dimensions);
     DeviceBuffer target_device;
+    ReportStage(options, "allocating target buffer on device");
     error = target_device.Allocate(target_bytes);
     if (error != cudaSuccess) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0,
                           CudaErrorMessage("failed to allocate CUDA target buffer", error));
     }
+    ReportStage(options, "copying target points to device");
     error = cudaMemcpy(target_device.get(), target_host.data(), target_bytes, cudaMemcpyHostToDevice);
     if (error != cudaSuccess) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0,
@@ -232,6 +265,7 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
     DeviceBuffer distances_device;
     size_t source_bytes = 0;
     bool allocated_batch_buffers = false;
+    ReportStage(options, "allocating source batch buffers on device");
     while (batch_size > 0) {
         if (!PointBytes(batch_size, num_dimensions, source_bytes)) {
             return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0, "source batch memory sizing overflow");
@@ -249,6 +283,14 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
     if (!allocated_batch_buffers) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0,
                           "failed to allocate CUDA source batch buffers");
+    }
+    {
+        std::ostringstream oss;
+        oss << "running CUDA batches with batch=" << batch_size;
+        ReportStage(options, oss.str());
+    }
+    if (options.progress_start_callback) {
+        options.progress_start_callback();
     }
 
     double total = 0.0;

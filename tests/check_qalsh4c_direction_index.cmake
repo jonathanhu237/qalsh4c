@@ -1,4 +1,4 @@
-set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/toy")
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/federalist")
 
 function(prepare_dataset dataset_dir)
     file(REMOVE_RECURSE "${dataset_dir}")
