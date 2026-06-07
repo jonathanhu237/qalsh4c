@@ -141,12 +141,13 @@ The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and 
 
 ## Estimate
 
-We provide four methods for estimating the Chamfer distance:
+We provide five methods for estimating the Chamfer distance:
 
 - Linear Scan ANN
 - QALSH ANN
 - Uniform Sampling
 - QALSH Sampling
+- Quadtree Sampling
 
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the GMM sample dataset to check the exact directed distances without building an index:
 
@@ -155,3 +156,12 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ba ann linear_scan
 ./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction both ann linear_scan
 ```
+
+Sampling methods use exact nearest-neighbor scans only for sampled points. Uniform and quadtree sampling do not require an index, while QALSH sampling uses the target-side QALSH index to generate weights. Quadtree sampling is based on the deterministic quadtree/DFS weighting routine from the Bakshi4C supplementary implementation; it supports both $\ell_1$ and $\ell_2$ by using the selected norm when computing crude distances. The default `--max-levels` is `3`, matching the supplementary experiments:
+
+```bash
+./build/dev/qalsh4c estimate -p 1 -d ./data/federalist --direction ab sampling -n 20 quadtree
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 20 quadtree --max-levels 3
+```
+
+Pass `--use-cache` to reuse generated sampling weights. Quadtree cache filenames include the norm order, method name, max-levels value, and source point set, for example `l1_quadtree_l3_weights_A.bin`.

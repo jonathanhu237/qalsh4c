@@ -142,6 +142,22 @@ if(BUILD_TESTING)
     target_link_libraries(ann_searcher_clone_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
     add_test(NAME ann_searcher_clone_test COMMAND ann_searcher_clone_test)
 
+    add_executable(
+        quadtree_weights_generator_test
+        tests/quadtree_weights_generator_test.cc
+        src/ann_searcher.cc
+        src/b_plus_tree.cc
+        src/buffer.cc
+        src/config.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+        src/weights_generator.cc
+    )
+    target_include_directories(quadtree_weights_generator_test PRIVATE src)
+    target_link_libraries(quadtree_weights_generator_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    add_test(NAME quadtree_weights_generator_test COMMAND quadtree_weights_generator_test)
+
     add_executable(log_error_test tests/log_error_test.cc)
     target_include_directories(log_error_test PRIVATE src)
     add_test(NAME log_error_test COMMAND log_error_test)
@@ -284,6 +300,14 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh_ann_help.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_quadtree_sampling
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_quadtree_sampling.cmake
     )
 
     add_test(
