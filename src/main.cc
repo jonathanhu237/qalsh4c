@@ -113,9 +113,6 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
 
-    qalsh_ann->add_option("-c, --approximation-ratio", approximation_ratio, "Approximation ratio for QALSH")
-        ->default_val(Global::kDefaultApproximationRatio);
-
     bool candidate_limit{false};
     qalsh_ann->add_flag("--candidate-limit", candidate_limit,
                         "Enable early termination when candidate count reaches the limit");
