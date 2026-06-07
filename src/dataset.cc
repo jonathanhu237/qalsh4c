@@ -575,27 +575,6 @@ std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path, bool sh
     return points;
 }
 
-void AppendPoints(std::vector<Point>& target, std::vector<Point> source) {
-    if (!target.empty() && !source.empty() && target.front().size() != source.front().size()) {
-        Log::error("Cannot append point sets with different dimensions.");
-    }
-    target.reserve(target.size() + source.size());
-    std::move(source.begin(), source.end(), std::back_inserter(target));
-}
-
-std::vector<Point> LoadFvecsDataset(const std::filesystem::path& raw_directory, std::string_view prefix,
-                                    bool show_progress) {
-    const Clock::time_point start = Clock::now();
-    LogStage(show_progress, "Loading {} fvecs dataset from {}.", prefix, raw_directory.string());
-    std::vector<Point> points;
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_base.fvecs", prefix), show_progress));
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_learn.fvecs", prefix), show_progress));
-    AppendPoints(points, LoadFvecsFile(raw_directory / std::format("{}_query.fvecs", prefix), show_progress));
-    LogStage(show_progress, "Loaded {} fvecs dataset: {}, elapsed {}.", prefix, PointSetDescription(points),
-             FormatElapsed(start));
-    return points;
-}
-
 struct BmpImage {
     unsigned int width{0};
     unsigned int height{0};
@@ -743,9 +722,9 @@ std::vector<Point> LoadSourcePoints(const ConvertOptions& options, bool show_pro
         case DatasetKind::kP53:
             return LoadP53(options.raw_directory, show_progress);
         case DatasetKind::kSift:
-            return LoadFvecsDataset(options.raw_directory, "sift", show_progress);
+            return LoadFvecsFile(options.raw_directory / "sift_base.fvecs", show_progress);
         case DatasetKind::kGist:
-            return LoadFvecsDataset(options.raw_directory, "gist", show_progress);
+            return LoadFvecsFile(options.raw_directory / "gist_base.fvecs", show_progress);
         case DatasetKind::kTrevi:
             return LoadTrevi(options.raw_directory, show_progress);
     }

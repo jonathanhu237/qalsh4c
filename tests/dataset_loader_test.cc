@@ -150,7 +150,7 @@ int main() {
 
     const std::filesystem::path sift_dir = root / "sift-raw";
     std::filesystem::create_directories(sift_dir);
-    WriteFvecs(sift_dir / "sift_base.fvecs", {{1.0F, 2.0F}});
+    WriteFvecs(sift_dir / "sift_base.fvecs", {{1.0F, 2.0F}, {3.0F, 4.0F}, {5.0F, 6.0F}});
     WriteFvecs(sift_dir / "sift_learn.fvecs", {{3.0F, 4.0F}});
     WriteFvecs(sift_dir / "sift_query.fvecs", {{5.0F, 6.0F}});
     DatasetPrep::ConvertDataset(DatasetPrep::ConvertOptions{
@@ -166,7 +166,7 @@ int main() {
 
     const std::filesystem::path gist_dir = root / "gist-raw";
     std::filesystem::create_directories(gist_dir);
-    WriteFvecs(gist_dir / "gist_base.fvecs", {{1.0F, 2.0F}});
+    WriteFvecs(gist_dir / "gist_base.fvecs", {{1.0F, 2.0F}, {3.0F, 4.0F}, {5.0F, 6.0F}});
     WriteFvecs(gist_dir / "gist_learn.fvecs", {{3.0F, 4.0F}});
     WriteFvecs(gist_dir / "gist_query.fvecs", {{5.0F, 6.0F}});
     DatasetPrep::ConvertDataset(DatasetPrep::ConvertOptions{
