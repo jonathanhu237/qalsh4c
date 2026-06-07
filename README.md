@@ -10,9 +10,10 @@ To build the project, you need to have the following dependencies installed:
 - [Ninja](https://ninja-build.org/): version 1.11.1 or higher
 - [GCC](https://gcc.gnu.org/): version 13.3.0 or higher
 
-CMake downloads pinned versions of CLI11, Eigen, and nlohmann-json during the
-first configure step for each build directory. OpenMP is optional and enabled
-automatically when CMake can find a compatible local runtime.
+Pinned header-only copies of CLI11, Eigen, and nlohmann-json are vendored under
+`third_party`, so configure/build does not need network access for project
+dependencies. OpenMP is optional and enabled automatically when CMake can find a
+compatible local runtime.
 
 CUDA ground-truth acceleration is optional. `QALSH4C_ENABLE_CUDA` accepts
 `AUTO`, `ON`, or `OFF` and defaults to `AUTO`; `AUTO` builds CUDA support when a
