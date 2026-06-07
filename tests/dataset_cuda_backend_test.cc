@@ -1,6 +1,7 @@
 #include "dataset.h"
 #include "dataset_cuda.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -42,19 +43,22 @@ int main() {
     }
 
     const std::vector<Point> batched_source = {Point{0.0, 0.0}, Point{2.0, 0.0}, Point{5.0, 0.0}};
-    size_t batch_progress_calls = 0;
+    std::vector<size_t> batch_progress_values;
     DatasetPrep::CudaChamferOptions batch_options;
     batch_options.max_source_batch_points = 1;
     DatasetPrep::CudaChamferResult batched_result =
         DatasetPrep::ComputeDirectedChamferCuda(batched_source, b, 2.0,
-                                                [&](size_t) { ++batch_progress_calls; }, batch_options);
+                                                [&](size_t completed) { batch_progress_values.push_back(completed); },
+                                                batch_options);
     if (batched_result.status != DatasetPrep::CudaChamferStatus::kSuccess) {
         std::cerr << batched_result.message << '\n';
         return 5;
     }
     const double batched_cpu = DatasetPrep::ComputeDirectedChamfer(
         batched_source, b, 2.0, "cuda test batched", false, DatasetPrep::GroundTruthDevice::kCpu);
-    if (!Near(batched_result.value, batched_cpu) || batch_progress_calls != batched_source.size()) {
+    const bool progress_is_monotonic = std::is_sorted(batch_progress_values.begin(), batch_progress_values.end());
+    if (!Near(batched_result.value, batched_cpu) || batch_progress_values.empty() ||
+        batch_progress_values.back() != batched_source.size() || !progress_is_monotonic) {
         return 6;
     }
 

@@ -226,12 +226,14 @@ if(BUILD_TESTING)
             dataset_cuda_cli_test
             tests/dataset_cuda_cli_test.cc
             src/config.cc
+            src/global.cc
+            src/utils.cc
         )
         target_include_directories(dataset_cuda_cli_test PRIVATE src)
-        target_link_libraries(dataset_cuda_cli_test PRIVATE nlohmann_json::nlohmann_json)
+        target_link_libraries(dataset_cuda_cli_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
         add_test(
             NAME dataset_cuda_cli_test
-            COMMAND dataset_cuda_cli_test $<TARGET_FILE:qalsh4c> ${CMAKE_CURRENT_BINARY_DIR}/dataset_cuda_cli_test
+            COMMAND dataset_cuda_cli_test $<TARGET_FILE:qalsh4c> ${CMAKE_CURRENT_BINARY_DIR}/dataset_cuda_cli_test_work
         )
         set_tests_properties(dataset_cuda_cli_test PROPERTIES SKIP_RETURN_CODE 77)
     endif()

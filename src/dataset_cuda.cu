@@ -4,12 +4,14 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -21,36 +23,50 @@ constexpr double kMemoryBudgetFraction = 0.80;
 constexpr size_t kMaxSafetyMarginBytes = 64ULL * 1024ULL * 1024ULL;
 constexpr int kCudaBlockSize = 128;
 constexpr size_t kMaxKernelBatchPoints = static_cast<size_t>(std::numeric_limits<int>::max()) * kCudaBlockSize;
+constexpr auto kProgressPollInterval = std::chrono::milliseconds(250);
 
 __global__ void ChamferMinDistancesKernel(const double* source_points, const double* target_points,
                                           size_t num_source_points, size_t num_target_points,
-                                          unsigned int num_dimensions, int norm_kind, double* min_distances) {
+                                          unsigned int num_dimensions, int norm_kind, double* min_distances,
+                                          unsigned long long* progress_counter) {
     const size_t source_index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-    if (source_index >= num_source_points) {
-        return;
-    }
+    const bool active = source_index < num_source_points;
 
-    const double* source = source_points + (source_index * num_dimensions);
-    double min_distance = DBL_MAX;
+    if (active) {
+        const double* source = source_points + (source_index * num_dimensions);
+        double min_distance = DBL_MAX;
 
-    for (size_t target_index = 0; target_index < num_target_points; ++target_index) {
-        const double* target = target_points + (target_index * num_dimensions);
-        double distance = 0.0;
-        for (unsigned int dimension = 0; dimension < num_dimensions; ++dimension) {
-            const double diff = source[dimension] - target[dimension];
-            if (norm_kind == 1) {
-                distance += fabs(diff);
-            } else {
-                distance += diff * diff;
+        for (size_t target_index = 0; target_index < num_target_points; ++target_index) {
+            const double* target = target_points + (target_index * num_dimensions);
+            double distance = 0.0;
+            for (unsigned int dimension = 0; dimension < num_dimensions; ++dimension) {
+                const double diff = source[dimension] - target[dimension];
+                if (norm_kind == 1) {
+                    distance += fabs(diff);
+                } else {
+                    distance += diff * diff;
+                }
             }
+            if (norm_kind == 2) {
+                distance = sqrt(distance);
+            }
+            min_distance = fmin(min_distance, distance);
         }
-        if (norm_kind == 2) {
-            distance = sqrt(distance);
-        }
-        min_distance = fmin(min_distance, distance);
+
+        min_distances[source_index] = min_distance;
     }
 
-    min_distances[source_index] = min_distance;
+    __syncthreads();
+    if (threadIdx.x == 0 && progress_counter != nullptr) {
+        const size_t block_begin = static_cast<size_t>(blockIdx.x) * blockDim.x;
+        const size_t remaining = block_begin < num_source_points ? num_source_points - block_begin : 0;
+        const size_t completed = remaining < static_cast<size_t>(blockDim.x)
+                                     ? remaining
+                                     : static_cast<size_t>(blockDim.x);
+        if (completed > 0) {
+            atomicAdd(progress_counter, static_cast<unsigned long long>(completed));
+        }
+    }
 }
 
 CudaChamferResult MakeResult(CudaChamferStatus status, double value, std::string message) {
@@ -158,6 +174,106 @@ class DeviceBuffer {
     double* ptr_{nullptr};
 };
 
+class DeviceCounter {
+   public:
+    DeviceCounter() = default;
+    DeviceCounter(const DeviceCounter&) = delete;
+    DeviceCounter& operator=(const DeviceCounter&) = delete;
+
+    ~DeviceCounter() {
+        if (ptr_ != nullptr) {
+            cudaFree(ptr_);
+        }
+    }
+
+    cudaError_t Allocate() {
+        return cudaMalloc(reinterpret_cast<void**>(&ptr_), sizeof(unsigned long long));
+    }
+
+    cudaError_t Reset(cudaStream_t stream) {
+        return cudaMemsetAsync(ptr_, 0, sizeof(unsigned long long), stream);
+    }
+
+    [[nodiscard]] unsigned long long* get() const {
+        return ptr_;
+    }
+
+   private:
+    unsigned long long* ptr_{nullptr};
+};
+
+class HostCounter {
+   public:
+    HostCounter() = default;
+    HostCounter(const HostCounter&) = delete;
+    HostCounter& operator=(const HostCounter&) = delete;
+
+    ~HostCounter() {
+        if (ptr_ != nullptr) {
+            cudaFreeHost(ptr_);
+        }
+    }
+
+    cudaError_t Allocate() {
+        return cudaHostAlloc(reinterpret_cast<void**>(&ptr_), sizeof(unsigned long long), cudaHostAllocDefault);
+    }
+
+    [[nodiscard]] unsigned long long* get() const {
+        return ptr_;
+    }
+
+   private:
+    unsigned long long* ptr_{nullptr};
+};
+
+class CudaStream {
+   public:
+    CudaStream() = default;
+    CudaStream(const CudaStream&) = delete;
+    CudaStream& operator=(const CudaStream&) = delete;
+
+    ~CudaStream() {
+        if (stream_ != nullptr) {
+            cudaStreamDestroy(stream_);
+        }
+    }
+
+    cudaError_t Create() {
+        return cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
+    }
+
+    [[nodiscard]] cudaStream_t get() const {
+        return stream_;
+    }
+
+   private:
+    cudaStream_t stream_{nullptr};
+};
+
+class CudaEvent {
+   public:
+    CudaEvent() = default;
+    CudaEvent(const CudaEvent&) = delete;
+    CudaEvent& operator=(const CudaEvent&) = delete;
+
+    ~CudaEvent() {
+        if (event_ != nullptr) {
+            cudaEventDestroy(event_);
+        }
+    }
+
+    cudaError_t Create() {
+        return cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
+    }
+
+    [[nodiscard]] cudaEvent_t get() const {
+        return event_;
+    }
+
+   private:
+    cudaEvent_t event_{nullptr};
+};
+
 size_t SafetyMargin(size_t budget_bytes) {
     return std::min(kMaxSafetyMarginBytes, budget_bytes / 10U);
 }
@@ -198,6 +314,44 @@ CudaChamferResult ComputeBatchCapacity(size_t free_bytes, size_t num_source_poin
                                              : std::min(options.max_source_batch_points, kMaxKernelBatchPoints);
     batch_size = std::max<size_t>(1, std::min({num_source_points, batch_budget / per_source_bytes,
                                                max_batch_points}));
+    return MakeResult(CudaChamferStatus::kSuccess, 0.0, "");
+}
+
+CudaChamferResult PollKernelProgress(cudaEvent_t kernel_done, cudaStream_t progress_stream,
+                                     const DeviceCounter& progress_device, HostCounter& progress_host,
+                                     size_t completed_before_batch, size_t current_batch,
+                                     const CudaProgressCallback& progress_callback) {
+    size_t last_reported = 0;
+    while (true) {
+        cudaError_t event_status = cudaEventQuery(kernel_done);
+        if (event_status == cudaSuccess) {
+            break;
+        }
+        if (event_status != cudaErrorNotReady) {
+            return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                              CudaErrorMessage("CUDA Chamfer kernel failed", event_status));
+        }
+
+        cudaError_t error = cudaMemcpyAsync(progress_host.get(), progress_device.get(), sizeof(unsigned long long),
+                                            cudaMemcpyDeviceToHost, progress_stream);
+        if (error != cudaSuccess) {
+            return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                              CudaErrorMessage("failed to copy CUDA progress counter", error));
+        }
+        error = cudaStreamSynchronize(progress_stream);
+        if (error != cudaSuccess) {
+            return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                              CudaErrorMessage("failed to synchronize CUDA progress stream", error));
+        }
+
+        const size_t batch_progress =
+            std::min(static_cast<size_t>(*progress_host.get()), current_batch);
+        if (batch_progress > last_reported) {
+            last_reported = batch_progress;
+            progress_callback(completed_before_batch + batch_progress);
+        }
+        std::this_thread::sleep_for(kProgressPollInterval);
+    }
     return MakeResult(CudaChamferStatus::kSuccess, 0.0, "");
 }
 
@@ -245,6 +399,52 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
         ReportStage(options, oss.str());
     }
 
+    CudaStream compute_stream;
+    error = compute_stream.Create();
+    if (error != cudaSuccess) {
+        return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0,
+                          CudaErrorMessage("failed to create CUDA compute stream", error));
+    }
+
+    bool block_progress_enabled = progress_callback != nullptr;
+    CudaStream progress_stream;
+    DeviceCounter progress_device;
+    HostCounter progress_host;
+    CudaEvent kernel_done;
+    auto disable_block_progress = [&](const std::string& message) {
+        block_progress_enabled = false;
+        std::ostringstream oss;
+        oss << message << "; using batch-level progress";
+        ReportStage(options, oss.str());
+    };
+    if (block_progress_enabled) {
+        error = progress_stream.Create();
+        if (error != cudaSuccess) {
+            disable_block_progress(CudaErrorMessage("failed to create CUDA progress stream", error));
+        }
+    }
+    if (block_progress_enabled) {
+        error = progress_device.Allocate();
+        if (error != cudaSuccess) {
+            disable_block_progress(CudaErrorMessage("failed to allocate CUDA progress counter", error));
+        }
+    }
+    if (block_progress_enabled) {
+        error = progress_host.Allocate();
+        if (error != cudaSuccess) {
+            disable_block_progress(CudaErrorMessage("failed to allocate CUDA host progress counter", error));
+        }
+    }
+    if (block_progress_enabled) {
+        error = kernel_done.Create();
+        if (error != cudaSuccess) {
+            disable_block_progress(CudaErrorMessage("failed to create CUDA progress event", error));
+        }
+    }
+    if (block_progress_enabled) {
+        ReportStage(options, "using CUDA block-level progress updates");
+    }
+
     ReportStage(options, "flattening target points");
     std::vector<double> target_host = FlattenPoints(to, 0, to.size(), num_dimensions);
     DeviceBuffer target_device;
@@ -255,7 +455,8 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
                           CudaErrorMessage("failed to allocate CUDA target buffer", error));
     }
     ReportStage(options, "copying target points to device");
-    error = cudaMemcpy(target_device.get(), target_host.data(), target_bytes, cudaMemcpyHostToDevice);
+    error = cudaMemcpyAsync(target_device.get(), target_host.data(), target_bytes, cudaMemcpyHostToDevice,
+                            compute_stream.get());
     if (error != cudaSuccess) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0,
                           CudaErrorMessage("failed to copy target points to CUDA device", error));
@@ -302,33 +503,70 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
         const size_t current_source_bytes = current_batch * num_dimensions * sizeof(double);
         std::vector<double> source_host = FlattenPoints(from, completed, current_batch, num_dimensions);
 
-        error = cudaMemcpy(source_device.get(), source_host.data(), current_source_bytes, cudaMemcpyHostToDevice);
+        error = cudaMemcpyAsync(source_device.get(), source_host.data(), current_source_bytes, cudaMemcpyHostToDevice,
+                                compute_stream.get());
         if (error != cudaSuccess) {
             return MakeResult(CudaChamferStatus::kFailed, 0.0,
                               CudaErrorMessage("failed to copy source batch to CUDA device", error));
         }
+        if (block_progress_enabled) {
+            error = progress_device.Reset(compute_stream.get());
+            if (error != cudaSuccess) {
+                return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                                  CudaErrorMessage("failed to reset CUDA progress counter", error));
+            }
+            error = cudaStreamSynchronize(compute_stream.get());
+            if (error != cudaSuccess) {
+                return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                                  CudaErrorMessage("failed to synchronize CUDA progress counter reset", error));
+            }
+        }
 
         const int grid_size = static_cast<int>((current_batch + kCudaBlockSize - 1U) / kCudaBlockSize);
-        ChamferMinDistancesKernel<<<grid_size, kCudaBlockSize>>>(source_device.get(), target_device.get(),
-                                                                 current_batch, to.size(),
-                                                                 static_cast<unsigned int>(num_dimensions), norm_kind,
-                                                                 distances_device.get());
+        ChamferMinDistancesKernel<<<grid_size, kCudaBlockSize, 0, compute_stream.get()>>>(
+            source_device.get(), target_device.get(), current_batch, to.size(),
+            static_cast<unsigned int>(num_dimensions), norm_kind, distances_device.get(),
+            block_progress_enabled ? progress_device.get() : nullptr);
         error = cudaGetLastError();
         if (error != cudaSuccess) {
             return MakeResult(CudaChamferStatus::kFailed, 0.0,
                               CudaErrorMessage("failed to launch CUDA Chamfer kernel", error));
         }
-        error = cudaDeviceSynchronize();
-        if (error != cudaSuccess) {
-            return MakeResult(CudaChamferStatus::kFailed, 0.0,
-                              CudaErrorMessage("CUDA Chamfer kernel failed", error));
+        if (block_progress_enabled) {
+            error = cudaEventRecord(kernel_done.get(), compute_stream.get());
+            if (error != cudaSuccess) {
+                return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                                  CudaErrorMessage("failed to record CUDA progress event", error));
+            }
+            CudaChamferResult progress_result =
+                PollKernelProgress(kernel_done.get(), progress_stream.get(), progress_device, progress_host,
+                                   completed, current_batch, progress_callback);
+            if (progress_result.status != CudaChamferStatus::kSuccess) {
+                return progress_result;
+            }
+            error = cudaEventSynchronize(kernel_done.get());
+            if (error != cudaSuccess) {
+                return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                                  CudaErrorMessage("CUDA Chamfer kernel failed", error));
+            }
+        } else {
+            error = cudaStreamSynchronize(compute_stream.get());
+            if (error != cudaSuccess) {
+                return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                                  CudaErrorMessage("CUDA Chamfer kernel failed", error));
+            }
         }
 
-        error = cudaMemcpy(distances_host.data(), distances_device.get(), current_batch * sizeof(double),
-                           cudaMemcpyDeviceToHost);
+        error = cudaMemcpyAsync(distances_host.data(), distances_device.get(), current_batch * sizeof(double),
+                                cudaMemcpyDeviceToHost, compute_stream.get());
         if (error != cudaSuccess) {
             return MakeResult(CudaChamferStatus::kFailed, 0.0,
                               CudaErrorMessage("failed to copy CUDA Chamfer distances to host", error));
+        }
+        error = cudaStreamSynchronize(compute_stream.get());
+        if (error != cudaSuccess) {
+            return MakeResult(CudaChamferStatus::kFailed, 0.0,
+                              CudaErrorMessage("failed to synchronize CUDA distance copy", error));
         }
 
         for (size_t i = 0; i < current_batch; ++i) {
