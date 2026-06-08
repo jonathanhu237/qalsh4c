@@ -141,6 +141,11 @@ int main(int argc, char** argv) {
         ->default_val(false)
         ->default_str(use_cache ? "True" : "False");
 
+    unsigned int exact_batch_size{0};
+    sampling->add_option("--exact-batch-size", exact_batch_size,
+                         "Batch size for stage 2 exact linear scans (0: auto)")
+        ->default_val(0);
+
     std::unique_ptr<WeightsGenerator> weights_generator;
     sampling->require_subcommand(1);
     sampling->callback([&]() {
@@ -148,7 +153,7 @@ int main(int argc, char** argv) {
             Log::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
-                                                        num_samples_ba, epsilon, delta, use_cache);
+                                                        num_samples_ba, epsilon, delta, use_cache, exact_batch_size);
     });
 
     // ------------------------------

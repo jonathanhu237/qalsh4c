@@ -39,6 +39,8 @@ class LinearScanAnnSearcher : public AnnSearcher {
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
     AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
+    std::vector<AnnResult> SearchBatchWithUpperBounds(const std::vector<Point>& query_points,
+                                                      const std::vector<double>& initial_upper_bounds);
 
    private:
     PointSet base_;

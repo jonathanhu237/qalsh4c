@@ -20,7 +20,34 @@
 #include "utils.h"
 #include "weights_generator.h"
 
+#ifdef QALSH4C_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace {
+
+constexpr size_t kMaxAutoExactScanBatchSize = 64;
+
+unsigned int MaxExactScanThreads() {
+#ifdef QALSH4C_USE_OPENMP
+    return static_cast<unsigned int>(std::max(1, omp_get_max_threads()));
+#else
+    return 1;
+#endif
+}
+
+unsigned int ResolveExactBatchSize(unsigned int requested_batch_size, size_t num_unique_samples) {
+    if (requested_batch_size != 0) {
+        return requested_batch_size;
+    }
+    if (num_unique_samples == 0) {
+        return 1;
+    }
+
+    const size_t num_threads = MaxExactScanThreads();
+    const size_t batch_size = (num_unique_samples + num_threads - 1) / num_threads;
+    return static_cast<unsigned int>(std::clamp(batch_size, size_t{1}, kMaxAutoExactScanBatchSize));
+}
 
 double BinaryKlDivergence(double x, double y) {
     if (x < 0.0 || x > 1.0 || y <= 0.0 || y >= 1.0) {
@@ -85,14 +112,16 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
                                      unsigned int num_samples_default, unsigned int num_samples_ab,
-                                     unsigned int num_samples_ba, double epsilon, double delta, bool use_cache)
+                                     unsigned int num_samples_ba, double epsilon, double delta, bool use_cache,
+                                     unsigned int exact_batch_size)
     : weights_generator_(std::move(weights_generator)),
       num_samples_default_(num_samples_default),
       num_samples_ab_(num_samples_ab),
       num_samples_ba_(num_samples_ba),
       epsilon_(epsilon),
       delta_(delta),
-      use_cache_(use_cache) {}
+      use_cache_(use_cache),
+      exact_batch_size_(exact_batch_size) {}
 
 bool SamplingEstimator::RequiresIndex() const {
     return weights_generator_ && weights_generator_->RequiresIndex();
@@ -221,6 +250,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
     std::ranges::sort(sample_counts);
 
+    const unsigned int exact_batch_size = ResolveExactBatchSize(exact_batch_size_, sample_counts.size());
+    if (exact_batch_size_ == 0) {
+        Log::info("SamplingEstimator automatically selected exact batch size {} for {} unique samples and {} threads.",
+                  exact_batch_size, sample_counts.size(), MaxExactScanThreads());
+    } else {
+        Log::info("Using specified exact batch size: {}", exact_batch_size);
+    }
+
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
     double estimation = 0.0;
@@ -230,15 +267,56 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         LinearScanAnnSearcher ann_searcher;
         ann_searcher.Init(to, norm_order);
 
+        if (exact_batch_size == 1) {
 #pragma omp for schedule(dynamic)
-        for (long long sample_index = 0; sample_index < static_cast<long long>(sample_counts.size()); ++sample_index) {
-            const auto& [point_id, count] = sample_counts[static_cast<size_t>(sample_index)];
-            const double initial_upper_bound =
-                weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
-            const double nearest_distance =
-                ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
-            estimation +=
-                (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+            for (long long sample_index = 0; sample_index < static_cast<long long>(sample_counts.size());
+                 ++sample_index) {
+                const auto& [point_id, count] = sample_counts[static_cast<size_t>(sample_index)];
+                const double initial_upper_bound =
+                    weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
+                const double nearest_distance =
+                    ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
+                estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+            }
+        } else {
+            std::vector<Point> batch_queries;
+            std::vector<double> batch_upper_bounds;
+            std::vector<unsigned int> batch_point_ids;
+            std::vector<unsigned int> batch_counts;
+            batch_queries.reserve(exact_batch_size);
+            batch_upper_bounds.reserve(exact_batch_size);
+            batch_point_ids.reserve(exact_batch_size);
+            batch_counts.reserve(exact_batch_size);
+
+#pragma omp for schedule(dynamic)
+            for (long long batch_begin = 0; batch_begin < static_cast<long long>(sample_counts.size());
+                 batch_begin += static_cast<long long>(exact_batch_size)) {
+                const size_t begin = static_cast<size_t>(batch_begin);
+                const size_t end = std::min(begin + static_cast<size_t>(exact_batch_size), sample_counts.size());
+
+                batch_queries.clear();
+                batch_upper_bounds.clear();
+                batch_point_ids.clear();
+                batch_counts.clear();
+
+                for (size_t sample_index = begin; sample_index < end; ++sample_index) {
+                    const auto& [point_id, count] = sample_counts[sample_index];
+                    batch_point_ids.push_back(point_id);
+                    batch_counts.push_back(count);
+                    batch_queries.push_back(query_points[point_id]);
+                    batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
+                                                                          : std::numeric_limits<double>::infinity());
+                }
+
+                std::vector<AnnResult> batch_results =
+                    ann_searcher.SearchBatchWithUpperBounds(batch_queries, batch_upper_bounds);
+                for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
+                    const unsigned int point_id = batch_point_ids[batch_index];
+                    const unsigned int count = batch_counts[batch_index];
+                    const double nearest_distance = batch_results[batch_index].distance;
+                    estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+                }
+            }
         }
     }
 #else
@@ -248,12 +326,51 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     PointSet queries;
     queries.Init(from);
-    for (const auto& [point_id, count] : sample_counts) {
-        const double initial_upper_bound =
-            weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
-        const double nearest_distance =
-            ann_searcher.SearchWithUpperBound(queries.ReadPoint(point_id), initial_upper_bound).distance;
-        estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+
+    if (exact_batch_size == 1) {
+        for (const auto& [point_id, count] : sample_counts) {
+            const double initial_upper_bound =
+                weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
+            const double nearest_distance =
+                ann_searcher.SearchWithUpperBound(queries.ReadPoint(point_id), initial_upper_bound).distance;
+            estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+        }
+    } else {
+        std::vector<Point> batch_queries;
+        std::vector<double> batch_upper_bounds;
+        std::vector<unsigned int> batch_point_ids;
+        std::vector<unsigned int> batch_counts;
+        batch_queries.reserve(exact_batch_size);
+        batch_upper_bounds.reserve(exact_batch_size);
+        batch_point_ids.reserve(exact_batch_size);
+        batch_counts.reserve(exact_batch_size);
+
+        for (size_t begin = 0; begin < sample_counts.size(); begin += exact_batch_size) {
+            const size_t end = std::min(begin + static_cast<size_t>(exact_batch_size), sample_counts.size());
+
+            batch_queries.clear();
+            batch_upper_bounds.clear();
+            batch_point_ids.clear();
+            batch_counts.clear();
+
+            for (size_t sample_index = begin; sample_index < end; ++sample_index) {
+                const auto& [point_id, count] = sample_counts[sample_index];
+                batch_point_ids.push_back(point_id);
+                batch_counts.push_back(count);
+                batch_queries.push_back(queries.ReadPoint(point_id));
+                batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
+                                                                      : std::numeric_limits<double>::infinity());
+            }
+
+            std::vector<AnnResult> batch_results =
+                ann_searcher.SearchBatchWithUpperBounds(batch_queries, batch_upper_bounds);
+            for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
+                const unsigned int point_id = batch_point_ids[batch_index];
+                const unsigned int count = batch_counts[batch_index];
+                const double nearest_distance = batch_results[batch_index].distance;
+                estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+            }
+        }
     }
 #endif
 

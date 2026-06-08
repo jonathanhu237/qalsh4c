@@ -50,6 +50,36 @@ AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, 
     return result;
 }
 
+std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
+    const std::vector<Point>& query_points, const std::vector<double>& initial_upper_bounds) {
+    if (query_points.size() != initial_upper_bounds.size()) {
+        Log::error("Query size and upper-bound size mismatch.");
+    }
+
+    std::vector<AnnResult> results(query_points.size());
+    for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
+        results[query_index] = AnnResult{.distance = initial_upper_bounds[query_index], .point_id = 0};
+    }
+
+    base_.SeekPoint(0);
+    for (unsigned int point_id = 0; point_id < base_.get_num_points(); ++point_id) {
+        if (!base_.ReadNextPointInto(scratch_point_)) {
+            Log::error("Failed to read point {} during batched linear scan.", point_id);
+        }
+
+        for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
+            const double distance = Calc::LpDistanceBounded(scratch_point_, query_points[query_index], norm_order_,
+                                                            results[query_index].distance);
+            if (distance < results[query_index].distance) {
+                results[query_index].distance = distance;
+                results[query_index].point_id = point_id;
+            }
+        }
+    }
+
+    return results;
+}
+
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------

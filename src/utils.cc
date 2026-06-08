@@ -34,6 +34,9 @@ double Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_o
     if (upper_bound < 0.0) {
         return std::numeric_limits<double>::infinity();
     }
+    if (std::isinf(upper_bound)) {
+        return LpDistance(pt1, pt2, norm_order);
+    }
 
     if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         double sum = 0.0;
