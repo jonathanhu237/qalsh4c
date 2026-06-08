@@ -90,7 +90,8 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     std::vector<unsigned int> collision_count(base_.get_num_points(), 0);
     std::vector<bool> visited(base_.get_num_points(), false);
-    std::priority_queue<AnnResult, std::vector<AnnResult>, CompareAnnResult> candidates;
+    bool has_candidate = false;
+    AnnResult best_candidate{.distance = std::numeric_limits<double>::infinity(), .point_id = 0};
 
     unsigned int num_hash_tables = qalsh_config_.num_hash_tables;
     unsigned int collision_threshold = qalsh_config_.collision_threshold;
@@ -107,7 +108,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     bool shouldTerminate = false;
 
     auto t1_satisfied = [&]() {
-        return !candidates.empty() && (candidates.top().distance <= approximation_ratio * radius);
+        return has_candidate && best_candidate.distance <= approximation_ratio * radius;
     };
 
     while (!shouldTerminate) {
@@ -132,9 +133,13 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
                     if (++collision_count[point_id] >= collision_threshold) {
                         visited[point_id] = true;
-                        candidates.emplace(
-                            AnnResult{.distance = Calc::LpDistance(base_.ReadPoint(point_id), query_point, norm_order_),
-                                      .point_id = point_id});
+                        base_.ReadPointInto(point_id, candidate_scratch_point_);
+                        double distance = Calc::LpDistanceBounded(candidate_scratch_point_, query_point, norm_order_,
+                                                                  best_candidate.distance);
+                        if (distance < best_candidate.distance) {
+                            has_candidate = true;
+                            best_candidate = AnnResult{.distance = distance, .point_id = point_id};
+                        }
 
                         // Termination condition 1
                         if (t1_satisfied()) {
@@ -158,5 +163,5 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         bound = bucket_width * radius / 2.0;
     }
 
-    return candidates.top();
+    return best_candidate;
 }

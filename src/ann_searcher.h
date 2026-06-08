@@ -63,4 +63,5 @@ class QalshAnnSearcher : public AnnSearcher {
     QalshConfig qalsh_config_;
     std::vector<Point> dot_vectors_;
     std::vector<BPlusTreeSearcher> searchers_;
+    Point candidate_scratch_point_;
 };
