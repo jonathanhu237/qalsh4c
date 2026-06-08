@@ -149,6 +149,10 @@ We provide four methods for estimating the Chamfer distance:
 - Uniform Sampling
 - QALSH Sampling
 
+For QALSH sampling, omit `--num-samples` to let the implementation choose the sample count automatically. The automatic count uses the QALSH4C bound
+`ceil((c^2 * (1 - delta0) / (1 - c * delta0) - 1) / (delta * epsilon^2))`, where
+`delta0 = exp(-m * KL((l - 1) / m, p1))`; tune the estimator with `--epsilon` and `--delta`.
+
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the GMM sample dataset to check the exact directed distances without building an index:
 
 ```bash

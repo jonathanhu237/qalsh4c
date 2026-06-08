@@ -25,7 +25,8 @@ class AnnEstimator : public Estimator {
 class SamplingEstimator : public Estimator {
    public:
     SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples_default,
-                      unsigned int num_samples_ab, unsigned int num_samples_ba, double epsilon, bool use_cache);
+                      unsigned int num_samples_ab, unsigned int num_samples_ba, double epsilon, double delta,
+                      bool use_cache);
     [[nodiscard]] bool RequiresIndex() const override;
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
@@ -35,5 +36,6 @@ class SamplingEstimator : public Estimator {
     unsigned int num_samples_ab_;       // Sample count for A->B direction
     unsigned int num_samples_ba_;       // Sample count for B->A direction
     double epsilon_;
+    double delta_;
     bool use_cache_;
 };

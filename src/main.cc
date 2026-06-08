@@ -136,6 +136,10 @@ int main(int argc, char** argv) {
     double epsilon{0.0};
     sampling->add_option("-e,--epsilon", epsilon, "Epsilon for the algorithm")->default_val(Global::kQalsh4cEpsilon);
 
+    double delta{0.0};
+    sampling->add_option("--delta", delta, "Failure probability for automatic QALSH sample count")
+        ->default_val(Global::kQalsh4cDelta);
+
     bool use_cache{false};
     sampling->add_flag("--use-cache", use_cache, "Use cached files if available")
         ->default_val(false)
@@ -148,7 +152,7 @@ int main(int argc, char** argv) {
             Log::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
-                                                        num_samples_ba, epsilon, use_cache);
+                                                        num_samples_ba, epsilon, delta, use_cache);
     });
 
     // ------------------------------
