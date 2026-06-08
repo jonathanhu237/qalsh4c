@@ -97,7 +97,15 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     double bound = bucket_width * radius / 2.0;
     bool shouldTerminate = false;
 
+    auto t1_satisfied = [&]() {
+        return !candidates.empty() && (candidates.top().distance <= approximation_ratio * radius);
+    };
+
     while (!shouldTerminate) {
+        if (t1_satisfied()) {
+            break;
+        }
+
         std::queue<unsigned int> active_tables;
         for (unsigned int i = 0; i < num_hash_tables; i++) {
             active_tables.push(i);
@@ -120,7 +128,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                                       .point_id = point_id});
 
                         // Termination condition 1
-                        if (!candidates.empty() && (candidates.top().distance <= approximation_ratio * radius)) {
+                        if (t1_satisfied()) {
                             shouldTerminate = true;
                             return;
                         }
@@ -130,6 +138,10 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
             if (!table_done) {
                 active_tables.push(i);
             }
+        }
+
+        if (t1_satisfied()) {
+            break;
         }
 
         // Update radius and bound for next iteration
