@@ -258,12 +258,8 @@ std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafMayContainKey() {
     unsigned int current_level = level_;
     unsigned int next_page_num = root_page_num_;
     while (current_level != 0) {
-        auto node_it = internal_node_cache_.find(next_page_num);
-        if (node_it == internal_node_cache_.end()) {
-            ReadPage(next_page_num);
-            node_it = internal_node_cache_.emplace(next_page_num, InternalNode(buffer_)).first;
-        }
-        const InternalNode& internal_node = node_it->second;
+        ReadPage(next_page_num);
+        const InternalNode internal_node(buffer_);
 
         auto it = std::ranges::upper_bound(internal_node.keys_, query_key_);
         auto index = static_cast<size_t>(std::distance(internal_node.keys_.begin(), it));

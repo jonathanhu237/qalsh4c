@@ -7,7 +7,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -127,7 +126,6 @@ class BPlusTreeSearcher {
     Buffer buffer_;
     unsigned int root_page_num_{0};
     unsigned int level_{0};
-    std::unordered_map<unsigned int, InternalNode> internal_node_cache_;
     double query_key_{0.0};
 
     struct SearchRecord {

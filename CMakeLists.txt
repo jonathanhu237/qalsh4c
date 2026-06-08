@@ -104,15 +104,6 @@ if(BUILD_TESTING)
     add_test(NAME b_plus_tree_stream_test COMMAND b_plus_tree_stream_test)
 
     add_executable(
-        b_plus_tree_searcher_cache_test
-        tests/b_plus_tree_searcher_cache_test.cc
-        src/b_plus_tree.cc
-        src/buffer.cc
-    )
-    target_include_directories(b_plus_tree_searcher_cache_test PRIVATE src)
-    add_test(NAME b_plus_tree_searcher_cache_test COMMAND b_plus_tree_searcher_cache_test)
-
-    add_executable(
         qalsh_ann_candidate_limit_test
         tests/qalsh_ann_candidate_limit_test.cc
         src/ann_searcher.cc
