@@ -256,8 +256,7 @@ std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafMayContainKey() {
     unsigned int current_level = level_;
     unsigned int next_page_num = root_page_num_;
     while (current_level != 0) {
-        ReadPage(next_page_num);
-        const InternalNode internal_node(buffer_);
+        const InternalNode& internal_node = LocateInternalByPageNum(next_page_num);
 
         auto it = std::ranges::upper_bound(internal_node.keys_, query_key_);
         auto index = static_cast<size_t>(std::distance(internal_node.keys_.begin(), it));
@@ -266,6 +265,16 @@ std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafMayContainKey() {
         current_level--;
     }
     return LocateLeafByPageNum(next_page_num);
+}
+
+const InternalNode& BPlusTreeSearcher::LocateInternalByPageNum(unsigned int page_num) {
+    auto it = internal_cache_.find(page_num);
+    if (it != internal_cache_.end()) {
+        return it->second;
+    }
+
+    ReadPage(page_num);
+    return internal_cache_.emplace(page_num, InternalNode(buffer_)).first->second;
 }
 
 std::shared_ptr<LeafNode> BPlusTreeSearcher::LocateLeafByPageNum(unsigned int page_num) {

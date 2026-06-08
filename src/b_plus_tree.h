@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -118,6 +119,7 @@ class BPlusTreeSearcher {
     bool IncrementalSearchRight(double bound, Handler&& handler);
 
     void ReadPage(unsigned int page_num);
+    const InternalNode& LocateInternalByPageNum(unsigned int page_num);
     std::shared_ptr<LeafNode> LocateLeafMayContainKey();
     std::shared_ptr<LeafNode> LocateLeafByPageNum(unsigned int page_num);
 
@@ -135,6 +137,7 @@ class BPlusTreeSearcher {
 
     std::optional<SearchRecord> left_;
     std::optional<SearchRecord> right_;
+    std::unordered_map<unsigned int, InternalNode> internal_cache_;
 };
 
 // --------------------------------------------------------------------------------
