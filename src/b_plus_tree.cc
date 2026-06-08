@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <vector>
 
@@ -183,17 +184,14 @@ void BPlusTreeBulkLoader::BuildFromStream(size_t num_entries, std::function<DotP
 
 unsigned int BPlusTreeBulkLoader::AllocatePage() {
     unsigned int new_page_num = next_page_num_++;
-
-    ofs_.seekp(static_cast<std::streamoff>(new_page_num * page_size_));
-    std::vector<char> empty_page(page_size_, 0);
-    ofs_.write(empty_page.data(), static_cast<std::streamsize>(empty_page.size()));
     num_page_++;
 
     return new_page_num;
 }
 
 void BPlusTreeBulkLoader::WritePage(unsigned int page_num) {
-    ofs_.seekp(static_cast<std::streamoff>(page_num * page_size_));
+    const auto offset = static_cast<std::uint64_t>(page_num) * static_cast<std::uint64_t>(page_size_);
+    ofs_.seekp(static_cast<std::streamoff>(offset));
     buffer_.Save(ofs_);
 }
 
