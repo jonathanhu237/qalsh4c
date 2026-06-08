@@ -104,21 +104,6 @@ if(BUILD_TESTING)
     add_test(NAME b_plus_tree_stream_test COMMAND b_plus_tree_stream_test)
 
     add_executable(
-        qalsh_ann_candidate_limit_test
-        tests/qalsh_ann_candidate_limit_test.cc
-        src/ann_searcher.cc
-        src/b_plus_tree.cc
-        src/buffer.cc
-        src/config.cc
-        src/global.cc
-        src/point_set.cc
-        src/utils.cc
-    )
-    target_include_directories(qalsh_ann_candidate_limit_test PRIVATE src)
-    target_link_libraries(qalsh_ann_candidate_limit_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
-    add_test(NAME qalsh_ann_candidate_limit_test COMMAND qalsh_ann_candidate_limit_test)
-
-    add_executable(
         ann_searcher_clone_test
         tests/ann_searcher_clone_test.cc
         src/ann_searcher.cc

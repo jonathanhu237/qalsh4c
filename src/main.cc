@@ -114,11 +114,7 @@ int main(int argc, char** argv) {
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
 
-    bool candidate_limit{false};
-    qalsh_ann->add_flag("--candidate-limit", candidate_limit,
-                        "Enable early termination when candidate count reaches the limit");
-
-    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(candidate_limit); });
+    qalsh_ann->callback([&] { ann_searcher = std::make_unique<QalshAnnSearcher>(); });
 
     // ------------------------------
     // sampling estimate

@@ -72,20 +72,11 @@ int main() {
         return 1;
     }
 
-    QalshAnnSearcher limited(true);
-    limited.Init(metadata, 2.0);
-    std::unique_ptr<AnnSearcher> limited_clone = limited.Clone();
-    limited_clone->Init(metadata, 2.0);
-    if (const AnnResult result = limited_clone->Search(query_point); result.point_id == 149) {
-        std::filesystem::remove_all(temp_dir);
-        return 1;
-    }
-
-    QalshAnnSearcher unlimited(false);
-    unlimited.Init(metadata, 2.0);
-    std::unique_ptr<AnnSearcher> unlimited_clone = unlimited.Clone();
-    unlimited_clone->Init(metadata, 2.0);
-    if (const AnnResult result = unlimited_clone->Search(query_point); result.point_id != 149 || result.distance != 1.5) {
+    QalshAnnSearcher qalsh;
+    qalsh.Init(metadata, 2.0);
+    std::unique_ptr<AnnSearcher> qalsh_clone = qalsh.Clone();
+    qalsh_clone->Init(metadata, 2.0);
+    if (const AnnResult result = qalsh_clone->Search(query_point); result.point_id != 149 || result.distance != 1.5) {
         std::filesystem::remove_all(temp_dir);
         return 1;
     }

@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "b_plus_tree.h"
-#include "global.h"
 #include "log.h"
 #include "point_set.h"
 #include "utils.h"
@@ -45,14 +44,12 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
-QalshAnnSearcher::QalshAnnSearcher(bool candidate_limit) : candidate_limit_(candidate_limit) {}
-
 bool QalshAnnSearcher::RequiresIndex() const {
     return true;
 }
 
 std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
-    return std::make_unique<QalshAnnSearcher>(candidate_limit_);
+    return std::make_unique<QalshAnnSearcher>();
 }
 
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
@@ -124,12 +121,6 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
                         // Termination condition 1
                         if (!candidates.empty() && (candidates.top().distance <= approximation_ratio * radius)) {
-                            shouldTerminate = true;
-                            return;
-                        }
-
-                        // Termination condition 2
-                        if (candidate_limit_ && candidates.size() >= Global::kNumCandidates) {
                             shouldTerminate = true;
                             return;
                         }

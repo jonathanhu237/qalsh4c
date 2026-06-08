@@ -11,8 +11,8 @@ endif()
 
 string(CONCAT qalsh_ann_help_output "${qalsh_ann_help_stdout}" "${qalsh_ann_help_stderr}")
 
-if(NOT qalsh_ann_help_output MATCHES "--candidate-limit")
-    message(FATAL_ERROR "Expected --candidate-limit option in qalsh ann help output")
+if(qalsh_ann_help_output MATCHES "--candidate-limit")
+    message(FATAL_ERROR "Unexpected --candidate-limit option in qalsh ann help output")
 endif()
 
 if(qalsh_ann_help_output MATCHES "--approximation-ratio")

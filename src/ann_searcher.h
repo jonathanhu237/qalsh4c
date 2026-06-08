@@ -49,14 +49,13 @@ class LinearScanAnnSearcher : public AnnSearcher {
 // ---------------------------------------------
 class QalshAnnSearcher : public AnnSearcher {
    public:
-    explicit QalshAnnSearcher(bool candidate_limit = false);
+    QalshAnnSearcher() = default;
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
-    bool candidate_limit_{false};
     PointSet base_;
     double norm_order_{0.0};
     QalshConfig qalsh_config_;
