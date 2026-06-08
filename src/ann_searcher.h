@@ -43,6 +43,7 @@ class LinearScanAnnSearcher : public AnnSearcher {
    private:
     PointSet base_;
     double norm_order_{0.0};
+    Point scratch_point_;
 };
 
 // ---------------------------------------------

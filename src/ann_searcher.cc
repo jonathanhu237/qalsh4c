@@ -34,8 +34,13 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, double initial_upper_bound) {
     AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
+    base_.SeekPoint(0);
     for (unsigned int i = 0; i < base_.get_num_points(); i++) {
-        double distance = Calc::LpDistanceBounded(base_.ReadPoint(i), query_point, norm_order_, result.distance);
+        if (!base_.ReadNextPointInto(scratch_point_)) {
+            Log::error("Failed to read point {} during linear scan.", i);
+        }
+
+        double distance = Calc::LpDistanceBounded(scratch_point_, query_point, norm_order_, result.distance);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;

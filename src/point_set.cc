@@ -1,5 +1,8 @@
 #include "point_set.h"
 
+#include <cstdint>
+#include <iterator>
+
 #include "log.h"
 
 void PointSet::Init(const PointSetMetadata &metadata) {
@@ -17,12 +20,32 @@ void PointSet::Init(const PointSetMetadata &metadata) {
 }
 
 Point PointSet::ReadPoint(unsigned int point_id) {
-    ifs_.seekg(static_cast<std::streamoff>(static_cast<unsigned long>(point_id * num_dimensions_) * sizeof(Coordinate)),
-               std::ios::beg);
     Point point(num_dimensions_);
-    ifs_.read(reinterpret_cast<char *>(point.data()),
-              static_cast<std::streamoff>(num_dimensions_ * sizeof(Coordinate)));
+    ReadPointInto(point_id, point);
     return point;
+}
+
+void PointSet::ReadPointInto(unsigned int point_id, Point& out) {
+    SeekPoint(point_id);
+    if (!ReadNextPointInto(out)) {
+        Log::error("Failed to read point {}.", point_id);
+    }
+}
+
+void PointSet::SeekPoint(unsigned int point_id) {
+    const auto offset = static_cast<std::uint64_t>(point_id) * static_cast<std::uint64_t>(num_dimensions_) *
+                        static_cast<std::uint64_t>(sizeof(Coordinate));
+    ifs_.clear();
+    ifs_.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+}
+
+bool PointSet::ReadNextPointInto(Point& out) {
+    if (out.size() != num_dimensions_) {
+        out.resize(num_dimensions_);
+    }
+    ifs_.read(reinterpret_cast<char *>(out.data()),
+              static_cast<std::streamsize>(static_cast<size_t>(num_dimensions_) * sizeof(Coordinate)));
+    return static_cast<bool>(ifs_);
 }
 
 std::vector<Point> PointSet::LoadPointsFromFile(const std::filesystem::path &file_path, unsigned int num_points,
@@ -33,17 +56,19 @@ std::vector<Point> PointSet::LoadPointsFromFile(const std::filesystem::path &fil
         return {};
     }
 
-    unsigned int total_doubles = num_points * num_dimensions;
-    std::vector<double> buffer(total_doubles);
-    ifs.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamoff>(total_doubles * sizeof(Coordinate)));
+    const size_t total_coordinates = static_cast<size_t>(num_points) * static_cast<size_t>(num_dimensions);
+    std::vector<double> buffer(total_coordinates);
+    ifs.read(reinterpret_cast<char *>(buffer.data()),
+             static_cast<std::streamsize>(total_coordinates * sizeof(Coordinate)));
 
     std::vector<Point> points;
     points.reserve(num_points);
     for (unsigned int i = 0; i < num_points; ++i) {
-        auto start_offset = i * num_dimensions;
-        auto end_offset = start_offset + num_dimensions;
-        auto start_it = buffer.begin() + start_offset;
-        auto end_it = buffer.begin() + end_offset;
+        const size_t start_offset = static_cast<size_t>(i) * static_cast<size_t>(num_dimensions);
+        const size_t end_offset = start_offset + static_cast<size_t>(num_dimensions);
+        auto start_it =
+            std::next(buffer.begin(), static_cast<std::vector<double>::difference_type>(start_offset));
+        auto end_it = std::next(buffer.begin(), static_cast<std::vector<double>::difference_type>(end_offset));
         points.emplace_back(start_it, end_it);
     }
 

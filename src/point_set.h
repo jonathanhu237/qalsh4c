@@ -21,6 +21,9 @@ class PointSet {
 
     void Init(const PointSetMetadata& metadata);
     Point ReadPoint(unsigned int point_id);
+    void ReadPointInto(unsigned int point_id, Point& out);
+    void SeekPoint(unsigned int point_id);
+    bool ReadNextPointInto(Point& out);
     static std::vector<Point> LoadPointsFromFile(const std::filesystem::path& file_path, unsigned int num_points,
                                                  unsigned int num_dimensions);
 
