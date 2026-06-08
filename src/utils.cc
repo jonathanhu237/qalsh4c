@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <numeric>
 #include <random>
@@ -25,6 +26,40 @@ double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
     if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         return static_cast<double>((v1 - v2).lpNorm<2>());
     }
+    Log::error("Unsupported norm order: {}", norm_order);
+    return 0.0;
+}
+
+double Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_order, double upper_bound) {
+    if (upper_bound < 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
+        double sum = 0.0;
+        for (size_t i = 0; i < pt1.size(); ++i) {
+            sum += std::abs(pt1[i] - pt2[i]);
+            if (sum > upper_bound) {
+                return std::numeric_limits<double>::infinity();
+            }
+        }
+        return sum;
+    }
+
+    // NOLINTNEXTLINE(readability-magic-numbers)
+    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
+        const double upper_bound_sq = upper_bound * upper_bound;
+        double sum_sq = 0.0;
+        for (size_t i = 0; i < pt1.size(); ++i) {
+            const double diff = pt1[i] - pt2[i];
+            sum_sq += diff * diff;
+            if (sum_sq > upper_bound_sq) {
+                return std::numeric_limits<double>::infinity();
+            }
+        }
+        return std::sqrt(sum_sq);
+    }
+
     Log::error("Unsupported norm order: {}", norm_order);
     return 0.0;
 }

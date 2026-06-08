@@ -9,6 +9,7 @@
 class Calc {
    public:
     static double LpDistance(const Point &pt1, const Point &pt2, double norm_order);
+    static double LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_order, double upper_bound);
     static double DotProduct(const Point &pt1, const Point &pt2);
     static double L1Probability(double x);
     static double L2Probability(double x);

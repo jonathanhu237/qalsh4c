@@ -38,6 +38,7 @@ class LinearScanAnnSearcher : public AnnSearcher {
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
+    AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
 
    private:
     PointSet base_;

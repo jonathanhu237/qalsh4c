@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <unordered_map>
@@ -103,6 +104,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     if (!weights_generator_) {
         Log::error("The ANN searcher is not set.");
     }
+    const bool weights_are_upper_bounds = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr;
 
     // Determine the direction and select the appropriate sample count
     std::string from_name = from.file_path.stem().string();
@@ -134,7 +136,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     // Update the num_samples
     double updated_num_samples = base_num_samples;
     if (updated_num_samples == 0) {
-        if (dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr) {
+        if (weights_are_upper_bounds) {
             const double epsilon = epsilon_;
             const double delta = delta_;
             if (epsilon <= 0.0) {
@@ -231,7 +233,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 #pragma omp for schedule(dynamic)
         for (long long sample_index = 0; sample_index < static_cast<long long>(sample_counts.size()); ++sample_index) {
             const auto& [point_id, count] = sample_counts[static_cast<size_t>(sample_index)];
-            const double nearest_distance = ann_searcher.Search(query_points[point_id]).distance;
+            const double initial_upper_bound =
+                weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
+            const double nearest_distance =
+                ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
             estimation +=
                 (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
         }
@@ -244,7 +249,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     PointSet queries;
     queries.Init(from);
     for (const auto& [point_id, count] : sample_counts) {
-        const double nearest_distance = ann_searcher.Search(queries.ReadPoint(point_id)).distance;
+        const double initial_upper_bound =
+            weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
+        const double nearest_distance =
+            ann_searcher.SearchWithUpperBound(queries.ReadPoint(point_id), initial_upper_bound).distance;
         estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
     }
 #endif

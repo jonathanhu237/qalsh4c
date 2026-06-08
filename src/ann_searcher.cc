@@ -28,10 +28,14 @@ void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_o
 }
 
 AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
-    AnnResult result{.distance = std::numeric_limits<double>::max(), .point_id = 0};
+    return SearchWithUpperBound(query_point, std::numeric_limits<double>::infinity());
+}
+
+AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, double initial_upper_bound) {
+    AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
     for (unsigned int i = 0; i < base_.get_num_points(); i++) {
-        double distance = Calc::LpDistance(base_.ReadPoint(i), query_point, norm_order_);
+        double distance = Calc::LpDistanceBounded(base_.ReadPoint(i), query_point, norm_order_, result.distance);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
