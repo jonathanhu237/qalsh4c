@@ -17,5 +17,5 @@ class Global {
 
     // qalsh4c
     static constexpr double kQalsh4cEpsilon = 1.0;
-    static constexpr double kQalsh4cDelta = 1.0 / std::numbers::e_v<double>;
+    static constexpr double kQalsh4cDelta = 0.1;
 };
