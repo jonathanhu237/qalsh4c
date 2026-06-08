@@ -2,6 +2,7 @@
 
 #include <Eigen/Eigen>
 #include <random>
+#include <vector>
 
 #include "point_set.h"
 
@@ -26,4 +27,16 @@ class Memory {
 class Sample {
    public:
     static unsigned int FromWeights(const std::vector<double> &weights);
+};
+
+class WeightedSampler {
+   public:
+    explicit WeightedSampler(const std::vector<double> &weights);
+    unsigned int Sample();
+    double Total() const;
+
+   private:
+    std::vector<double> cumulative_weights_;
+    double total_{0.0};
+    std::mt19937 gen_;
 };

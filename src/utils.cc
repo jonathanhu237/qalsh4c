@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 #include "global.h"
@@ -81,4 +83,28 @@ unsigned int Sample::FromWeights(const std::vector<double> &weights) {
     auto it = std::ranges::upper_bound(cumulative_weights, random_value);
 
     return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
+}
+
+WeightedSampler::WeightedSampler(const std::vector<double> &weights) : gen_(Random::SeededGenerator()) {
+    total_ = std::accumulate(weights.begin(), weights.end(), 0.0);
+    if (total_ <= 0) {
+        throw std::runtime_error("Total sum of weights must be positive.");
+    }
+
+    cumulative_weights_.reserve(weights.size());
+    std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights_));
+}
+
+unsigned int WeightedSampler::Sample() {
+    std::uniform_real_distribution<double> dis(0.0, total_);
+    const double random_value = dis(gen_);
+    auto it = std::ranges::upper_bound(cumulative_weights_, random_value);
+    if (it == cumulative_weights_.end()) {
+        return static_cast<unsigned int>(cumulative_weights_.size() - 1);
+    }
+    return static_cast<unsigned int>(std::distance(cumulative_weights_.begin(), it));
+}
+
+double WeightedSampler::Total() const {
+    return total_;
 }

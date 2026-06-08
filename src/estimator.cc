@@ -7,6 +7,7 @@
 #include <format>
 #include <memory>
 #include <numeric>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -200,17 +201,25 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Sample the points using the generated weights.
-    double sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+    WeightedSampler sampler(weights);
+    const double sum = sampler.Total();
     Log::info("Total sum of weights: {}", sum);
 
     const unsigned int num_samples = static_cast<unsigned int>(updated_num_samples);
-#ifdef QALSH4C_USE_OPENMP
-    std::vector<unsigned int> sampled_ids;
-    sampled_ids.reserve(num_samples);
+    std::unordered_map<unsigned int, unsigned int> sample_count_map;
+    sample_count_map.reserve(num_samples);
     for (unsigned int sample_index = 0; sample_index < num_samples; ++sample_index) {
-        sampled_ids.push_back(Sample::FromWeights(weights));
+        ++sample_count_map[sampler.Sample()];
     }
 
+    std::vector<std::pair<unsigned int, unsigned int>> sample_counts;
+    sample_counts.reserve(sample_count_map.size());
+    for (const auto& [point_id, count] : sample_count_map) {
+        sample_counts.emplace_back(point_id, count);
+    }
+    std::ranges::sort(sample_counts);
+
+#ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
     double estimation = 0.0;
 
@@ -220,9 +229,11 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
         ann_searcher.Init(to, norm_order);
 
 #pragma omp for schedule(dynamic)
-        for (long long sample_index = 0; sample_index < static_cast<long long>(sampled_ids.size()); ++sample_index) {
-            const unsigned int point_id = sampled_ids[static_cast<size_t>(sample_index)];
-            estimation += (sum * ann_searcher.Search(query_points[point_id]).distance / weights[point_id]);
+        for (long long sample_index = 0; sample_index < static_cast<long long>(sample_counts.size()); ++sample_index) {
+            const auto& [point_id, count] = sample_counts[static_cast<size_t>(sample_index)];
+            const double nearest_distance = ann_searcher.Search(query_points[point_id]).distance;
+            estimation +=
+                (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
         }
     }
 #else
@@ -232,9 +243,9 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     PointSet queries;
     queries.Init(from);
-    for (unsigned int cnt = 1; cnt <= num_samples; cnt++) {
-        unsigned int point_id = Sample::FromWeights(weights);
-        estimation += (sum * ann_searcher.Search(queries.ReadPoint(point_id)).distance / weights[point_id]);
+    for (const auto& [point_id, count] : sample_counts) {
+        const double nearest_distance = ann_searcher.Search(queries.ReadPoint(point_id)).distance;
+        estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
     }
 #endif
 
