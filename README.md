@@ -160,3 +160,5 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ba ann linear_scan
 ./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction both ann linear_scan
 ```
+
+The top-level `-T, --threads` option controls OpenMP parallelism and defaults to `1`. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.

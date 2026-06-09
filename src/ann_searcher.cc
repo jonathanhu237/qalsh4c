@@ -1,5 +1,6 @@
 #include "ann_searcher.h"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <limits>
@@ -115,11 +116,25 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
         searchers_.emplace_back(index_directory / "b_plus_trees" / std::format("{}.bin", i), qalsh_config_.page_size);
     }
+
+    collision_counts_.assign(base_.get_num_points(), 0);
+    collision_stamps_.assign(base_.get_num_points(), 0);
+    visited_stamps_.assign(base_.get_num_points(), 0);
+    search_epoch_ = 0;
+}
+
+unsigned int QalshAnnSearcher::NextSearchEpoch() {
+    ++search_epoch_;
+    if (search_epoch_ == 0) {
+        std::ranges::fill(collision_stamps_, 0);
+        std::ranges::fill(visited_stamps_, 0);
+        search_epoch_ = 1;
+    }
+    return search_epoch_;
 }
 
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
-    std::vector<unsigned int> collision_count(base_.get_num_points(), 0);
-    std::vector<bool> visited(base_.get_num_points(), false);
+    const unsigned int epoch = NextSearchEpoch();
     bool has_candidate = false;
     AnnResult best_candidate{.distance = std::numeric_limits<double>::infinity(), .point_id = 0};
 
@@ -157,12 +172,17 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
             bool table_done =
                 searchers_[i].IncrementalSearch(bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
-                    if (shouldTerminate || visited[point_id]) {
+                    if (shouldTerminate || visited_stamps_[point_id] == epoch) {
                         return;
                     }
 
-                    if (++collision_count[point_id] >= collision_threshold) {
-                        visited[point_id] = true;
+                    if (collision_stamps_[point_id] != epoch) {
+                        collision_stamps_[point_id] = epoch;
+                        collision_counts_[point_id] = 0;
+                    }
+
+                    if (++collision_counts_[point_id] >= collision_threshold) {
+                        visited_stamps_[point_id] = epoch;
                         base_.ReadPointInto(point_id, candidate_scratch_point_);
                         double distance = Calc::LpDistanceBounded(candidate_scratch_point_, query_point, norm_order_,
                                                                   best_candidate.distance);

@@ -11,9 +11,18 @@
 #include "log.h"
 #include "weights_generator.h"
 
+#ifdef QALSH4C_USE_OPENMP
+#include <omp.h>
+#endif
+
 int main(int argc, char** argv) {
     // Parse command-line arguments.
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
+
+    unsigned int thread_count{1};
+    app.add_option("-T,--threads", thread_count, "Number of OpenMP threads")
+        ->default_val(thread_count)
+        ->check(CLI::PositiveNumber);
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
         ->default_str(Global::kUseFixedSeed ? "True" : "False");
@@ -24,6 +33,9 @@ int main(int argc, char** argv) {
         if (!command) {
             Log::error("Command is not set. Please specify a command.");
         }
+#ifdef QALSH4C_USE_OPENMP
+        omp_set_num_threads(static_cast<int>(thread_count));
+#endif
         command->Execute();
     });
 

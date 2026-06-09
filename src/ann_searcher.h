@@ -66,4 +66,10 @@ class QalshAnnSearcher : public AnnSearcher {
     std::vector<Point> dot_vectors_;
     std::vector<BPlusTreeSearcher> searchers_;
     Point candidate_scratch_point_;
+    std::vector<unsigned int> collision_counts_;
+    std::vector<unsigned int> collision_stamps_;
+    std::vector<unsigned int> visited_stamps_;
+    unsigned int search_epoch_{0};
+
+    unsigned int NextSearchEpoch();
 };
