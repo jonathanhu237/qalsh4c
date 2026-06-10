@@ -4,7 +4,6 @@
 #include <cmath>
 #include <functional>
 #include <limits>
-#include <queue>
 #include <random>
 #include <vector>
 
@@ -259,52 +258,62 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         return has_candidate && best_candidate.distance <= approximation_ratio * radius;
     };
 
+    std::vector<unsigned int> active_tables;
+    std::vector<unsigned int> next_active_tables;
+    active_tables.reserve(num_hash_tables);
+    next_active_tables.reserve(num_hash_tables);
+
     while (!shouldTerminate) {
         if (t1_satisfied()) {
             break;
         }
 
-        std::queue<unsigned int> active_tables;
+        active_tables.clear();
         for (unsigned int i = 0; i < num_hash_tables; i++) {
-            active_tables.push(i);
+            active_tables.push_back(i);
         }
 
         while (!active_tables.empty() && !shouldTerminate) {
-            unsigned int i = active_tables.front();
-            active_tables.pop();
+            next_active_tables.clear();
+            for (unsigned int i : active_tables) {
+                if (shouldTerminate) {
+                    break;
+                }
 
-            bool table_done = index_data.searchers[i].IncrementalSearch(
-                search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
-                    if (shouldTerminate || visited_stamps_[point_id] == epoch) {
-                        return;
-                    }
-
-                    if (collision_stamps_[point_id] != epoch) {
-                        collision_stamps_[point_id] = epoch;
-                        collision_counts_[point_id] = 0;
-                    }
-
-                    if (++collision_counts_[point_id] >= collision_threshold) {
-                        visited_stamps_[point_id] = epoch;
-                        const Point& candidate_point = index_data.base_points[point_id];
-                        double distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
-                                                                  best_candidate.distance);
-                        if (distance < best_candidate.distance) {
-                            has_candidate = true;
-                            best_candidate = AnnResult{.distance = distance, .point_id = point_id};
-                        }
-
-                        // Termination condition 1
-                        if (t1_satisfied()) {
-                            shouldTerminate = true;
+                bool table_done = index_data.searchers[i].IncrementalSearch(
+                    search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
+                        if (shouldTerminate || visited_stamps_[point_id] == epoch) {
                             return;
                         }
-                    }
-                });
 
-            if (!table_done) {
-                active_tables.push(i);
+                        if (collision_stamps_[point_id] != epoch) {
+                            collision_stamps_[point_id] = epoch;
+                            collision_counts_[point_id] = 0;
+                        }
+
+                        if (++collision_counts_[point_id] >= collision_threshold) {
+                            visited_stamps_[point_id] = epoch;
+                            const Point& candidate_point = index_data.base_points[point_id];
+                            double distance = Calc::LpDistanceBounded(candidate_point, query_point,
+                                                                      index_data.norm_order, best_candidate.distance);
+                            if (distance < best_candidate.distance) {
+                                has_candidate = true;
+                                best_candidate = AnnResult{.distance = distance, .point_id = point_id};
+                            }
+
+                            // Termination condition 1
+                            if (t1_satisfied()) {
+                                shouldTerminate = true;
+                                return;
+                            }
+                        }
+                    });
+
+                if (!table_done) {
+                    next_active_tables.push_back(i);
+                }
             }
+            active_tables.swap(next_active_tables);
         }
 
         if (t1_satisfied()) {
