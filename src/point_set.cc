@@ -1,7 +1,6 @@
 #include "point_set.h"
 
 #include <cstdint>
-#include <iterator>
 
 #include "log.h"
 
@@ -56,20 +55,16 @@ std::vector<Point> PointSet::LoadPointsFromFile(const std::filesystem::path &fil
         return {};
     }
 
-    const size_t total_coordinates = static_cast<size_t>(num_points) * static_cast<size_t>(num_dimensions);
-    std::vector<double> buffer(total_coordinates);
-    ifs.read(reinterpret_cast<char *>(buffer.data()),
-             static_cast<std::streamsize>(total_coordinates * sizeof(Coordinate)));
-
     std::vector<Point> points;
     points.reserve(num_points);
     for (unsigned int i = 0; i < num_points; ++i) {
-        const size_t start_offset = static_cast<size_t>(i) * static_cast<size_t>(num_dimensions);
-        const size_t end_offset = start_offset + static_cast<size_t>(num_dimensions);
-        auto start_it =
-            std::next(buffer.begin(), static_cast<std::vector<double>::difference_type>(start_offset));
-        auto end_it = std::next(buffer.begin(), static_cast<std::vector<double>::difference_type>(end_offset));
-        points.emplace_back(start_it, end_it);
+        Point point(num_dimensions);
+        ifs.read(reinterpret_cast<char *>(point.data()),
+                 static_cast<std::streamsize>(static_cast<size_t>(num_dimensions) * sizeof(Coordinate)));
+        if (!ifs) {
+            Log::error("Failed to read point {} from {}.", i, file_path.string());
+        }
+        points.push_back(std::move(point));
     }
 
     return points;
