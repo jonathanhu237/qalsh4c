@@ -45,9 +45,10 @@ class LinearScanAnnSearcher : public AnnSearcher {
                                                       const std::vector<double>& initial_upper_bounds);
 
    private:
-    PointSet base_;
     double norm_order_{0.0};
-    Point scratch_point_;
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
+    std::vector<Point> base_points_;
 };
 
 // ---------------------------------------------

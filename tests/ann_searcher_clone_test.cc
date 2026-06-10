@@ -41,11 +41,18 @@ int main() {
 
     LinearScanAnnSearcher linear;
     linear.Init(metadata, 2.0);
+    std::filesystem::remove(temp_dir / "base.bin");
+    if (const AnnResult result = linear.Search(query_point); result.point_id != 0 || result.distance != 0.0) {
+        std::filesystem::remove_all(temp_dir);
+        return 1;
+    }
+    WritePointFile(temp_dir / "base.bin", base_points);
+
     std::unique_ptr<AnnSearcher> linear_clone = linear.Clone();
     linear_clone->Init(metadata, 2.0);
     if (const AnnResult result = linear_clone->Search(query_point); result.point_id != 0 || result.distance != 0.0) {
         std::filesystem::remove_all(temp_dir);
-        return 1;
+        return 2;
     }
 
     QalshAnnSearcher qalsh(2.0);
@@ -54,12 +61,12 @@ int main() {
     qalsh_clone->Init(metadata, 2.0);
     if (const AnnResult result = qalsh_clone->Search(query_point); result.point_id != 0 || result.distance != 0.0) {
         std::filesystem::remove_all(temp_dir);
-        return 2;
+        return 3;
     }
 
     if (std::filesystem::exists(temp_dir / "index")) {
         std::filesystem::remove_all(temp_dir);
-        return 3;
+        return 4;
     }
 
     std::filesystem::remove_all(temp_dir);

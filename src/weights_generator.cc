@@ -92,11 +92,11 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     }
 #else
     ann_searcher_->Init(to_metadata, norm_order);
-    PointSet base;
-    base.Init(from_metadata);
+    std::vector<Point> query_points =
+        PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
 
     for (unsigned int i = 0; i < from_metadata.num_points; i++) {
-        weights[i] = ann_searcher_->Search(base.ReadPoint(i)).distance;
+        weights[i] = ann_searcher_->Search(query_points[i]).distance;
     }
 #endif
 

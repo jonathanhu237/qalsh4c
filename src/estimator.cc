@@ -94,13 +94,12 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 #else
     ann_searcher_->Init(to, norm_order);
 
-    PointSet queries;
-    queries.Init(from);
+    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
 
     std::vector<double> distances;
     distances.reserve(from.num_points);
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
-        distances.emplace_back(ann_searcher_->Search(queries.ReadPoint(point_id)).distance);
+        distances.emplace_back(ann_searcher_->Search(query_points[point_id]).distance);
     }
 #endif
 
@@ -322,15 +321,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     LinearScanAnnSearcher ann_searcher;
     ann_searcher.Init(to, norm_order);
 
-    PointSet queries;
-    queries.Init(from);
+    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
 
     if (exact_batch_size == 1) {
         for (const auto& [point_id, count] : sample_counts) {
             const double initial_upper_bound =
                 weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
             const double nearest_distance =
-                ann_searcher.SearchWithUpperBound(queries.ReadPoint(point_id), initial_upper_bound).distance;
+                ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
             estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
         }
     } else {
@@ -355,7 +353,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 const auto& [point_id, count] = sample_counts[sample_index];
                 batch_point_ids.push_back(point_id);
                 batch_counts.push_back(count);
-                batch_queries.push_back(queries.ReadPoint(point_id));
+                batch_queries.push_back(query_points[point_id]);
                 batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
                                                                       : std::numeric_limits<double>::infinity());
             }

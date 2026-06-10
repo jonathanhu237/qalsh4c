@@ -25,8 +25,13 @@ std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
 }
 
 void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
-    base_.Init(metadata);
     norm_order_ = norm_order;
+    num_points_ = metadata.num_points;
+    num_dimensions_ = metadata.num_dimensions;
+    base_points_ = PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_);
+    if (base_points_.size() != num_points_) {
+        Log::error("Failed to load all target points for in-memory linear scan.");
+    }
 }
 
 AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
@@ -36,13 +41,8 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, double initial_upper_bound) {
     AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
-    base_.SeekPoint(0);
-    for (unsigned int i = 0; i < base_.get_num_points(); i++) {
-        if (!base_.ReadNextPointInto(scratch_point_)) {
-            Log::error("Failed to read point {} during linear scan.", i);
-        }
-
-        double distance = Calc::LpDistanceBounded(scratch_point_, query_point, norm_order_, result.distance);
+    for (unsigned int i = 0; i < num_points_; i++) {
+        double distance = Calc::LpDistanceBounded(base_points_[i], query_point, norm_order_, result.distance);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -63,14 +63,9 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
         results[query_index] = AnnResult{.distance = initial_upper_bounds[query_index], .point_id = 0};
     }
 
-    base_.SeekPoint(0);
-    for (unsigned int point_id = 0; point_id < base_.get_num_points(); ++point_id) {
-        if (!base_.ReadNextPointInto(scratch_point_)) {
-            Log::error("Failed to read point {} during batched linear scan.", point_id);
-        }
-
+    for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
         for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
-            const double distance = Calc::LpDistanceBounded(scratch_point_, query_points[query_index], norm_order_,
+            const double distance = Calc::LpDistanceBounded(base_points_[point_id], query_points[query_index], norm_order_,
                                                             results[query_index].distance);
             if (distance < results[query_index].distance) {
                 results[query_index].distance = distance;
