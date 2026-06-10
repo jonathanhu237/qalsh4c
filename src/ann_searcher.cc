@@ -156,6 +156,23 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
 
     index_data->searchers.clear();
     index_data->searchers.resize(index_data->qalsh_config.num_hash_tables);
+    std::vector<std::vector<DotProductPointIdPair>> entries_by_table(index_data->qalsh_config.num_hash_tables);
+    for (std::vector<DotProductPointIdPair>& entries : entries_by_table) {
+        entries.resize(index_data->num_points);
+    }
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long point_index = 0; point_index < static_cast<long long>(index_data->num_points); ++point_index) {
+        const auto point_id = static_cast<unsigned int>(point_index);
+        const Point& base_point = index_data->base_points[point_id];
+        for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
+            entries_by_table[table_id][point_id] =
+                DotProductPointIdPair{.dot_product = Calc::DotProduct(base_point, index_data->dot_vectors[table_id]),
+                                      .point_id = point_id};
+        }
+    }
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
@@ -163,14 +180,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     for (long long table_index = 0; table_index < static_cast<long long>(index_data->qalsh_config.num_hash_tables);
          ++table_index) {
         const auto table_id = static_cast<unsigned int>(table_index);
-        std::vector<DotProductPointIdPair> entries;
-        entries.reserve(index_data->num_points);
-        for (unsigned int point_id = 0; point_id < index_data->num_points; ++point_id) {
-            entries.push_back(DotProductPointIdPair{.dot_product = Calc::DotProduct(index_data->base_points[point_id],
-                                                                                    index_data->dot_vectors[table_id]),
-                                                    .point_id = point_id});
-        }
-        index_data->searchers[table_id].Build(std::move(entries));
+        index_data->searchers[table_id].Build(std::move(entries_by_table[table_id]));
     }
 
     index_data_ = std::move(index_data);

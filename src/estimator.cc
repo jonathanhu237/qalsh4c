@@ -49,6 +49,21 @@ unsigned int ResolveExactBatchSize(unsigned int requested_batch_size, size_t num
     return static_cast<unsigned int>(std::clamp(batch_size, size_t{1}, kMaxAutoExactScanBatchSize));
 }
 
+std::vector<Point> LoadSampledQueryPoints(const PointSetMetadata& metadata,
+                                          const std::vector<std::pair<unsigned int, unsigned int>>& sample_counts) {
+    PointSet point_set;
+    point_set.Init(metadata);
+
+    std::vector<Point> query_points;
+    query_points.reserve(sample_counts.size());
+    for (const auto& [point_id, count] : sample_counts) {
+        (void)count;
+        query_points.push_back(point_set.ReadPoint(point_id));
+    }
+
+    return query_points;
+}
+
 double BinaryKlDivergence(double x, double y) {
     if (x < 0.0 || x > 1.0 || y <= 0.0 || y >= 1.0) {
         Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
@@ -250,7 +265,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
 #ifdef QALSH4C_USE_OPENMP
-    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
     LinearScanAnnSearcher shared_ann_searcher;
     shared_ann_searcher.Init(to, norm_order);
     double estimation = 0.0;
@@ -267,7 +282,9 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 const double initial_upper_bound =
                     weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
                 const double nearest_distance =
-                    ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
+                    ann_searcher.SearchWithUpperBound(query_points[static_cast<size_t>(sample_index)],
+                                                      initial_upper_bound)
+                        .distance;
                 estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
             }
         } else {
@@ -295,7 +312,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                     const auto& [point_id, count] = sample_counts[sample_index];
                     batch_point_ids.push_back(point_id);
                     batch_counts.push_back(count);
-                    batch_queries.push_back(query_points[point_id]);
+                    batch_queries.push_back(query_points[sample_index]);
                     batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
                                                                           : std::numeric_limits<double>::infinity());
                 }
@@ -316,14 +333,15 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     LinearScanAnnSearcher ann_searcher;
     ann_searcher.Init(to, norm_order);
 
-    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
 
     if (exact_batch_size == 1) {
-        for (const auto& [point_id, count] : sample_counts) {
+        for (size_t sample_index = 0; sample_index < sample_counts.size(); ++sample_index) {
+            const auto& [point_id, count] = sample_counts[sample_index];
             const double initial_upper_bound =
                 weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
             const double nearest_distance =
-                ann_searcher.SearchWithUpperBound(query_points[point_id], initial_upper_bound).distance;
+                ann_searcher.SearchWithUpperBound(query_points[sample_index], initial_upper_bound).distance;
             estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
         }
     } else {
@@ -348,7 +366,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 const auto& [point_id, count] = sample_counts[sample_index];
                 batch_point_ids.push_back(point_id);
                 batch_counts.push_back(count);
-                batch_queries.push_back(query_points[point_id]);
+                batch_queries.push_back(query_points[sample_index]);
                 batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
                                                                       : std::numeric_limits<double>::infinity());
             }
