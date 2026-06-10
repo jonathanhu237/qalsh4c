@@ -74,9 +74,10 @@ bool InMemoryQalshTable::IncrementalSearchLeft(InMemoryQalshTableCursor& cursor,
         return true;
     }
 
+    const DotProductPointIdPair* entries = entries_.data();
     for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
         const size_t index = *cursor.left;
-        const DotProductPointIdPair& entry = entries_[index];
+        const DotProductPointIdPair& entry = entries[index];
         if (cursor.query_key - entry.dot_product > bound) {
             return true;
         }
@@ -100,16 +101,18 @@ bool InMemoryQalshTable::IncrementalSearchRight(InMemoryQalshTableCursor& cursor
         return true;
     }
 
+    const DotProductPointIdPair* entries = entries_.data();
+    const size_t num_entries = entries_.size();
     for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
         const size_t index = *cursor.right;
-        const DotProductPointIdPair& entry = entries_[index];
+        const DotProductPointIdPair& entry = entries[index];
         if (entry.dot_product - cursor.query_key > bound) {
             return true;
         }
 
         std::forward<Handler>(handler)(entry.point_id, entry.dot_product);
 
-        if (index + 1 >= entries_.size()) {
+        if (index + 1 >= num_entries) {
             cursor.right = std::nullopt;
             return true;
         }
