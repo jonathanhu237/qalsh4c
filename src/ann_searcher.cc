@@ -13,6 +13,26 @@
 #include "point_set.h"
 #include "utils.h"
 
+namespace {
+
+double DotProductRaw(const Point& lhs, const Point& rhs) {
+    double result = 0.0;
+    const double* lhs_data = lhs.data();
+    const double* rhs_data = rhs.data();
+    const auto num_dimensions = static_cast<long long>(lhs.size());
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp simd reduction(+ : result)
+#endif
+    for (long long dimension = 0; dimension < num_dimensions; ++dimension) {
+        result += lhs_data[dimension] * rhs_data[dimension];
+    }
+
+    return result;
+}
+
+}  // namespace
+
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
@@ -185,7 +205,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
         const Point& base_point = index_data->base_points[point_id];
         for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
             entries_by_table[table_id][point_id] =
-                DotProductPointIdPair{.dot_product = Calc::DotProduct(base_point, index_data->dot_vectors[table_id]),
+                DotProductPointIdPair{.dot_product = DotProductRaw(base_point, index_data->dot_vectors[table_id]),
                                       .point_id = point_id};
         }
     }
@@ -247,7 +267,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
     for (unsigned int i = 0; i < num_hash_tables; i++) {
         search_cursors_[i] =
-            index_data.searchers[i].InitCursor(Calc::DotProduct(query_point, index_data.dot_vectors[i]));
+            index_data.searchers[i].InitCursor(DotProductRaw(query_point, index_data.dot_vectors[i]));
     }
 
     // c-ANN search
