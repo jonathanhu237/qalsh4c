@@ -64,6 +64,18 @@ std::vector<Point> LoadSampledQueryPoints(const PointSetMetadata& metadata,
     return query_points;
 }
 
+void InitExactScanSearcher(LinearScanAnnSearcher& ann_searcher, const PointSetMetadata& metadata, double norm_order,
+                           const std::shared_ptr<const std::vector<Point>>& loaded_target_points) {
+    if (loaded_target_points) {
+        if (loaded_target_points->size() != metadata.num_points) {
+            Log::error("Loaded target point count does not match exact scan metadata.");
+        }
+        ann_searcher.InitLoaded(loaded_target_points, metadata.num_dimensions, norm_order);
+        return;
+    }
+    ann_searcher.Init(metadata, norm_order);
+}
+
 double BinaryKlDivergence(double x, double y) {
     if (x < 0.0 || x > 1.0 || y <= 0.0 || y >= 1.0) {
         Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
@@ -236,6 +248,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     if (weights.size() != from.num_points) {
         Log::error("Weights size does not match the number of query points in the dataset");
     }
+    const std::shared_ptr<const std::vector<Point>> loaded_target_points =
+        qalsh_weights_generator == nullptr ? nullptr : qalsh_weights_generator->TargetPoints();
 
     // Sample the points using the generated weights.
     WeightedSampler sampler(weights);
@@ -267,7 +281,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
     LinearScanAnnSearcher shared_ann_searcher;
-    shared_ann_searcher.Init(to, norm_order);
+    InitExactScanSearcher(shared_ann_searcher, to, norm_order, loaded_target_points);
     double estimation = 0.0;
 
 #pragma omp parallel reduction(+ : estimation)
@@ -331,7 +345,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 #else
     double estimation = 0.0;
     LinearScanAnnSearcher ann_searcher;
-    ann_searcher.Init(to, norm_order);
+    InitExactScanSearcher(ann_searcher, to, norm_order, loaded_target_points);
 
     std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
 

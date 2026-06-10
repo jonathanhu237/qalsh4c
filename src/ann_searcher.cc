@@ -25,14 +25,23 @@ std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
 }
 
 void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
-    norm_order_ = norm_order;
-    num_points_ = metadata.num_points;
-    num_dimensions_ = metadata.num_dimensions;
     auto base_points = std::make_shared<std::vector<Point>>(
-        PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_));
-    if (base_points->size() != num_points_) {
+        PointSet::LoadPointsFromFile(metadata.file_path, metadata.num_points, metadata.num_dimensions));
+    if (base_points->size() != metadata.num_points) {
         Log::error("Failed to load all target points for in-memory linear scan.");
     }
+    InitLoaded(std::move(base_points), metadata.num_dimensions, norm_order);
+}
+
+void LinearScanAnnSearcher::InitLoaded(std::shared_ptr<const std::vector<Point>> base_points,
+                                       unsigned int num_dimensions, double norm_order) {
+    if (!base_points) {
+        Log::error("Loaded target points are not set.");
+    }
+
+    norm_order_ = norm_order;
+    num_points_ = static_cast<unsigned int>(base_points->size());
+    num_dimensions_ = num_dimensions;
     base_points_ = std::move(base_points);
 }
 
@@ -105,6 +114,13 @@ std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
     clone->index_data_ = index_data_;
     clone->ResetSearchState();
     return clone;
+}
+
+std::shared_ptr<const std::vector<Point>> QalshAnnSearcher::TargetPoints() const {
+    if (!index_data_) {
+        return {};
+    }
+    return std::shared_ptr<const std::vector<Point>>(index_data_, &index_data_->base_points);
 }
 
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {

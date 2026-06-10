@@ -38,6 +38,7 @@ class QalshWeightsGenerator : public WeightsGenerator {
     explicit QalshWeightsGenerator(double approximation_ratio = Global::kDefaultApproximationRatio);
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] QalshConfig BuildConfig(unsigned int num_points, double norm_order) const;
+    [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  double norm_order, bool use_cache) override;
 

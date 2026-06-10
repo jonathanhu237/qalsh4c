@@ -45,6 +45,14 @@ QalshConfig QalshWeightsGenerator::BuildConfig(unsigned int num_points, double n
     return config;
 }
 
+std::shared_ptr<const std::vector<Point>> QalshWeightsGenerator::TargetPoints() const {
+    const auto* qalsh_searcher = dynamic_cast<const QalshAnnSearcher*>(ann_searcher_.get());
+    if (qalsh_searcher == nullptr) {
+        return {};
+    }
+    return qalsh_searcher->TargetPoints();
+}
+
 std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                     const PointSetMetadata& to_metadata, double norm_order,
                                                     bool use_cache) {

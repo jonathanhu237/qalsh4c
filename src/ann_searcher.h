@@ -39,6 +39,8 @@ class LinearScanAnnSearcher : public AnnSearcher {
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
+    void InitLoaded(std::shared_ptr<const std::vector<Point>> base_points, unsigned int num_dimensions,
+                    double norm_order);
     AnnResult Search(const Point& query_point) override;
     AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
     std::vector<AnnResult> SearchBatchWithUpperBounds(const std::vector<Point>& query_points,
@@ -70,6 +72,7 @@ class QalshAnnSearcher : public AnnSearcher {
     QalshAnnSearcher(double approximation_ratio, std::mt19937::result_type random_seed);
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
+    [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
