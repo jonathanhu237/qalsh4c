@@ -130,16 +130,6 @@ Known raw datasets can be converted with:
 
 Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. SIFT and GIST conversion read only `sift_base.fvecs` and `gist_base.fvecs`; `learn` and `query` files are kept as raw inputs but are not mixed into the prepared dataset. MNIST conversion reads `train-images-idx3-ubyte` and `t10k-images-idx3-ubyte` from the raw directory and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
 
-## Index
-
-To use QALSH for estimating the Chamfer distance, you first need to build an index using `index` command. The following command will index the `./data/federalist` dataset under $\ell_2$ norm:
-
-```bash
-./build/dev/qalsh4c index -p 2 -d data/federalist --direction both
-```
-
-The `--direction` option accepts `ab`, `ba`, or `both`. `ab` is the default and builds the target-side `B` index for `A -> B` estimation; `ba` builds the target-side `A` index; `both` builds both indexes. Once the index is built, you can find the index files in the `./data/federalist/index/l2` directory.
-
 ## Estimate
 
 We provide four methods for estimating the Chamfer distance:
@@ -149,9 +139,21 @@ We provide four methods for estimating the Chamfer distance:
 - Uniform Sampling
 - QALSH Sampling
 
+QALSH now uses an in-memory index. There is no separate `index` command and no
+`data/<dataset>/index` directory is required. QALSH ANN and QALSH sampling build
+the needed target-side hash tables inside the current process from `A.bin` and
+`B.bin`. Configure the approximation ratio on the QALSH subcommand:
+
+```bash
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab ann qalsh -c 2
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 100 qalsh -c 2
+```
+
 For QALSH sampling, omit `--num-samples` to let the implementation choose the sample count automatically. The automatic count uses the QALSH4C bound
 `ceil((c^2 * (1 - delta0) / (1 - c * delta0) - 1) / (delta * epsilon^2))`, where
-`delta0 = exp(-m * KL((l - 1) / m, p1))`; tune the estimator with `--epsilon` and `--delta`.
+`delta0 = exp(-m * KL((l - 1) / m, p1))`; tune the estimator with `--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
+
+`sampling qalsh --use-cache` still stores and reads raw `double` weight files such as `l2_qalsh_weights_A.bin`. When the cache exists, QALSH sampling reads those weights directly and skips QALSH weight generation for that direction.
 
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the GMM sample dataset to check the exact directed distances without building an index:
 

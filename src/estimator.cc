@@ -133,7 +133,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     if (!weights_generator_) {
         Log::error("The ANN searcher is not set.");
     }
-    const bool weights_are_upper_bounds = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get()) != nullptr;
+    auto* qalsh_weights_generator = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get());
+    const bool weights_are_upper_bounds = qalsh_weights_generator != nullptr;
 
     // Determine the direction and select the appropriate sample count
     std::string from_name = from.file_path.stem().string();
@@ -175,10 +176,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 Log::error("Delta must be in (0, 1) for automatic QALSH sampling.");
             }
 
-            std::filesystem::path index_directory =
-                to.file_path.parent_path() / "index" / std::format("l{}", norm_order) / to.file_path.stem();
-            QalshConfig qalsh_config;
-            qalsh_config.Load(index_directory / "config.json");
+            QalshConfig qalsh_config = qalsh_weights_generator->BuildConfig(to.num_points, norm_order);
 
             const unsigned int m = qalsh_config.num_hash_tables;
             const unsigned int l = qalsh_config.collision_threshold;

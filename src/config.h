@@ -34,9 +34,6 @@ struct QalshConfig {
     double error_probability{0.0};
     unsigned int num_hash_tables{0};
     unsigned int collision_threshold{0};
-    unsigned int page_size{0};
 
-    void Save(const std::filesystem::path &file_path);
-    void Load(const std::filesystem::path &file_path);
     void Regularize(unsigned int num_points, double norm_order);
 };

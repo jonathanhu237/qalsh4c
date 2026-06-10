@@ -2,12 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
-#include <format>
+#include <functional>
 #include <limits>
 #include <queue>
+#include <random>
 #include <vector>
 
-#include "b_plus_tree.h"
+#include "global.h"
 #include "log.h"
 #include "point_set.h"
 #include "utils.h"
@@ -84,42 +85,82 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
+QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio)
+    : QalshAnnSearcher(approximation_ratio, Random::SeededGenerator()()) {}
+
+QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio, std::mt19937::result_type random_seed)
+    : approximation_ratio_(approximation_ratio),
+      random_seed_(random_seed) {}
+
 bool QalshAnnSearcher::RequiresIndex() const {
-    return true;
+    return false;
 }
 
 std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
-    return std::make_unique<QalshAnnSearcher>();
+    return std::make_unique<QalshAnnSearcher>(approximation_ratio_, random_seed_);
 }
 
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
-    base_.Init(metadata);
     norm_order_ = norm_order;
+    num_points_ = metadata.num_points;
+    num_dimensions_ = metadata.num_dimensions;
 
-    // Load QALSH configuration.
-    std::filesystem::path index_directory =
-        metadata.file_path.parent_path() / "index" / std::format("l{}", norm_order_) / metadata.file_path.stem();
-    qalsh_config_.Load(index_directory / "config.json");
-
-    // Load the dot vectors.
-    std::ifstream dot_vector_file(index_directory / "dot_vectors.bin", std::ios::binary);
-    if (!dot_vector_file.is_open()) {
-        Log::error("Failed to open dot vectors file: {}", (index_directory / "dot_vectors.bin").string());
-        return;
+    if (num_points_ == 0 || num_dimensions_ == 0) {
+        Log::error("QALSH requires a non-empty point set with non-zero dimensions.");
     }
-    dot_vectors_ = PointSet::LoadPointsFromFile(index_directory / "dot_vectors.bin", qalsh_config_.num_hash_tables,
-                                                base_.get_num_dimensions());
 
-    // Create B+ tree searchers.
+    qalsh_config_ = QalshConfig{.approximation_ratio = approximation_ratio_};
+    qalsh_config_.Regularize(num_points_, norm_order_);
+    Log::info(
+        "Building in-memory QALSH index with approximation ratio {}, bucket width {}, {} hash tables, collision "
+        "threshold {}.",
+        qalsh_config_.approximation_ratio, qalsh_config_.bucket_width, qalsh_config_.num_hash_tables,
+        qalsh_config_.collision_threshold);
+
+    base_points_ = PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_);
+    if (base_points_.size() != num_points_) {
+        Log::error("Failed to load all target points for in-memory QALSH index.");
+    }
+
+    std::function<double()> coordinate_generator;
+    std::mt19937 gen(random_seed_);
+    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
+        std::cauchy_distribution<double> dist(0.0, 1.0);
+        coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
+    } else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
+        std::normal_distribution<double> dist(0.0, 1.0);
+        coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
+    } else {
+        Log::error("Unsupported norm order: {}", norm_order_);
+    }
+
+    dot_vectors_.clear();
+    dot_vectors_.reserve(qalsh_config_.num_hash_tables);
+    for (unsigned int table_id = 0; table_id < qalsh_config_.num_hash_tables; ++table_id) {
+        Point dot_vector;
+        dot_vector.reserve(num_dimensions_);
+        for (unsigned int dimension = 0; dimension < num_dimensions_; ++dimension) {
+            dot_vector.push_back(coordinate_generator());
+        }
+        dot_vectors_.push_back(std::move(dot_vector));
+    }
+
     searchers_.clear();
     searchers_.reserve(qalsh_config_.num_hash_tables);
-    for (unsigned int i = 0; i < qalsh_config_.num_hash_tables; i++) {
-        searchers_.emplace_back(index_directory / "b_plus_trees" / std::format("{}.bin", i), qalsh_config_.page_size);
+    for (unsigned int table_id = 0; table_id < qalsh_config_.num_hash_tables; ++table_id) {
+        std::vector<DotProductPointIdPair> entries;
+        entries.reserve(num_points_);
+        for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
+            entries.push_back(DotProductPointIdPair{.dot_product = Calc::DotProduct(base_points_[point_id],
+                                                                                    dot_vectors_[table_id]),
+                                                    .point_id = point_id});
+        }
+        searchers_.emplace_back(std::move(entries));
     }
 
-    collision_counts_.assign(base_.get_num_points(), 0);
-    collision_stamps_.assign(base_.get_num_points(), 0);
-    visited_stamps_.assign(base_.get_num_points(), 0);
+    collision_counts_.assign(num_points_, 0);
+    collision_stamps_.assign(num_points_, 0);
+    visited_stamps_.assign(num_points_, 0);
     search_epoch_ = 0;
 }
 
@@ -183,8 +224,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
                     if (++collision_counts_[point_id] >= collision_threshold) {
                         visited_stamps_[point_id] = epoch;
-                        base_.ReadPointInto(point_id, candidate_scratch_point_);
-                        double distance = Calc::LpDistanceBounded(candidate_scratch_point_, query_point, norm_order_,
+                        const Point& candidate_point = base_points_[point_id];
+                        double distance = Calc::LpDistanceBounded(candidate_point, query_point, norm_order_,
                                                                   best_candidate.distance);
                         if (distance < best_candidate.distance) {
                             has_candidate = true;

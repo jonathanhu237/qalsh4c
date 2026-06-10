@@ -1,10 +1,15 @@
 #include "weights_generator.h"
 
 #include <cstddef>
+#include <filesystem>
+#include <format>
+#include <fstream>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "config.h"
 #include "log.h"
 #include "point_set.h"
 
@@ -26,10 +31,18 @@ std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // --------------------------------------------------
 // QalshWeightsGenerator Implementation
 // --------------------------------------------------
-QalshWeightsGenerator::QalshWeightsGenerator() : ann_searcher_(std::make_unique<QalshAnnSearcher>()) {}
+QalshWeightsGenerator::QalshWeightsGenerator(double approximation_ratio)
+    : approximation_ratio_(approximation_ratio),
+      ann_searcher_(std::make_unique<QalshAnnSearcher>(approximation_ratio_)) {}
 
 bool QalshWeightsGenerator::RequiresIndex() const {
-    return true;
+    return false;
+}
+
+QalshConfig QalshWeightsGenerator::BuildConfig(unsigned int num_points, double norm_order) const {
+    QalshConfig config{.approximation_ratio = approximation_ratio_};
+    config.Regularize(num_points, norm_order);
+    return config;
 }
 
 std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
@@ -39,13 +52,21 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
     std::filesystem::path weights_path = parent_directory / std::format("l{}_qalsh_weights_{}.bin", norm_order, stem);
+    const auto expected_bytes =
+        static_cast<std::streamsize>(sizeof(double) * static_cast<size_t>(from_metadata.num_points));
 
     if (use_cache) {
         Log::warn("The weights will be read from the cache file if it exists.");
         if (std::filesystem::exists(weights_path)) {
-            std::ifstream ifs(weights_path);
-            ifs.read(reinterpret_cast<char*>(weights.data()),
-                     static_cast<std::streamoff>(sizeof(double) * from_metadata.num_points));
+            std::ifstream ifs(weights_path, std::ios::binary);
+            if (!ifs.is_open()) {
+                Log::error("Failed to open QALSH weights cache file: {}", weights_path.string());
+            }
+            ifs.read(reinterpret_cast<char*>(weights.data()), expected_bytes);
+            if (ifs.gcount() != expected_bytes) {
+                Log::error("QALSH weights cache file is incomplete: expected {} bytes, read {} bytes from {}",
+                           expected_bytes, ifs.gcount(), weights_path.string());
+            }
             return weights;
         }
         Log::warn("Cache file doesn't exist. Generating the new one...");
@@ -80,9 +101,11 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 #endif
 
     if (use_cache) {
-        std::ofstream ofs(weights_path);
-        ofs.write(reinterpret_cast<const char*>(weights.data()),
-                  static_cast<std::streamoff>(sizeof(double) * from_metadata.num_points));
+        std::ofstream ofs(weights_path, std::ios::binary | std::ios::trunc);
+        if (!ofs.is_open()) {
+            Log::error("Failed to open QALSH weights cache file for writing: {}", weights_path.string());
+        }
+        ofs.write(reinterpret_cast<const char*>(weights.data()), expected_bytes);
     }
 
     return weights;

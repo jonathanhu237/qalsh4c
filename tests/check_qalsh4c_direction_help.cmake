@@ -16,5 +16,4 @@ function(check_help command_name)
     endif()
 endfunction()
 
-check_help(index)
 check_help(estimate)

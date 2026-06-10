@@ -18,3 +18,7 @@ endif()
 if(NOT qalsh4c_help_output MATCHES "QALSH")
     message(FATAL_ERROR "Unexpected qalsh4c --help output: missing expected application text")
 endif()
+
+if(qalsh4c_help_output MATCHES "[\r\n][ \t]+index[ \t\r\n]")
+    message(FATAL_ERROR "Unexpected removed index command in qalsh4c --help output:\n${qalsh4c_help_output}")
+endif()

@@ -1,8 +1,11 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "ann_searcher.h"
+#include "config.h"
+#include "global.h"
 #include "point_set.h"
 
 // --------------------------------------------------
@@ -32,11 +35,13 @@ class UniformWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
-    QalshWeightsGenerator();
+    explicit QalshWeightsGenerator(double approximation_ratio = Global::kDefaultApproximationRatio);
     [[nodiscard]] bool RequiresIndex() const override;
+    [[nodiscard]] QalshConfig BuildConfig(unsigned int num_points, double norm_order) const;
     std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  double norm_order, bool use_cache) override;
 
    private:
+    double approximation_ratio_{Global::kDefaultApproximationRatio};
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };

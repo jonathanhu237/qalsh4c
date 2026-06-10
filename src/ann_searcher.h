@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <random>
 #include <vector>
 
-#include "b_plus_tree.h"
 #include "config.h"
+#include "global.h"
 #include "point_set.h"
+#include "qalsh_index.h"
 
 struct AnnResult {
     double distance{0.0};
@@ -53,19 +55,23 @@ class LinearScanAnnSearcher : public AnnSearcher {
 // ---------------------------------------------
 class QalshAnnSearcher : public AnnSearcher {
    public:
-    QalshAnnSearcher() = default;
+    explicit QalshAnnSearcher(double approximation_ratio = Global::kDefaultApproximationRatio);
+    QalshAnnSearcher(double approximation_ratio, std::mt19937::result_type random_seed);
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, double norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
-    PointSet base_;
+    double approximation_ratio_{Global::kDefaultApproximationRatio};
+    std::mt19937::result_type random_seed_{Global::kDefaultSeed};
     double norm_order_{0.0};
+    unsigned int num_points_{0};
+    unsigned int num_dimensions_{0};
     QalshConfig qalsh_config_;
+    std::vector<Point> base_points_;
     std::vector<Point> dot_vectors_;
-    std::vector<BPlusTreeSearcher> searchers_;
-    Point candidate_scratch_point_;
+    std::vector<InMemoryQalshTable> searchers_;
     std::vector<unsigned int> collision_counts_;
     std::vector<unsigned int> collision_stamps_;
     std::vector<unsigned int> visited_stamps_;
