@@ -13,6 +13,38 @@
 #include "point_set.h"
 #include "utils.h"
 
+namespace {
+
+void ProjectPointInto(const Point& point, const std::vector<double>& projection_vectors_by_dimension,
+                      unsigned int num_hash_tables, std::vector<double>& dot_products) {
+    if (dot_products.size() != num_hash_tables) {
+        dot_products.assign(num_hash_tables, 0.0);
+    } else {
+        std::ranges::fill(dot_products, 0.0);
+    }
+    for (size_t dimension = 0; dimension < point.size(); ++dimension) {
+        const double coordinate = point[dimension];
+        const double* projection_values =
+            projection_vectors_by_dimension.data() + (dimension * static_cast<size_t>(num_hash_tables));
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp simd
+#endif
+        for (unsigned int table_id = 0; table_id < num_hash_tables; ++table_id) {
+            dot_products[table_id] += coordinate * projection_values[table_id];
+        }
+    }
+}
+
+std::vector<double> ProjectPoint(const Point& point, const std::vector<double>& projection_vectors_by_dimension,
+                                 unsigned int num_hash_tables) {
+    std::vector<double> dot_products;
+    ProjectPointInto(point, projection_vectors_by_dimension, num_hash_tables, dot_products);
+    return dot_products;
+}
+
+}  // namespace
+
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
@@ -159,15 +191,16 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
         Log::error("Unsupported norm order: {}", norm_order);
     }
 
-    index_data->dot_vectors.clear();
-    index_data->dot_vectors.reserve(index_data->qalsh_config.num_hash_tables);
+    index_data->projection_vectors_by_dimension.assign(
+        static_cast<size_t>(index_data->num_dimensions) * static_cast<size_t>(index_data->qalsh_config.num_hash_tables),
+        0.0);
     for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
-        Point dot_vector;
-        dot_vector.reserve(index_data->num_dimensions);
         for (unsigned int dimension = 0; dimension < index_data->num_dimensions; ++dimension) {
-            dot_vector.push_back(coordinate_generator());
+            const size_t projection_index =
+                (static_cast<size_t>(dimension) * static_cast<size_t>(index_data->qalsh_config.num_hash_tables)) +
+                static_cast<size_t>(table_id);
+            index_data->projection_vectors_by_dimension[projection_index] = coordinate_generator();
         }
-        index_data->dot_vectors.push_back(std::move(dot_vector));
     }
 
     index_data->searchers.clear();
@@ -178,17 +211,33 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     }
 
 #ifdef QALSH4C_USE_OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for (long long point_index = 0; point_index < static_cast<long long>(index_data->num_points); ++point_index) {
-        const auto point_id = static_cast<unsigned int>(point_index);
-        const Point& base_point = index_data->base_points[point_id];
-        for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
-            entries_by_table[table_id][point_id] =
-                DotProductPointIdPair{.dot_product = Calc::DotProduct(base_point, index_data->dot_vectors[table_id]),
-                                      .point_id = point_id};
+#pragma omp parallel
+    {
+        std::vector<double> dot_products;
+#pragma omp for schedule(static)
+        for (long long point_index = 0; point_index < static_cast<long long>(index_data->num_points); ++point_index) {
+            const auto point_id = static_cast<unsigned int>(point_index);
+            const Point& base_point = index_data->base_points[point_id];
+            ProjectPointInto(base_point, index_data->projection_vectors_by_dimension,
+                             index_data->qalsh_config.num_hash_tables, dot_products);
+            for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
+                entries_by_table[table_id][point_id] =
+                    DotProductPointIdPair{.dot_product = dot_products[table_id], .point_id = point_id};
+            }
         }
     }
+#else
+    std::vector<double> dot_products;
+    for (unsigned int point_id = 0; point_id < index_data->num_points; ++point_id) {
+        const Point& base_point = index_data->base_points[point_id];
+        ProjectPointInto(base_point, index_data->projection_vectors_by_dimension,
+                         index_data->qalsh_config.num_hash_tables, dot_products);
+        for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
+            entries_by_table[table_id][point_id] =
+                DotProductPointIdPair{.dot_product = dot_products[table_id], .point_id = point_id};
+        }
+    }
+#endif
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
@@ -245,9 +294,10 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     double bucket_width = index_data.qalsh_config.bucket_width;
     double approximation_ratio = index_data.qalsh_config.approximation_ratio;
 
+    const std::vector<double> query_dot_products =
+        ProjectPoint(query_point, index_data.projection_vectors_by_dimension, num_hash_tables);
     for (unsigned int i = 0; i < num_hash_tables; i++) {
-        search_cursors_[i] =
-            index_data.searchers[i].InitCursor(Calc::DotProduct(query_point, index_data.dot_vectors[i]));
+        search_cursors_[i] = index_data.searchers[i].InitCursor(query_dot_products[i]);
     }
 
     // c-ANN search
