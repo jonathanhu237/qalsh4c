@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <thread>
 
 #include "ann_searcher.h"
 #include "command.h"
@@ -15,11 +16,27 @@
 #include <omp.h>
 #endif
 
+namespace {
+
+unsigned int DefaultThreadCount() {
+#ifdef QALSH4C_USE_OPENMP
+    const int num_processors = omp_get_num_procs();
+    if (num_processors > 0) {
+        return static_cast<unsigned int>(num_processors);
+    }
+#endif
+
+    const unsigned int hardware_threads = std::thread::hardware_concurrency();
+    return hardware_threads == 0 ? 1 : hardware_threads;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
     // Parse command-line arguments.
     CLI::App app{"Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH)."};
 
-    unsigned int thread_count{1};
+    unsigned int thread_count{DefaultThreadCount()};
     app.add_option("-T,--threads", thread_count, "Number of OpenMP threads")
         ->default_val(thread_count)
         ->check(CLI::PositiveNumber);
