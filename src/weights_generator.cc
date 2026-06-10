@@ -93,7 +93,7 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     {
         std::unique_ptr<AnnSearcher> local_searcher = ann_searcher_->Clone();
 
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(static)
         for (long long query_index = 0; query_index < static_cast<long long>(from_metadata.num_points); ++query_index) {
             const auto point_id = static_cast<std::size_t>(query_index);
             weights[point_id] = local_searcher->Search(query_points[point_id]).distance;

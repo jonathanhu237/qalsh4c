@@ -191,7 +191,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     }
 
 #ifdef QALSH4C_USE_OPENMP
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 #endif
     for (long long table_index = 0; table_index < static_cast<long long>(index_data->qalsh_config.num_hash_tables);
          ++table_index) {
