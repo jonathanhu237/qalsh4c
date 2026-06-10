@@ -155,8 +155,14 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     }
 
     index_data->searchers.clear();
-    index_data->searchers.reserve(index_data->qalsh_config.num_hash_tables);
-    for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
+    index_data->searchers.resize(index_data->qalsh_config.num_hash_tables);
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(dynamic)
+#endif
+    for (long long table_index = 0; table_index < static_cast<long long>(index_data->qalsh_config.num_hash_tables);
+         ++table_index) {
+        const auto table_id = static_cast<unsigned int>(table_index);
         std::vector<DotProductPointIdPair> entries;
         entries.reserve(index_data->num_points);
         for (unsigned int point_id = 0; point_id < index_data->num_points; ++point_id) {
@@ -164,7 +170,7 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
                                                                                     index_data->dot_vectors[table_id]),
                                                     .point_id = point_id});
         }
-        index_data->searchers.emplace_back(std::move(entries));
+        index_data->searchers[table_id].Build(std::move(entries));
     }
 
     index_data_ = std::move(index_data);
