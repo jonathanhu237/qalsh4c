@@ -59,7 +59,7 @@ struct QalshAnnIndexData {
     unsigned int num_dimensions{0};
     QalshConfig qalsh_config;
     std::vector<Point> base_points;
-    std::vector<double> projection_vectors_by_dimension;
+    std::vector<Point> dot_vectors;
     std::vector<InMemoryQalshTable> searchers;
 };
 
