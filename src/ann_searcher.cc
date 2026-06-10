@@ -13,6 +13,45 @@
 #include "point_set.h"
 #include "utils.h"
 
+namespace {
+
+bool IsL1(double norm_order) {
+    return std::abs(norm_order - 1.0) < Global::kEpsilon;
+}
+
+bool IsL2(double norm_order) {
+    return std::abs(norm_order - 2.0) < Global::kEpsilon;
+}
+
+double SquaredUpperBound(double upper_bound) {
+    return std::isinf(upper_bound) ? std::numeric_limits<double>::infinity() : upper_bound * upper_bound;
+}
+
+double L1DistanceBounded(const Point& point, const Point& query_point, double upper_bound) {
+    double sum = 0.0;
+    for (size_t dimension = 0; dimension < point.size(); ++dimension) {
+        sum += std::abs(point[dimension] - query_point[dimension]);
+        if (sum > upper_bound) {
+            return std::numeric_limits<double>::infinity();
+        }
+    }
+    return sum;
+}
+
+double L2DistanceSquaredBounded(const Point& point, const Point& query_point, double upper_bound_sq) {
+    double sum_sq = 0.0;
+    for (size_t dimension = 0; dimension < point.size(); ++dimension) {
+        const double diff = point[dimension] - query_point[dimension];
+        sum_sq += diff * diff;
+        if (sum_sq > upper_bound_sq) {
+            return std::numeric_limits<double>::infinity();
+        }
+    }
+    return sum_sq;
+}
+
+}  // namespace
+
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
 // ---------------------------------------------
@@ -56,6 +95,32 @@ AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, 
 
     AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
+    if (IsL2(norm_order_)) {
+        double result_distance_sq =
+            initial_upper_bound < 0.0 ? initial_upper_bound : SquaredUpperBound(initial_upper_bound);
+        for (unsigned int i = 0; i < num_points_; i++) {
+            const double distance_sq =
+                L2DistanceSquaredBounded((*base_points_)[i], query_point, result_distance_sq);
+            if (distance_sq < result_distance_sq) {
+                result.point_id = i;
+                result_distance_sq = distance_sq;
+                result.distance = std::sqrt(distance_sq);
+            }
+        }
+        return result;
+    }
+
+    if (IsL1(norm_order_)) {
+        for (unsigned int i = 0; i < num_points_; i++) {
+            const double distance = L1DistanceBounded((*base_points_)[i], query_point, result.distance);
+            if (distance < result.distance) {
+                result.point_id = i;
+                result.distance = distance;
+            }
+        }
+        return result;
+    }
+
     for (unsigned int i = 0; i < num_points_; i++) {
         double distance = Calc::LpDistanceBounded((*base_points_)[i], query_point, norm_order_, result.distance);
         if (distance < result.distance) {
@@ -79,6 +144,44 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
     std::vector<AnnResult> results(query_points.size());
     for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
         results[query_index] = AnnResult{.distance = initial_upper_bounds[query_index], .point_id = 0};
+    }
+
+    if (IsL2(norm_order_)) {
+        std::vector<double> result_distance_squares(query_points.size());
+        for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
+            result_distance_squares[query_index] =
+                initial_upper_bounds[query_index] < 0.0 ? initial_upper_bounds[query_index]
+                                                        : SquaredUpperBound(initial_upper_bounds[query_index]);
+        }
+
+        for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
+            for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
+                const double distance_sq = L2DistanceSquaredBounded(
+                    (*base_points_)[point_id], query_points[query_index], result_distance_squares[query_index]);
+                if (distance_sq < result_distance_squares[query_index]) {
+                    result_distance_squares[query_index] = distance_sq;
+                    results[query_index].distance = std::sqrt(distance_sq);
+                    results[query_index].point_id = point_id;
+                }
+            }
+        }
+
+        return results;
+    }
+
+    if (IsL1(norm_order_)) {
+        for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
+            for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
+                const double distance = L1DistanceBounded((*base_points_)[point_id], query_points[query_index],
+                                                          results[query_index].distance);
+                if (distance < results[query_index].distance) {
+                    results[query_index].distance = distance;
+                    results[query_index].point_id = point_id;
+                }
+            }
+        }
+
+        return results;
     }
 
     for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
