@@ -76,14 +76,14 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         Log::error("The ANN searcher is not set.");
     }
 
-#ifdef QALSH4C_USE_OPENMP
+    ann_searcher_->Init(to, norm_order);
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
     std::vector<double> distances(from.num_points, 0.0);
 
+#ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
     {
         std::unique_ptr<AnnSearcher> local_searcher = ann_searcher_->Clone();
-        local_searcher->Init(to, norm_order);
 
 #pragma omp for schedule(dynamic)
         for (long long query_index = 0; query_index < static_cast<long long>(from.num_points); ++query_index) {
@@ -92,14 +92,8 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         }
     }
 #else
-    ann_searcher_->Init(to, norm_order);
-
-    std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-
-    std::vector<double> distances;
-    distances.reserve(from.num_points);
     for (unsigned int point_id = 0; point_id < from.num_points; point_id++) {
-        distances.emplace_back(ann_searcher_->Search(query_points[point_id]).distance);
+        distances[point_id] = ann_searcher_->Search(query_points[point_id]).distance;
     }
 #endif
 
@@ -257,12 +251,13 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    LinearScanAnnSearcher shared_ann_searcher;
+    shared_ann_searcher.Init(to, norm_order);
     double estimation = 0.0;
 
 #pragma omp parallel reduction(+ : estimation)
     {
-        LinearScanAnnSearcher ann_searcher;
-        ann_searcher.Init(to, norm_order);
+        LinearScanAnnSearcher ann_searcher = shared_ann_searcher;
 
         if (exact_batch_size == 1) {
 #pragma omp for schedule(dynamic)

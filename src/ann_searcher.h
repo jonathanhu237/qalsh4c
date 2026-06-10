@@ -48,7 +48,17 @@ class LinearScanAnnSearcher : public AnnSearcher {
     double norm_order_{0.0};
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
-    std::vector<Point> base_points_;
+    std::shared_ptr<const std::vector<Point>> base_points_;
+};
+
+struct QalshAnnIndexData {
+    double norm_order{0.0};
+    unsigned int num_points{0};
+    unsigned int num_dimensions{0};
+    QalshConfig qalsh_config;
+    std::vector<Point> base_points;
+    std::vector<Point> dot_vectors;
+    std::vector<InMemoryQalshTable> searchers;
 };
 
 // ---------------------------------------------
@@ -66,17 +76,13 @@ class QalshAnnSearcher : public AnnSearcher {
    private:
     double approximation_ratio_{Global::kDefaultApproximationRatio};
     std::mt19937::result_type random_seed_{Global::kDefaultSeed};
-    double norm_order_{0.0};
-    unsigned int num_points_{0};
-    unsigned int num_dimensions_{0};
-    QalshConfig qalsh_config_;
-    std::vector<Point> base_points_;
-    std::vector<Point> dot_vectors_;
-    std::vector<InMemoryQalshTable> searchers_;
+    std::shared_ptr<const QalshAnnIndexData> index_data_;
+    std::vector<InMemoryQalshTableCursor> search_cursors_;
     std::vector<unsigned int> collision_counts_;
     std::vector<unsigned int> collision_stamps_;
     std::vector<unsigned int> visited_stamps_;
     unsigned int search_epoch_{0};
 
+    void ResetSearchState();
     unsigned int NextSearchEpoch();
 };

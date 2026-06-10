@@ -75,6 +75,8 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     // Generate weights based on QALSH algorithm.
     Log::info("Generating weights using QALSH...");
 
+    ann_searcher_->Init(to_metadata, norm_order);
+
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points =
         PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
@@ -82,7 +84,6 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 #pragma omp parallel
     {
         std::unique_ptr<AnnSearcher> local_searcher = ann_searcher_->Clone();
-        local_searcher->Init(to_metadata, norm_order);
 
 #pragma omp for schedule(dynamic)
         for (long long query_index = 0; query_index < static_cast<long long>(from_metadata.num_points); ++query_index) {
@@ -91,7 +92,6 @@ std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from
         }
     }
 #else
-    ann_searcher_->Init(to_metadata, norm_order);
     std::vector<Point> query_points =
         PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
 

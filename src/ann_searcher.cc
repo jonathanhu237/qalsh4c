@@ -21,17 +21,19 @@ bool LinearScanAnnSearcher::RequiresIndex() const {
 }
 
 std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
-    return std::make_unique<LinearScanAnnSearcher>();
+    return std::make_unique<LinearScanAnnSearcher>(*this);
 }
 
 void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
     norm_order_ = norm_order;
     num_points_ = metadata.num_points;
     num_dimensions_ = metadata.num_dimensions;
-    base_points_ = PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_);
-    if (base_points_.size() != num_points_) {
+    auto base_points = std::make_shared<std::vector<Point>>(
+        PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_));
+    if (base_points->size() != num_points_) {
         Log::error("Failed to load all target points for in-memory linear scan.");
     }
+    base_points_ = std::move(base_points);
 }
 
 AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
@@ -39,10 +41,14 @@ AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
 }
 
 AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, double initial_upper_bound) {
+    if (!base_points_) {
+        Log::error("Linear scan searcher is not initialized.");
+    }
+
     AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
     for (unsigned int i = 0; i < num_points_; i++) {
-        double distance = Calc::LpDistanceBounded(base_points_[i], query_point, norm_order_, result.distance);
+        double distance = Calc::LpDistanceBounded((*base_points_)[i], query_point, norm_order_, result.distance);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -57,6 +63,9 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
     if (query_points.size() != initial_upper_bounds.size()) {
         Log::error("Query size and upper-bound size mismatch.");
     }
+    if (!base_points_) {
+        Log::error("Linear scan searcher is not initialized.");
+    }
 
     std::vector<AnnResult> results(query_points.size());
     for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
@@ -65,8 +74,8 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
 
     for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
         for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
-            const double distance = Calc::LpDistanceBounded(base_points_[point_id], query_points[query_index], norm_order_,
-                                                            results[query_index].distance);
+            const double distance = Calc::LpDistanceBounded((*base_points_)[point_id], query_points[query_index],
+                                                            norm_order_, results[query_index].distance);
             if (distance < results[query_index].distance) {
                 results[query_index].distance = distance;
                 results[query_index].point_id = point_id;
@@ -92,70 +101,90 @@ bool QalshAnnSearcher::RequiresIndex() const {
 }
 
 std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
-    return std::make_unique<QalshAnnSearcher>(approximation_ratio_, random_seed_);
+    auto clone = std::make_unique<QalshAnnSearcher>(approximation_ratio_, random_seed_);
+    clone->index_data_ = index_data_;
+    clone->ResetSearchState();
+    return clone;
 }
 
 void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
-    norm_order_ = norm_order;
-    num_points_ = metadata.num_points;
-    num_dimensions_ = metadata.num_dimensions;
+    auto index_data = std::make_shared<QalshAnnIndexData>();
+    index_data->norm_order = norm_order;
+    index_data->num_points = metadata.num_points;
+    index_data->num_dimensions = metadata.num_dimensions;
 
-    if (num_points_ == 0 || num_dimensions_ == 0) {
+    if (index_data->num_points == 0 || index_data->num_dimensions == 0) {
         Log::error("QALSH requires a non-empty point set with non-zero dimensions.");
     }
 
-    qalsh_config_ = QalshConfig{.approximation_ratio = approximation_ratio_};
-    qalsh_config_.Regularize(num_points_, norm_order_);
+    index_data->qalsh_config = QalshConfig{.approximation_ratio = approximation_ratio_};
+    index_data->qalsh_config.Regularize(index_data->num_points, norm_order);
     Log::info(
         "Building in-memory QALSH index with approximation ratio {}, bucket width {}, {} hash tables, collision "
         "threshold {}.",
-        qalsh_config_.approximation_ratio, qalsh_config_.bucket_width, qalsh_config_.num_hash_tables,
-        qalsh_config_.collision_threshold);
+        index_data->qalsh_config.approximation_ratio, index_data->qalsh_config.bucket_width,
+        index_data->qalsh_config.num_hash_tables, index_data->qalsh_config.collision_threshold);
 
-    base_points_ = PointSet::LoadPointsFromFile(metadata.file_path, num_points_, num_dimensions_);
-    if (base_points_.size() != num_points_) {
+    index_data->base_points =
+        PointSet::LoadPointsFromFile(metadata.file_path, index_data->num_points, index_data->num_dimensions);
+    if (index_data->base_points.size() != index_data->num_points) {
         Log::error("Failed to load all target points for in-memory QALSH index.");
     }
 
     std::function<double()> coordinate_generator;
     std::mt19937 gen(random_seed_);
-    if (std::abs(norm_order_ - 1.0) < Global::kEpsilon) {
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         std::cauchy_distribution<double> dist(0.0, 1.0);
         coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
-    } else if (std::abs(norm_order_ - 2.0) < Global::kEpsilon) {
+    } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         std::normal_distribution<double> dist(0.0, 1.0);
         coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
     } else {
-        Log::error("Unsupported norm order: {}", norm_order_);
+        Log::error("Unsupported norm order: {}", norm_order);
     }
 
-    dot_vectors_.clear();
-    dot_vectors_.reserve(qalsh_config_.num_hash_tables);
-    for (unsigned int table_id = 0; table_id < qalsh_config_.num_hash_tables; ++table_id) {
+    index_data->dot_vectors.clear();
+    index_data->dot_vectors.reserve(index_data->qalsh_config.num_hash_tables);
+    for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
         Point dot_vector;
-        dot_vector.reserve(num_dimensions_);
-        for (unsigned int dimension = 0; dimension < num_dimensions_; ++dimension) {
+        dot_vector.reserve(index_data->num_dimensions);
+        for (unsigned int dimension = 0; dimension < index_data->num_dimensions; ++dimension) {
             dot_vector.push_back(coordinate_generator());
         }
-        dot_vectors_.push_back(std::move(dot_vector));
+        index_data->dot_vectors.push_back(std::move(dot_vector));
     }
 
-    searchers_.clear();
-    searchers_.reserve(qalsh_config_.num_hash_tables);
-    for (unsigned int table_id = 0; table_id < qalsh_config_.num_hash_tables; ++table_id) {
+    index_data->searchers.clear();
+    index_data->searchers.reserve(index_data->qalsh_config.num_hash_tables);
+    for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
         std::vector<DotProductPointIdPair> entries;
-        entries.reserve(num_points_);
-        for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
-            entries.push_back(DotProductPointIdPair{.dot_product = Calc::DotProduct(base_points_[point_id],
-                                                                                    dot_vectors_[table_id]),
+        entries.reserve(index_data->num_points);
+        for (unsigned int point_id = 0; point_id < index_data->num_points; ++point_id) {
+            entries.push_back(DotProductPointIdPair{.dot_product = Calc::DotProduct(index_data->base_points[point_id],
+                                                                                    index_data->dot_vectors[table_id]),
                                                     .point_id = point_id});
         }
-        searchers_.emplace_back(std::move(entries));
+        index_data->searchers.emplace_back(std::move(entries));
     }
 
-    collision_counts_.assign(num_points_, 0);
-    collision_stamps_.assign(num_points_, 0);
-    visited_stamps_.assign(num_points_, 0);
+    index_data_ = std::move(index_data);
+    ResetSearchState();
+}
+
+void QalshAnnSearcher::ResetSearchState() {
+    if (!index_data_) {
+        search_cursors_.clear();
+        collision_counts_.clear();
+        collision_stamps_.clear();
+        visited_stamps_.clear();
+        search_epoch_ = 0;
+        return;
+    }
+
+    search_cursors_.assign(index_data_->qalsh_config.num_hash_tables, InMemoryQalshTableCursor{});
+    collision_counts_.assign(index_data_->num_points, 0);
+    collision_stamps_.assign(index_data_->num_points, 0);
+    visited_stamps_.assign(index_data_->num_points, 0);
     search_epoch_ = 0;
 }
 
@@ -170,17 +199,23 @@ unsigned int QalshAnnSearcher::NextSearchEpoch() {
 }
 
 AnnResult QalshAnnSearcher::Search(const Point& query_point) {
+    if (!index_data_) {
+        Log::error("QALSH searcher is not initialized.");
+    }
+
+    const QalshAnnIndexData& index_data = *index_data_;
     const unsigned int epoch = NextSearchEpoch();
     bool has_candidate = false;
     AnnResult best_candidate{.distance = std::numeric_limits<double>::infinity(), .point_id = 0};
 
-    unsigned int num_hash_tables = qalsh_config_.num_hash_tables;
-    unsigned int collision_threshold = qalsh_config_.collision_threshold;
-    double bucket_width = qalsh_config_.bucket_width;
-    double approximation_ratio = qalsh_config_.approximation_ratio;
+    unsigned int num_hash_tables = index_data.qalsh_config.num_hash_tables;
+    unsigned int collision_threshold = index_data.qalsh_config.collision_threshold;
+    double bucket_width = index_data.qalsh_config.bucket_width;
+    double approximation_ratio = index_data.qalsh_config.approximation_ratio;
 
     for (unsigned int i = 0; i < num_hash_tables; i++) {
-        searchers_[i].Init(Calc::DotProduct(query_point, dot_vectors_[i]));
+        search_cursors_[i] =
+            index_data.searchers[i].InitCursor(Calc::DotProduct(query_point, index_data.dot_vectors[i]));
     }
 
     // c-ANN search
@@ -206,8 +241,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
             unsigned int i = active_tables.front();
             active_tables.pop();
 
-            bool table_done =
-                searchers_[i].IncrementalSearch(bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
+            bool table_done = index_data.searchers[i].IncrementalSearch(
+                search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
                     if (shouldTerminate || visited_stamps_[point_id] == epoch) {
                         return;
                     }
@@ -219,8 +254,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
                     if (++collision_counts_[point_id] >= collision_threshold) {
                         visited_stamps_[point_id] = epoch;
-                        const Point& candidate_point = base_points_[point_id];
-                        double distance = Calc::LpDistanceBounded(candidate_point, query_point, norm_order_,
+                        const Point& candidate_point = index_data.base_points[point_id];
+                        double distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
                                                                   best_candidate.distance);
                         if (distance < best_candidate.distance) {
                             has_candidate = true;
