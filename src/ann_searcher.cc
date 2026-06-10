@@ -226,25 +226,20 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
 void QalshAnnSearcher::ResetSearchState() {
     if (!index_data_) {
         search_cursors_.clear();
-        collision_counts_.clear();
-        collision_stamps_.clear();
-        visited_stamps_.clear();
+        search_states_.clear();
         search_epoch_ = 0;
         return;
     }
 
     search_cursors_.assign(index_data_->qalsh_config.num_hash_tables, InMemoryQalshTableCursor{});
-    collision_counts_.assign(index_data_->num_points, 0);
-    collision_stamps_.assign(index_data_->num_points, 0);
-    visited_stamps_.assign(index_data_->num_points, 0);
+    search_states_.assign(index_data_->num_points, QalshSearchState{});
     search_epoch_ = 0;
 }
 
 unsigned int QalshAnnSearcher::NextSearchEpoch() {
     ++search_epoch_;
     if (search_epoch_ == 0) {
-        std::ranges::fill(collision_stamps_, 0);
-        std::ranges::fill(visited_stamps_, 0);
+        std::ranges::fill(search_states_, QalshSearchState{});
         search_epoch_ = 1;
     }
     return search_epoch_;
@@ -295,17 +290,22 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
             bool table_done = index_data.searchers[i].IncrementalSearch(
                 search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
-                    if (shouldTerminate || visited_stamps_[point_id] == epoch) {
+                    if (shouldTerminate) {
                         return;
                     }
 
-                    if (collision_stamps_[point_id] != epoch) {
-                        collision_stamps_[point_id] = epoch;
-                        collision_counts_[point_id] = 0;
+                    QalshSearchState& state = search_states_[point_id];
+                    if (state.visited_stamp == epoch) {
+                        return;
                     }
 
-                    if (++collision_counts_[point_id] >= collision_threshold) {
-                        visited_stamps_[point_id] = epoch;
+                    if (state.collision_stamp != epoch) {
+                        state.collision_stamp = epoch;
+                        state.collision_count = 0;
+                    }
+
+                    if (++state.collision_count >= collision_threshold) {
+                        state.visited_stamp = epoch;
                         const Point& candidate_point = index_data.base_points[point_id];
                         double distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
                                                                   best_candidate.distance);

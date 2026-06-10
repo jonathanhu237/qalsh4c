@@ -63,6 +63,12 @@ struct QalshAnnIndexData {
     std::vector<InMemoryQalshTable> searchers;
 };
 
+struct QalshSearchState {
+    unsigned int collision_count{0};
+    unsigned int collision_stamp{0};
+    unsigned int visited_stamp{0};
+};
+
 // ---------------------------------------------
 // QalshAnnSearcher Definition
 // ---------------------------------------------
@@ -81,9 +87,7 @@ class QalshAnnSearcher : public AnnSearcher {
     std::mt19937::result_type random_seed_{Global::kDefaultSeed};
     std::shared_ptr<const QalshAnnIndexData> index_data_;
     std::vector<InMemoryQalshTableCursor> search_cursors_;
-    std::vector<unsigned int> collision_counts_;
-    std::vector<unsigned int> collision_stamps_;
-    std::vector<unsigned int> visited_stamps_;
+    std::vector<QalshSearchState> search_states_;
     unsigned int search_epoch_{0};
 
     void ResetSearchState();
