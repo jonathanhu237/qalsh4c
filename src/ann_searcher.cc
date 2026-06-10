@@ -1,5 +1,7 @@
 #include "ann_searcher.h"
 
+#include <Eigen/Dense>
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -172,10 +174,9 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
 
     index_data->searchers.clear();
     index_data->searchers.resize(index_data->qalsh_config.num_hash_tables);
-    std::vector<std::vector<DotProductPointIdPair>> entries_by_table(index_data->qalsh_config.num_hash_tables);
-    for (std::vector<DotProductPointIdPair>& entries : entries_by_table) {
-        entries.resize(index_data->num_points);
-    }
+
+    using RowMajorMatrixXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    RowMajorMatrixXd base_matrix(index_data->num_points, index_data->num_dimensions);
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(static)
@@ -183,12 +184,16 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     for (long long point_index = 0; point_index < static_cast<long long>(index_data->num_points); ++point_index) {
         const auto point_id = static_cast<unsigned int>(point_index);
         const Point& base_point = index_data->base_points[point_id];
-        for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
-            entries_by_table[table_id][point_id] =
-                DotProductPointIdPair{.dot_product = Calc::DotProduct(base_point, index_data->dot_vectors[table_id]),
-                                      .point_id = point_id};
+        std::ranges::copy(base_point, base_matrix.row(point_id).data());
+    }
+
+    Eigen::MatrixXd projection_matrix(index_data->num_dimensions, index_data->qalsh_config.num_hash_tables);
+    for (unsigned int table_id = 0; table_id < index_data->qalsh_config.num_hash_tables; ++table_id) {
+        for (unsigned int dimension = 0; dimension < index_data->num_dimensions; ++dimension) {
+            projection_matrix(dimension, table_id) = index_data->dot_vectors[table_id][dimension];
         }
     }
+    const Eigen::MatrixXd projected_keys = base_matrix * projection_matrix;
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
@@ -196,7 +201,13 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
     for (long long table_index = 0; table_index < static_cast<long long>(index_data->qalsh_config.num_hash_tables);
          ++table_index) {
         const auto table_id = static_cast<unsigned int>(table_index);
-        index_data->searchers[table_id].Build(std::move(entries_by_table[table_id]));
+        std::vector<DotProductPointIdPair> entries;
+        entries.reserve(index_data->num_points);
+        for (unsigned int point_id = 0; point_id < index_data->num_points; ++point_id) {
+            entries.push_back(DotProductPointIdPair{.dot_product = projected_keys(point_id, table_id),
+                                                    .point_id = point_id});
+        }
+        index_data->searchers[table_id].Build(std::move(entries));
     }
 
     index_data_ = std::move(index_data);
