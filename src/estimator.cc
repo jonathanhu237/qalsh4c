@@ -112,7 +112,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     {
         std::unique_ptr<AnnSearcher> local_searcher = ann_searcher_->Clone();
 
-#pragma omp for schedule(dynamic, 4)
+#pragma omp for schedule(dynamic)
         for (long long query_index = 0; query_index < static_cast<long long>(from.num_points); ++query_index) {
             const unsigned int point_id = static_cast<unsigned int>(query_index);
             distances[point_id] = local_searcher->Search(query_points[point_id]).distance;
