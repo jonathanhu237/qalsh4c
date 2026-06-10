@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -25,8 +24,10 @@ struct DotProductPointIdPairLess {
 
 struct InMemoryQalshTableCursor {
     double query_key{0.0};
-    std::optional<size_t> left;
-    std::optional<size_t> right;
+    size_t left_index{0};
+    size_t right_index{0};
+    bool has_left{false};
+    bool has_right{false};
 };
 
 class InMemoryQalshTable {
@@ -49,77 +50,79 @@ class InMemoryQalshTable {
 
         return InMemoryQalshTableCursor{
             .query_key = query_key,
-            .left = index == 0 ? std::nullopt : std::optional<size_t>{index - 1},
-            .right = index == entries_.size() ? std::nullopt : std::optional<size_t>{index},
+            .left_index = index == 0 ? 0 : index - 1,
+            .right_index = index,
+            .has_left = index > 0,
+            .has_right = index < entries_.size(),
         };
     }
 
-    template <std::invocable<unsigned int, double> Handler>
+    template <std::invocable<unsigned int> Handler>
     bool IncrementalSearch(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
 
    private:
-    template <std::invocable<unsigned int, double> Handler>
+    template <std::invocable<unsigned int> Handler>
     bool IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
 
-    template <std::invocable<unsigned int, double> Handler>
+    template <std::invocable<unsigned int> Handler>
     bool IncrementalSearchRight(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
 
     std::vector<DotProductPointIdPair> entries_;
 };
 
-template <std::invocable<unsigned int, double> Handler>
+template <std::invocable<unsigned int> Handler>
 bool InMemoryQalshTable::IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, double bound,
                                                Handler&& handler) const {
-    if (!cursor.left.has_value()) {
+    if (!cursor.has_left) {
         return true;
     }
 
     for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
-        const size_t index = *cursor.left;
+        const size_t index = cursor.left_index;
         const DotProductPointIdPair& entry = entries_[index];
         if (cursor.query_key - entry.dot_product > bound) {
             return true;
         }
 
-        std::forward<Handler>(handler)(entry.point_id, entry.dot_product);
+        std::forward<Handler>(handler)(entry.point_id);
 
         if (index == 0) {
-            cursor.left = std::nullopt;
+            cursor.has_left = false;
             return true;
         }
-        cursor.left = index - 1;
+        cursor.left_index = index - 1;
     }
 
     return false;
 }
 
-template <std::invocable<unsigned int, double> Handler>
+template <std::invocable<unsigned int> Handler>
 bool InMemoryQalshTable::IncrementalSearchRight(InMemoryQalshTableCursor& cursor, double bound,
                                                 Handler&& handler) const {
-    if (!cursor.right.has_value()) {
+    if (!cursor.has_right) {
         return true;
     }
 
     for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
-        const size_t index = *cursor.right;
+        const size_t index = cursor.right_index;
         const DotProductPointIdPair& entry = entries_[index];
         if (entry.dot_product - cursor.query_key > bound) {
             return true;
         }
 
-        std::forward<Handler>(handler)(entry.point_id, entry.dot_product);
+        std::forward<Handler>(handler)(entry.point_id);
 
         if (index + 1 >= entries_.size()) {
-            cursor.right = std::nullopt;
+            cursor.has_right = false;
             return true;
         }
-        cursor.right = index + 1;
+        cursor.right_index = index + 1;
     }
 
     return false;
 }
 
-template <std::invocable<unsigned int, double> Handler>
+template <std::invocable<unsigned int> Handler>
 bool InMemoryQalshTable::IncrementalSearch(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const {
     bool left_finished = IncrementalSearchLeft(cursor, bound, std::forward<Handler>(handler));
     bool right_finished = IncrementalSearchRight(cursor, bound, std::forward<Handler>(handler));
