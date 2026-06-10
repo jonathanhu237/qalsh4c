@@ -289,7 +289,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
             active_tables.pop();
 
             bool table_done = index_data.searchers[i].IncrementalSearch(
-                search_cursors_[i], bound, [&](unsigned int point_id) {
+                search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
                     if (shouldTerminate) {
                         return;
                     }
