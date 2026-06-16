@@ -96,6 +96,25 @@ if(BUILD_TESTING)
     target_link_libraries(ann_searcher_clone_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
     add_test(NAME ann_searcher_clone_test COMMAND ann_searcher_clone_test)
 
+    add_executable(
+        disk_linear_scan_test
+        tests/disk_linear_scan_test.cc
+        src/ann_searcher.cc
+        src/config.cc
+        src/estimator.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+        src/weights_generator.cc
+    )
+    target_include_directories(disk_linear_scan_test PRIVATE src)
+    target_link_libraries(disk_linear_scan_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(disk_linear_scan_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(disk_linear_scan_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME disk_linear_scan_test COMMAND disk_linear_scan_test)
+
     add_executable(log_error_test tests/log_error_test.cc)
     target_include_directories(log_error_test PRIVATE src)
     add_test(NAME log_error_test COMMAND log_error_test)

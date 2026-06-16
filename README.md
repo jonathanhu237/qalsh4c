@@ -163,4 +163,17 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction both ann linear_scan
 ```
 
+Pass `--disk-based` at the `estimate` level to use an external-memory
+implementation where available. The first disk-based implementation is exact
+linear scan; it streams query points from disk and scans target points in blocks
+instead of loading either point set in full. Tune the target block size with
+`--disk-block-size`:
+
+```bash
+./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 -p 2 -d ./data/federalist --direction ab ann linear_scan
+```
+
+Disk-based mode currently reports an error for QALSH ANN and sampling
+estimators instead of falling back to their in-memory implementations.
+
 The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.

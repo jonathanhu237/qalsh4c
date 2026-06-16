@@ -76,6 +76,26 @@ void InitExactScanSearcher(LinearScanAnnSearcher& ann_searcher, const PointSetMe
     ann_searcher.Init(metadata, norm_order);
 }
 
+double EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
+                                   unsigned int disk_block_size) {
+    DiskBasedLinearScanAnnSearcher ann_searcher(disk_block_size);
+    ann_searcher.Init(to, norm_order);
+
+    PointSet query_set;
+    query_set.Init(from);
+
+    Point query_point(from.num_dimensions);
+    double estimation = 0.0;
+    for (unsigned int point_id = 0; point_id < from.num_points; ++point_id) {
+        if (!query_set.ReadNextPointInto(query_point)) {
+            Log::error("Failed to read query point {} from {}.", point_id, from.file_path.string());
+        }
+        estimation += ann_searcher.Search(query_point).distance;
+    }
+
+    return estimation;
+}
+
 double BinaryKlDivergence(double x, double y) {
     if (x < 0.0 || x > 1.0 || y <= 0.0 || y >= 1.0) {
         Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
@@ -91,7 +111,14 @@ double BinaryKlDivergence(double x, double y) {
 // --------------------------------------------------
 // AnnEstimator Implementation
 // --------------------------------------------------
-AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher) : ann_searcher_(std::move(ann_searcher)) {}
+AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool disk_based, unsigned int disk_block_size)
+    : ann_searcher_(std::move(ann_searcher)),
+      disk_based_(disk_based),
+      disk_block_size_(disk_block_size) {
+    if (disk_block_size_ == 0) {
+        Log::error("Disk block size must be positive.");
+    }
+}
 
 bool AnnEstimator::RequiresIndex() const {
     return ann_searcher_ && ann_searcher_->RequiresIndex();
@@ -101,6 +128,13 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     // Check the ANN searcher
     if (!ann_searcher_) {
         Log::error("The ANN searcher is not set.");
+    }
+
+    if (disk_based_) {
+        if (dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get()) == nullptr) {
+            Log::error("Disk-based mode is currently implemented only for ANN linear_scan.");
+        }
+        return EstimateDiskBasedLinearScan(from, to, norm_order, disk_block_size_);
     }
 
     ann_searcher_->Init(to, norm_order);
@@ -133,7 +167,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
                                      unsigned int num_samples_default, unsigned int num_samples_ab,
                                      unsigned int num_samples_ba, double epsilon, double delta, bool use_cache,
-                                     unsigned int exact_batch_size)
+                                     unsigned int exact_batch_size, bool disk_based, unsigned int disk_block_size)
     : weights_generator_(std::move(weights_generator)),
       num_samples_default_(num_samples_default),
       num_samples_ab_(num_samples_ab),
@@ -141,7 +175,13 @@ SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_g
       epsilon_(epsilon),
       delta_(delta),
       use_cache_(use_cache),
-      exact_batch_size_(exact_batch_size) {}
+      exact_batch_size_(exact_batch_size),
+      disk_based_(disk_based),
+      disk_block_size_(disk_block_size) {
+    if (disk_block_size_ == 0) {
+        Log::error("Disk block size must be positive.");
+    }
+}
 
 bool SamplingEstimator::RequiresIndex() const {
     return weights_generator_ && weights_generator_->RequiresIndex();
@@ -153,6 +193,10 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     if (!weights_generator_) {
         Log::error("The ANN searcher is not set.");
     }
+    if (disk_based_) {
+        Log::error("Disk-based mode is not implemented for sampling estimators yet.");
+    }
+
     auto* qalsh_weights_generator = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get());
     const bool weights_are_upper_bounds = qalsh_weights_generator != nullptr;
 

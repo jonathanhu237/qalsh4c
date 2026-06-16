@@ -75,6 +75,18 @@ int main(int argc, char** argv) {
         ->default_val("ab")
         ->check(CLI::IsMember({"ab", "ba", "both"}));
 
+    bool disk_based{false};
+    estimate->add_flag("--disk-based", disk_based, "Use disk-based external-memory implementations when available")
+        ->default_val(false)
+        ->default_str(disk_based ? "True" : "False");
+
+    unsigned int disk_block_size{Global::kDefaultDiskBlockSize};
+    estimate
+        ->add_option("--disk-block-size", disk_block_size,
+                     "Number of target points read per disk block in disk-based mode")
+        ->default_val(Global::kDefaultDiskBlockSize)
+        ->check(CLI::PositiveNumber);
+
     std::unique_ptr<Estimator> estimator;
     estimate->require_subcommand(1);
     estimate->callback([&]() {
@@ -96,7 +108,7 @@ int main(int argc, char** argv) {
         if (!ann_searcher) {
             Log::error("Ann searcher is not set. Please specify a Ann searcher.");
         }
-        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher));
+        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher), disk_based, disk_block_size);
     });
 
     // ------------------------------
@@ -156,7 +168,8 @@ int main(int argc, char** argv) {
             Log::error("Weights generator is not set. Please specify a weights generator.");
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
-                                                        num_samples_ba, epsilon, delta, use_cache, exact_batch_size);
+                                                        num_samples_ba, epsilon, delta, use_cache, exact_batch_size,
+                                                        disk_based, disk_block_size);
     });
 
     // ------------------------------

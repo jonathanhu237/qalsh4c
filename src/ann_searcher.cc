@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <queue>
@@ -29,6 +31,45 @@ double DotProductRaw(const Point& lhs, const Point& rhs) {
     }
 
     return result;
+}
+
+double LpDistanceBoundedRaw(const Coordinate* lhs, const Coordinate* rhs, size_t num_dimensions, double norm_order,
+                            double upper_bound) {
+    if (upper_bound < 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
+        double sum = 0.0;
+        for (size_t dimension = 0; dimension < num_dimensions; ++dimension) {
+            sum += std::abs(lhs[dimension] - rhs[dimension]);
+            if (sum > upper_bound) {
+                return std::numeric_limits<double>::infinity();
+            }
+        }
+        return sum;
+    }
+
+    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
+        const double upper_bound_sq = upper_bound * upper_bound;
+        double sum_sq = 0.0;
+        for (size_t dimension = 0; dimension < num_dimensions; ++dimension) {
+            const double diff = lhs[dimension] - rhs[dimension];
+            sum_sq += diff * diff;
+            if (sum_sq > upper_bound_sq) {
+                return std::numeric_limits<double>::infinity();
+            }
+        }
+        return std::sqrt(sum_sq);
+    }
+
+    Log::error("Unsupported norm order: {}", norm_order);
+    return 0.0;
+}
+
+bool IsBetterAnnResult(const AnnResult& candidate, const AnnResult& best) {
+    return candidate.distance < best.distance ||
+           (candidate.distance == best.distance && candidate.point_id < best.point_id);
 }
 
 }  // namespace
@@ -113,6 +154,121 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
     }
 
     return results;
+}
+
+// ---------------------------------------------
+// DiskBasedLinearScanAnnSearcher Implementation
+// ---------------------------------------------
+DiskBasedLinearScanAnnSearcher::DiskBasedLinearScanAnnSearcher(unsigned int block_size) : block_size_(block_size) {
+    if (block_size_ == 0) {
+        Log::error("Disk block size must be positive.");
+    }
+}
+
+bool DiskBasedLinearScanAnnSearcher::RequiresIndex() const {
+    return false;
+}
+
+std::unique_ptr<AnnSearcher> DiskBasedLinearScanAnnSearcher::Clone() const {
+    auto clone = std::make_unique<DiskBasedLinearScanAnnSearcher>(block_size_);
+    if (initialized_) {
+        clone->Init(metadata_, norm_order_);
+    }
+    return clone;
+}
+
+void DiskBasedLinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+    if (metadata.num_points == 0 || metadata.num_dimensions == 0) {
+        Log::error("Disk-based linear scan requires a non-empty point set with non-zero dimensions.");
+    }
+
+    metadata_ = metadata;
+    norm_order_ = norm_order;
+    initialized_ = true;
+    block_buffer_.clear();
+    block_buffer_.reserve(static_cast<size_t>(block_size_) * metadata_.num_dimensions);
+}
+
+AnnResult DiskBasedLinearScanAnnSearcher::Search(const Point& query_point) {
+    return SearchWithUpperBound(query_point, std::numeric_limits<double>::infinity());
+}
+
+AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point,
+                                                               double initial_upper_bound) {
+    if (!initialized_) {
+        Log::error("Disk-based linear scan searcher is not initialized.");
+    }
+    if (query_point.size() != metadata_.num_dimensions) {
+        Log::error("Query point dimension {} does not match target dimension {}.", query_point.size(),
+                   metadata_.num_dimensions);
+    }
+
+    std::ifstream input(metadata_.file_path, std::ios::binary);
+    if (!input.is_open()) {
+        Log::error("Could not open point set file for disk-based linear scan: {}", metadata_.file_path.string());
+    }
+
+    AnnResult best{.distance = initial_upper_bound, .point_id = 0};
+    const Coordinate* query_data = query_point.data();
+
+    for (unsigned int block_begin = 0; block_begin < metadata_.num_points; block_begin += block_size_) {
+        const unsigned int block_point_count = std::min(block_size_, metadata_.num_points - block_begin);
+        const size_t coordinate_count = static_cast<size_t>(block_point_count) * metadata_.num_dimensions;
+        block_buffer_.resize(coordinate_count);
+
+        const auto bytes_to_read =
+            static_cast<std::streamsize>(coordinate_count * static_cast<size_t>(sizeof(Coordinate)));
+        input.read(reinterpret_cast<char*>(block_buffer_.data()), bytes_to_read);
+        if (input.gcount() != bytes_to_read) {
+            Log::error("Failed to read target block starting at point {} from {}.", block_begin,
+                       metadata_.file_path.string());
+        }
+
+        AnnResult block_best = best;
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+        {
+            AnnResult local_best = block_best;
+
+#pragma omp for nowait schedule(static)
+            for (long long local_index = 0; local_index < static_cast<long long>(block_point_count); ++local_index) {
+                const unsigned int point_id = block_begin + static_cast<unsigned int>(local_index);
+                const Coordinate* point_data =
+                    block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
+                const double distance = LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
+                                                             norm_order_, local_best.distance);
+                const AnnResult candidate{.distance = distance, .point_id = point_id};
+                if (IsBetterAnnResult(candidate, local_best)) {
+                    local_best = candidate;
+                }
+            }
+
+#pragma omp critical
+            {
+                if (IsBetterAnnResult(local_best, block_best)) {
+                    block_best = local_best;
+                }
+            }
+        }
+#else
+        for (unsigned int local_index = 0; local_index < block_point_count; ++local_index) {
+            const unsigned int point_id = block_begin + local_index;
+            const Coordinate* point_data =
+                block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
+            const double distance =
+                LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions, norm_order_, block_best.distance);
+            const AnnResult candidate{.distance = distance, .point_id = point_id};
+            if (IsBetterAnnResult(candidate, block_best)) {
+                block_best = candidate;
+            }
+        }
+#endif
+
+        best = block_best;
+    }
+
+    return best;
 }
 
 // ---------------------------------------------

@@ -53,6 +53,26 @@ class LinearScanAnnSearcher : public AnnSearcher {
     std::shared_ptr<const std::vector<Point>> base_points_;
 };
 
+// ---------------------------------------------
+// DiskBasedLinearScanAnnSearcher Definition
+// ---------------------------------------------
+class DiskBasedLinearScanAnnSearcher : public AnnSearcher {
+   public:
+    explicit DiskBasedLinearScanAnnSearcher(unsigned int block_size = Global::kDefaultDiskBlockSize);
+    [[nodiscard]] bool RequiresIndex() const override;
+    [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
+    void Init(const PointSetMetadata& metadata, double norm_order) override;
+    AnnResult Search(const Point& query_point) override;
+    AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
+
+   private:
+    double norm_order_{0.0};
+    PointSetMetadata metadata_;
+    unsigned int block_size_{Global::kDefaultDiskBlockSize};
+    bool initialized_{false};
+    std::vector<Coordinate> block_buffer_;
+};
+
 struct QalshAnnIndexData {
     double norm_order{0.0};
     unsigned int num_points{0};
