@@ -33,40 +33,6 @@ double DotProductRaw(const Point& lhs, const Point& rhs) {
     return result;
 }
 
-double LpDistanceBoundedRaw(const Coordinate* lhs, const Coordinate* rhs, size_t num_dimensions, double norm_order,
-                            double upper_bound) {
-    if (upper_bound < 0.0) {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-        double sum = 0.0;
-        for (size_t dimension = 0; dimension < num_dimensions; ++dimension) {
-            sum += std::abs(lhs[dimension] - rhs[dimension]);
-            if (sum > upper_bound) {
-                return std::numeric_limits<double>::infinity();
-            }
-        }
-        return sum;
-    }
-
-    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-        const double upper_bound_sq = upper_bound * upper_bound;
-        double sum_sq = 0.0;
-        for (size_t dimension = 0; dimension < num_dimensions; ++dimension) {
-            const double diff = lhs[dimension] - rhs[dimension];
-            sum_sq += diff * diff;
-            if (sum_sq > upper_bound_sq) {
-                return std::numeric_limits<double>::infinity();
-            }
-        }
-        return std::sqrt(sum_sq);
-    }
-
-    Log::error("Unsupported norm order: {}", norm_order);
-    return 0.0;
-}
-
 bool IsBetterAnnResult(const AnnResult& candidate, const AnnResult& best) {
     return candidate.distance < best.distance ||
            (candidate.distance == best.distance && candidate.point_id < best.point_id);
@@ -236,8 +202,8 @@ AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& quer
                 const unsigned int point_id = block_begin + static_cast<unsigned int>(local_index);
                 const Coordinate* point_data =
                     block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
-                const double distance = LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
-                                                             norm_order_, local_best.distance);
+                const double distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
+                                                                   norm_order_, local_best.distance);
                 const AnnResult candidate{.distance = distance, .point_id = point_id};
                 if (IsBetterAnnResult(candidate, local_best)) {
                     local_best = candidate;
@@ -256,8 +222,8 @@ AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& quer
             const unsigned int point_id = block_begin + local_index;
             const Coordinate* point_data =
                 block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
-            const double distance =
-                LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions, norm_order_, block_best.distance);
+            const double distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
+                                                               norm_order_, block_best.distance);
             const AnnResult candidate{.distance = distance, .point_id = point_id};
             if (IsBetterAnnResult(candidate, block_best)) {
                 block_best = candidate;

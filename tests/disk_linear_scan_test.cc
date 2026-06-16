@@ -45,7 +45,7 @@ int main() {
         .num_dimensions = 2,
     };
 
-    AnnEstimator disk_estimator(std::make_unique<LinearScanAnnSearcher>(), true, 2);
+    AnnEstimator disk_estimator(std::make_unique<LinearScanAnnSearcher>(), true, 2, 2);
     const double disk_estimate = disk_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
     if (!AlmostEqual(disk_estimate, 3.0)) {
         std::filesystem::remove_all(temp_dir);

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <filesystem>
 #include <format>
 #include <limits>
@@ -77,20 +78,87 @@ void InitExactScanSearcher(LinearScanAnnSearcher& ann_searcher, const PointSetMe
 }
 
 double EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
-                                   unsigned int disk_block_size) {
-    DiskBasedLinearScanAnnSearcher ann_searcher(disk_block_size);
-    ann_searcher.Init(to, norm_order);
+                                   unsigned int disk_block_size, unsigned int disk_query_batch_size) {
+    if (from.num_dimensions != to.num_dimensions) {
+        Log::error("Source and target dimension mismatch: {} vs {}.", from.num_dimensions, to.num_dimensions);
+    }
+    if (from.num_points == 0 || to.num_points == 0 || from.num_dimensions == 0) {
+        Log::error("Disk-based linear scan requires non-empty point sets with non-zero dimensions.");
+    }
 
-    PointSet query_set;
-    query_set.Init(from);
+    std::ifstream query_input(from.file_path, std::ios::binary);
+    if (!query_input.is_open()) {
+        Log::error("Could not open query point set file: {}", from.file_path.string());
+    }
+    std::ifstream target_input(to.file_path, std::ios::binary);
+    if (!target_input.is_open()) {
+        Log::error("Could not open target point set file: {}", to.file_path.string());
+    }
 
-    Point query_point(from.num_dimensions);
+    std::vector<Coordinate> query_batch;
+    std::vector<Coordinate> target_block;
+    query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
+    target_block.reserve(static_cast<size_t>(disk_block_size) * to.num_dimensions);
     double estimation = 0.0;
-    for (unsigned int point_id = 0; point_id < from.num_points; ++point_id) {
-        if (!query_set.ReadNextPointInto(query_point)) {
-            Log::error("Failed to read query point {} from {}.", point_id, from.file_path.string());
+
+    for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
+        const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
+        const size_t query_coordinate_count = static_cast<size_t>(query_count) * from.num_dimensions;
+        query_batch.resize(query_coordinate_count);
+        const auto query_bytes =
+            static_cast<std::streamsize>(query_coordinate_count * static_cast<size_t>(sizeof(Coordinate)));
+        query_input.read(reinterpret_cast<char*>(query_batch.data()), query_bytes);
+        if (query_input.gcount() != query_bytes) {
+            Log::error("Failed to read query batch starting at point {} from {}.", batch_begin,
+                       from.file_path.string());
         }
-        estimation += ann_searcher.Search(query_point).distance;
+
+        std::vector<AnnResult> batch_results(query_count,
+                                             AnnResult{.distance = std::numeric_limits<double>::infinity(),
+                                                       .point_id = 0});
+
+        target_input.clear();
+        target_input.seekg(0, std::ios::beg);
+        if (!target_input) {
+            Log::error("Failed to seek target point set file: {}", to.file_path.string());
+        }
+
+        for (unsigned int block_begin = 0; block_begin < to.num_points; block_begin += disk_block_size) {
+            const unsigned int target_count = std::min(disk_block_size, to.num_points - block_begin);
+            const size_t target_coordinate_count = static_cast<size_t>(target_count) * to.num_dimensions;
+            target_block.resize(target_coordinate_count);
+            const auto target_bytes =
+                static_cast<std::streamsize>(target_coordinate_count * static_cast<size_t>(sizeof(Coordinate)));
+            target_input.read(reinterpret_cast<char*>(target_block.data()), target_bytes);
+            if (target_input.gcount() != target_bytes) {
+                Log::error("Failed to read target block starting at point {} from {}.", block_begin,
+                           to.file_path.string());
+            }
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+            for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+                const auto local_query_index = static_cast<unsigned int>(query_index);
+                AnnResult& result = batch_results[local_query_index];
+                const Coordinate* query_data =
+                    query_batch.data() + static_cast<size_t>(local_query_index) * from.num_dimensions;
+                for (unsigned int target_index = 0; target_index < target_count; ++target_index) {
+                    const Coordinate* target_data =
+                        target_block.data() + static_cast<size_t>(target_index) * to.num_dimensions;
+                    const double distance = Calc::LpDistanceBoundedRaw(target_data, query_data, to.num_dimensions,
+                                                                       norm_order, result.distance);
+                    if (distance < result.distance) {
+                        result.distance = distance;
+                        result.point_id = block_begin + target_index;
+                    }
+                }
+            }
+        }
+
+        for (const AnnResult& result : batch_results) {
+            estimation += result.distance;
+        }
     }
 
     return estimation;
@@ -111,12 +179,17 @@ double BinaryKlDivergence(double x, double y) {
 // --------------------------------------------------
 // AnnEstimator Implementation
 // --------------------------------------------------
-AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool disk_based, unsigned int disk_block_size)
+AnnEstimator::AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool disk_based, unsigned int disk_block_size,
+                           unsigned int disk_query_batch_size)
     : ann_searcher_(std::move(ann_searcher)),
       disk_based_(disk_based),
-      disk_block_size_(disk_block_size) {
+      disk_block_size_(disk_block_size),
+      disk_query_batch_size_(disk_query_batch_size) {
     if (disk_block_size_ == 0) {
         Log::error("Disk block size must be positive.");
+    }
+    if (disk_query_batch_size_ == 0) {
+        Log::error("Disk query batch size must be positive.");
     }
 }
 
@@ -134,7 +207,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
         if (dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get()) == nullptr) {
             Log::error("Disk-based mode is currently implemented only for ANN linear_scan.");
         }
-        return EstimateDiskBasedLinearScan(from, to, norm_order, disk_block_size_);
+        return EstimateDiskBasedLinearScan(from, to, norm_order, disk_block_size_, disk_query_batch_size_);
     }
 
     ann_searcher_->Init(to, norm_order);
@@ -167,7 +240,8 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
                                      unsigned int num_samples_default, unsigned int num_samples_ab,
                                      unsigned int num_samples_ba, double epsilon, double delta, bool use_cache,
-                                     unsigned int exact_batch_size, bool disk_based, unsigned int disk_block_size)
+                                     unsigned int exact_batch_size, bool disk_based, unsigned int disk_block_size,
+                                     unsigned int disk_query_batch_size)
     : weights_generator_(std::move(weights_generator)),
       num_samples_default_(num_samples_default),
       num_samples_ab_(num_samples_ab),
@@ -177,9 +251,13 @@ SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_g
       use_cache_(use_cache),
       exact_batch_size_(exact_batch_size),
       disk_based_(disk_based),
-      disk_block_size_(disk_block_size) {
+      disk_block_size_(disk_block_size),
+      disk_query_batch_size_(disk_query_batch_size) {
     if (disk_block_size_ == 0) {
         Log::error("Disk block size must be positive.");
+    }
+    if (disk_query_batch_size_ == 0) {
+        Log::error("Disk query batch size must be positive.");
     }
 }
 

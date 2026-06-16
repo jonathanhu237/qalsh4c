@@ -87,6 +87,13 @@ int main(int argc, char** argv) {
         ->default_val(Global::kDefaultDiskBlockSize)
         ->check(CLI::PositiveNumber);
 
+    unsigned int disk_query_batch_size{Global::kDefaultDiskQueryBatchSize};
+    estimate
+        ->add_option("--disk-query-batch-size", disk_query_batch_size,
+                     "Number of query points read per disk batch in disk-based mode")
+        ->default_val(Global::kDefaultDiskQueryBatchSize)
+        ->check(CLI::PositiveNumber);
+
     std::unique_ptr<Estimator> estimator;
     estimate->require_subcommand(1);
     estimate->callback([&]() {
@@ -108,7 +115,8 @@ int main(int argc, char** argv) {
         if (!ann_searcher) {
             Log::error("Ann searcher is not set. Please specify a Ann searcher.");
         }
-        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher), disk_based, disk_block_size);
+        estimator = std::make_unique<AnnEstimator>(std::move(ann_searcher), disk_based, disk_block_size,
+                                                   disk_query_batch_size);
     });
 
     // ------------------------------
@@ -169,7 +177,7 @@ int main(int argc, char** argv) {
         }
         estimator = std::make_unique<SamplingEstimator>(std::move(weights_generator), num_samples, num_samples_ab,
                                                         num_samples_ba, epsilon, delta, use_cache, exact_batch_size,
-                                                        disk_based, disk_block_size);
+                                                        disk_based, disk_block_size, disk_query_batch_size);
     });
 
     // ------------------------------

@@ -165,12 +165,13 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 
 Pass `--disk-based` at the `estimate` level to use an external-memory
 implementation where available. The first disk-based implementation is exact
-linear scan; it streams query points from disk and scans target points in blocks
-instead of loading either point set in full. Tune the target block size with
-`--disk-block-size`:
+linear scan; it streams query points from disk in batches and scans target
+points in blocks instead of loading either point set in full. Tune the target
+block size with `--disk-block-size` and the query batch size with
+`--disk-query-batch-size`:
 
 ```bash
-./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 -p 2 -d ./data/federalist --direction ab ann linear_scan
+./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 --disk-query-batch-size 64 -p 2 -d ./data/federalist --direction ab ann linear_scan
 ```
 
 Disk-based mode currently reports an error for QALSH ANN and sampling

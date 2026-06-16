@@ -15,7 +15,8 @@ class Estimator {
 class AnnEstimator : public Estimator {
    public:
     AnnEstimator(std::unique_ptr<AnnSearcher> ann_searcher, bool disk_based = false,
-                 unsigned int disk_block_size = Global::kDefaultDiskBlockSize);
+                 unsigned int disk_block_size = Global::kDefaultDiskBlockSize,
+                 unsigned int disk_query_batch_size = Global::kDefaultDiskQueryBatchSize);
     [[nodiscard]] bool RequiresIndex() const override;
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
@@ -23,6 +24,7 @@ class AnnEstimator : public Estimator {
     std::unique_ptr<AnnSearcher> ann_searcher_;
     bool disk_based_{false};
     unsigned int disk_block_size_{Global::kDefaultDiskBlockSize};
+    unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
 };
 
 class SamplingEstimator : public Estimator {
@@ -30,7 +32,8 @@ class SamplingEstimator : public Estimator {
     SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator, unsigned int num_samples_default,
                       unsigned int num_samples_ab, unsigned int num_samples_ba, double epsilon, double delta,
                       bool use_cache, unsigned int exact_batch_size, bool disk_based = false,
-                      unsigned int disk_block_size = Global::kDefaultDiskBlockSize);
+                      unsigned int disk_block_size = Global::kDefaultDiskBlockSize,
+                      unsigned int disk_query_batch_size = Global::kDefaultDiskQueryBatchSize);
     [[nodiscard]] bool RequiresIndex() const override;
     double EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) override;
 
@@ -45,4 +48,5 @@ class SamplingEstimator : public Estimator {
     unsigned int exact_batch_size_;
     bool disk_based_{false};
     unsigned int disk_block_size_{Global::kDefaultDiskBlockSize};
+    unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
 };

@@ -31,16 +31,21 @@ double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
 }
 
 double Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_order, double upper_bound) {
-    if (upper_bound < 0.0) {
-        return std::numeric_limits<double>::infinity();
-    }
     if (std::isinf(upper_bound)) {
         return LpDistance(pt1, pt2, norm_order);
+    }
+    return LpDistanceBoundedRaw(pt1.data(), pt2.data(), pt1.size(), norm_order, upper_bound);
+}
+
+double Calc::LpDistanceBoundedRaw(const Coordinate* pt1, const Coordinate* pt2, size_t num_dimensions,
+                                  double norm_order, double upper_bound) {
+    if (upper_bound < 0.0) {
+        return std::numeric_limits<double>::infinity();
     }
 
     if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
         double sum = 0.0;
-        for (size_t i = 0; i < pt1.size(); ++i) {
+        for (size_t i = 0; i < num_dimensions; ++i) {
             sum += std::abs(pt1[i] - pt2[i]);
             if (sum > upper_bound) {
                 return std::numeric_limits<double>::infinity();
@@ -53,7 +58,7 @@ double Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_o
     if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
         const double upper_bound_sq = upper_bound * upper_bound;
         double sum_sq = 0.0;
-        for (size_t i = 0; i < pt1.size(); ++i) {
+        for (size_t i = 0; i < num_dimensions; ++i) {
             const double diff = pt1[i] - pt2[i];
             sum_sq += diff * diff;
             if (sum_sq > upper_bound_sq) {
