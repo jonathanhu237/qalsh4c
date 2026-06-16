@@ -17,10 +17,10 @@
 
 namespace {
 
-double DotProductRaw(const Point& lhs, const Point& rhs) {
-    double result = 0.0;
-    const double* lhs_data = lhs.data();
-    const double* rhs_data = rhs.data();
+float DotProductRaw(const Point& lhs, const Point& rhs) {
+    float result = 0.0;
+    const float* lhs_data = lhs.data();
+    const float* rhs_data = rhs.data();
     const auto num_dimensions = static_cast<long long>(lhs.size());
 
 #ifdef QALSH4C_USE_OPENMP
@@ -51,7 +51,7 @@ std::unique_ptr<AnnSearcher> LinearScanAnnSearcher::Clone() const {
     return std::make_unique<LinearScanAnnSearcher>(*this);
 }
 
-void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
     auto base_points = std::make_shared<std::vector<Point>>(
         PointSet::LoadPointsFromFile(metadata.file_path, metadata.num_points, metadata.num_dimensions));
     if (base_points->size() != metadata.num_points) {
@@ -61,7 +61,7 @@ void LinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_o
 }
 
 void LinearScanAnnSearcher::InitLoaded(std::shared_ptr<const std::vector<Point>> base_points,
-                                       unsigned int num_dimensions, double norm_order) {
+                                       unsigned int num_dimensions, float norm_order) {
     if (!base_points) {
         Log::error("Loaded target points are not set.");
     }
@@ -73,10 +73,10 @@ void LinearScanAnnSearcher::InitLoaded(std::shared_ptr<const std::vector<Point>>
 }
 
 AnnResult LinearScanAnnSearcher::Search(const Point& query_point) {
-    return SearchWithUpperBound(query_point, std::numeric_limits<double>::infinity());
+    return SearchWithUpperBound(query_point, std::numeric_limits<float>::infinity());
 }
 
-AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, double initial_upper_bound) {
+AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, float initial_upper_bound) {
     if (!base_points_) {
         Log::error("Linear scan searcher is not initialized.");
     }
@@ -84,7 +84,7 @@ AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, 
     AnnResult result{.distance = initial_upper_bound, .point_id = 0};
 
     for (unsigned int i = 0; i < num_points_; i++) {
-        double distance = Calc::LpDistanceBounded((*base_points_)[i], query_point, norm_order_, result.distance);
+        float distance = Calc::LpDistanceBounded((*base_points_)[i], query_point, norm_order_, result.distance);
         if (distance < result.distance) {
             result.point_id = i;
             result.distance = distance;
@@ -95,7 +95,7 @@ AnnResult LinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point, 
 }
 
 std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
-    const std::vector<Point>& query_points, const std::vector<double>& initial_upper_bounds) {
+    const std::vector<Point>& query_points, const std::vector<float>& initial_upper_bounds) {
     if (query_points.size() != initial_upper_bounds.size()) {
         Log::error("Query size and upper-bound size mismatch.");
     }
@@ -110,7 +110,7 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
 
     for (unsigned int point_id = 0; point_id < num_points_; ++point_id) {
         for (size_t query_index = 0; query_index < query_points.size(); ++query_index) {
-            const double distance = Calc::LpDistanceBounded((*base_points_)[point_id], query_points[query_index],
+            const float distance = Calc::LpDistanceBounded((*base_points_)[point_id], query_points[query_index],
                                                             norm_order_, results[query_index].distance);
             if (distance < results[query_index].distance) {
                 results[query_index].distance = distance;
@@ -143,7 +143,7 @@ std::unique_ptr<AnnSearcher> DiskBasedLinearScanAnnSearcher::Clone() const {
     return clone;
 }
 
-void DiskBasedLinearScanAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+void DiskBasedLinearScanAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
     if (metadata.num_points == 0 || metadata.num_dimensions == 0) {
         Log::error("Disk-based linear scan requires a non-empty point set with non-zero dimensions.");
     }
@@ -156,11 +156,11 @@ void DiskBasedLinearScanAnnSearcher::Init(const PointSetMetadata& metadata, doub
 }
 
 AnnResult DiskBasedLinearScanAnnSearcher::Search(const Point& query_point) {
-    return SearchWithUpperBound(query_point, std::numeric_limits<double>::infinity());
+    return SearchWithUpperBound(query_point, std::numeric_limits<float>::infinity());
 }
 
 AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point,
-                                                               double initial_upper_bound) {
+                                                               float initial_upper_bound) {
     if (!initialized_) {
         Log::error("Disk-based linear scan searcher is not initialized.");
     }
@@ -202,7 +202,7 @@ AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& quer
                 const unsigned int point_id = block_begin + static_cast<unsigned int>(local_index);
                 const Coordinate* point_data =
                     block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
-                const double distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
+                const float distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
                                                                    norm_order_, local_best.distance);
                 const AnnResult candidate{.distance = distance, .point_id = point_id};
                 if (IsBetterAnnResult(candidate, local_best)) {
@@ -222,7 +222,7 @@ AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& quer
             const unsigned int point_id = block_begin + local_index;
             const Coordinate* point_data =
                 block_buffer_.data() + static_cast<size_t>(local_index) * metadata_.num_dimensions;
-            const double distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
+            const float distance = Calc::LpDistanceBoundedRaw(point_data, query_data, metadata_.num_dimensions,
                                                                norm_order_, block_best.distance);
             const AnnResult candidate{.distance = distance, .point_id = point_id};
             if (IsBetterAnnResult(candidate, block_best)) {
@@ -240,10 +240,10 @@ AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& quer
 // ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
-QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio)
+QalshAnnSearcher::QalshAnnSearcher(float approximation_ratio)
     : QalshAnnSearcher(approximation_ratio, Random::SeededGenerator()()) {}
 
-QalshAnnSearcher::QalshAnnSearcher(double approximation_ratio, std::mt19937::result_type random_seed)
+QalshAnnSearcher::QalshAnnSearcher(float approximation_ratio, std::mt19937::result_type random_seed)
     : approximation_ratio_(approximation_ratio),
       random_seed_(random_seed) {}
 
@@ -265,7 +265,7 @@ std::shared_ptr<const std::vector<Point>> QalshAnnSearcher::TargetPoints() const
     return std::shared_ptr<const std::vector<Point>>(index_data_, &index_data_->base_points);
 }
 
-void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order) {
+void QalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
     auto index_data = std::make_shared<QalshAnnIndexData>();
     index_data->norm_order = norm_order;
     index_data->num_points = metadata.num_points;
@@ -289,13 +289,13 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, double norm_order)
         Log::error("Failed to load all target points for in-memory QALSH index.");
     }
 
-    std::function<double()> coordinate_generator;
+    std::function<float()> coordinate_generator;
     std::mt19937 gen(random_seed_);
     if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-        std::cauchy_distribution<double> dist(0.0, 1.0);
+        std::cauchy_distribution<float> dist(0.0, 1.0);
         coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
     } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-        std::normal_distribution<double> dist(0.0, 1.0);
+        std::normal_distribution<float> dist(0.0, 1.0);
         coordinate_generator = [dist, &gen]() mutable { return dist(gen); };
     } else {
         Log::error("Unsupported norm order: {}", norm_order);
@@ -375,12 +375,12 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     const QalshAnnIndexData& index_data = *index_data_;
     const unsigned int epoch = NextSearchEpoch();
     bool has_candidate = false;
-    AnnResult best_candidate{.distance = std::numeric_limits<double>::infinity(), .point_id = 0};
+    AnnResult best_candidate{.distance = std::numeric_limits<float>::infinity(), .point_id = 0};
 
     unsigned int num_hash_tables = index_data.qalsh_config.num_hash_tables;
     unsigned int collision_threshold = index_data.qalsh_config.collision_threshold;
-    double bucket_width = index_data.qalsh_config.bucket_width;
-    double approximation_ratio = index_data.qalsh_config.approximation_ratio;
+    float bucket_width = index_data.qalsh_config.bucket_width;
+    float approximation_ratio = index_data.qalsh_config.approximation_ratio;
 
     for (unsigned int i = 0; i < num_hash_tables; i++) {
         search_cursors_[i] =
@@ -388,8 +388,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     }
 
     // c-ANN search
-    double radius = 1.0;
-    double bound = bucket_width * radius / 2.0;
+    float radius = 1.0F;
+    float bound = bucket_width * radius / 2.0F;
     bool shouldTerminate = false;
 
     auto t1_satisfied = [&]() {
@@ -411,7 +411,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
             active_tables.pop();
 
             bool table_done = index_data.searchers[i].IncrementalSearch(
-                search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] double dot_product) {
+                search_cursors_[i], bound, [&](unsigned int point_id, [[maybe_unused]] float dot_product) {
                     if (shouldTerminate) {
                         return;
                     }
@@ -429,7 +429,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                     if (++state.collision_count >= collision_threshold) {
                         state.visited_stamp = epoch;
                         const Point& candidate_point = index_data.base_points[point_id];
-                        double distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
+                        float distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
                                                                   best_candidate.distance);
                         if (distance < best_candidate.distance) {
                             has_candidate = true;
@@ -455,7 +455,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 
         // Update radius and bound for next iteration
         radius *= approximation_ratio;
-        bound = bucket_width * radius / 2.0;
+        bound = bucket_width * radius / 2.0F;
     }
 
     return best_candidate;

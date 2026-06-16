@@ -18,29 +18,29 @@
 namespace DatasetPrep {
 namespace {
 
-constexpr double kNormEpsilon = 1e-12;
-constexpr double kMemoryBudgetFraction = 0.80;
+constexpr float kNormEpsilon = 1e-12;
+constexpr float kMemoryBudgetFraction = 0.80;
 constexpr size_t kMaxSafetyMarginBytes = 64ULL * 1024ULL * 1024ULL;
 constexpr int kCudaBlockSize = 128;
 constexpr size_t kMaxKernelBatchPoints = static_cast<size_t>(std::numeric_limits<int>::max()) * kCudaBlockSize;
 constexpr auto kProgressPollInterval = std::chrono::milliseconds(250);
 
-__global__ void ChamferMinDistancesKernel(const double* source_points, const double* target_points,
+__global__ void ChamferMinDistancesKernel(const float* source_points, const float* target_points,
                                           size_t num_source_points, size_t num_target_points,
-                                          unsigned int num_dimensions, int norm_kind, double* min_distances,
+                                          unsigned int num_dimensions, int norm_kind, float* min_distances,
                                           unsigned long long* progress_counter) {
     const size_t source_index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     const bool active = source_index < num_source_points;
 
     if (active) {
-        const double* source = source_points + (source_index * num_dimensions);
-        double min_distance = DBL_MAX;
+        const float* source = source_points + (source_index * num_dimensions);
+        float min_distance = FLT_MAX;
 
         for (size_t target_index = 0; target_index < num_target_points; ++target_index) {
-            const double* target = target_points + (target_index * num_dimensions);
-            double distance = 0.0;
+            const float* target = target_points + (target_index * num_dimensions);
+            float distance = 0.0;
             for (unsigned int dimension = 0; dimension < num_dimensions; ++dimension) {
-                const double diff = source[dimension] - target[dimension];
+                const float diff = source[dimension] - target[dimension];
                 if (norm_kind == 1) {
                     distance += fabs(diff);
                 } else {
@@ -69,7 +69,7 @@ __global__ void ChamferMinDistancesKernel(const double* source_points, const dou
     }
 }
 
-CudaChamferResult MakeResult(CudaChamferStatus status, double value, std::string message) {
+CudaChamferResult MakeResult(CudaChamferStatus status, float value, std::string message) {
     CudaChamferResult result;
     result.status = status;
     result.value = value;
@@ -85,10 +85,10 @@ std::string CudaErrorMessage(const std::string& prefix, cudaError_t error) {
 
 std::string FormatBytes(size_t bytes) {
     std::ostringstream oss;
-    constexpr double kib = 1024.0;
-    constexpr double mib = kib * 1024.0;
-    constexpr double gib = mib * 1024.0;
-    const double value = static_cast<double>(bytes);
+    constexpr float kib = 1024.0;
+    constexpr float mib = kib * 1024.0;
+    constexpr float gib = mib * 1024.0;
+    const float value = static_cast<float>(bytes);
     oss.setf(std::ios::fixed, std::ios::floatfield);
     oss.precision(2);
     if (value >= gib) {
@@ -122,10 +122,10 @@ bool PointBytes(size_t num_points, size_t num_dimensions, size_t& output) {
     if (!CheckedMultiply(num_points, num_dimensions, values)) {
         return false;
     }
-    return CheckedMultiply(values, sizeof(double), output);
+    return CheckedMultiply(values, sizeof(float), output);
 }
 
-int NormKind(double norm_order) {
+int NormKind(float norm_order) {
     if (std::abs(norm_order - 1.0) < kNormEpsilon) {
         return 1;
     }
@@ -135,9 +135,9 @@ int NormKind(double norm_order) {
     return 0;
 }
 
-std::vector<double> FlattenPoints(const std::vector<Point>& points, size_t begin, size_t count,
+std::vector<float> FlattenPoints(const std::vector<Point>& points, size_t begin, size_t count,
                                   size_t num_dimensions) {
-    std::vector<double> flattened;
+    std::vector<float> flattened;
     flattened.reserve(count * num_dimensions);
     for (size_t point_index = begin; point_index < begin + count; ++point_index) {
         flattened.insert(flattened.end(), points[point_index].begin(), points[point_index].end());
@@ -168,10 +168,10 @@ class DeviceBuffer {
         return cudaMalloc(reinterpret_cast<void**>(&ptr_), bytes);
     }
 
-    [[nodiscard]] double* get() const { return ptr_; }
+    [[nodiscard]] float* get() const { return ptr_; }
 
    private:
-    double* ptr_{nullptr};
+    float* ptr_{nullptr};
 };
 
 class DeviceCounter {
@@ -288,16 +288,16 @@ CudaChamferResult ComputeBatchCapacity(size_t free_bytes, size_t num_source_poin
     if (!PointBytes(num_target_points, num_dimensions, target_bytes)) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0, "target point set overflows CUDA memory sizing");
     }
-    if (one_source_bytes > std::numeric_limits<size_t>::max() - sizeof(double)) {
+    if (one_source_bytes > std::numeric_limits<size_t>::max() - sizeof(float)) {
         return MakeResult(CudaChamferStatus::kFallbackAllowed, 0.0, "source batch memory sizing overflow");
     }
 
     const size_t budget_bytes =
         options.memory_budget_bytes_override == 0
-            ? static_cast<size_t>(static_cast<double>(free_bytes) * kMemoryBudgetFraction)
+            ? static_cast<size_t>(static_cast<float>(free_bytes) * kMemoryBudgetFraction)
             : options.memory_budget_bytes_override;
     const size_t margin_bytes = SafetyMargin(budget_bytes);
-    const size_t per_source_bytes = one_source_bytes + sizeof(double);
+    const size_t per_source_bytes = one_source_bytes + sizeof(float);
 
     if (budget_bytes <= target_bytes || budget_bytes - target_bytes <= margin_bytes ||
         budget_bytes - target_bytes - margin_bytes < per_source_bytes) {
@@ -358,7 +358,7 @@ CudaChamferResult PollKernelProgress(cudaEvent_t kernel_done, cudaStream_t progr
 }  // namespace
 
 CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, const std::vector<Point>& to,
-                                             double norm_order, const CudaProgressCallback& progress_callback,
+                                             float norm_order, const CudaProgressCallback& progress_callback,
                                              CudaChamferOptions options) {
     ReportStage(options, "querying CUDA devices");
     int device_count = 0;
@@ -446,7 +446,7 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
     }
 
     ReportStage(options, "flattening target points");
-    std::vector<double> target_host = FlattenPoints(to, 0, to.size(), num_dimensions);
+    std::vector<float> target_host = FlattenPoints(to, 0, to.size(), num_dimensions);
     DeviceBuffer target_device;
     ReportStage(options, "allocating target buffer on device");
     error = target_device.Allocate(target_bytes);
@@ -473,7 +473,7 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
         }
         error = source_device.Allocate(source_bytes);
         if (error == cudaSuccess) {
-            error = distances_device.Allocate(batch_size * sizeof(double));
+            error = distances_device.Allocate(batch_size * sizeof(float));
             if (error == cudaSuccess) {
                 allocated_batch_buffers = true;
                 break;
@@ -494,14 +494,14 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
         options.progress_start_callback();
     }
 
-    double total = 0.0;
+    float total = 0.0;
     size_t completed = 0;
-    std::vector<double> distances_host(batch_size, 0.0);
+    std::vector<float> distances_host(batch_size, 0.0);
 
     while (completed < from.size()) {
         const size_t current_batch = std::min(batch_size, from.size() - completed);
-        const size_t current_source_bytes = current_batch * num_dimensions * sizeof(double);
-        std::vector<double> source_host = FlattenPoints(from, completed, current_batch, num_dimensions);
+        const size_t current_source_bytes = current_batch * num_dimensions * sizeof(float);
+        std::vector<float> source_host = FlattenPoints(from, completed, current_batch, num_dimensions);
 
         error = cudaMemcpyAsync(source_device.get(), source_host.data(), current_source_bytes, cudaMemcpyHostToDevice,
                                 compute_stream.get());
@@ -557,7 +557,7 @@ CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, con
             }
         }
 
-        error = cudaMemcpyAsync(distances_host.data(), distances_device.get(), current_batch * sizeof(double),
+        error = cudaMemcpyAsync(distances_host.data(), distances_device.get(), current_batch * sizeof(float),
                                 cudaMemcpyDeviceToHost, compute_stream.get());
         if (error != cudaSuccess) {
             return MakeResult(CudaChamferStatus::kFailed, 0.0,

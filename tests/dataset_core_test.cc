@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <vector>
 
-bool Near(double actual, double expected) {
+bool Near(float actual, float expected) {
     return std::abs(actual - expected) < 1e-9;
 }
 

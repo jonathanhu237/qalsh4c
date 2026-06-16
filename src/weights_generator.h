@@ -15,8 +15,8 @@ class WeightsGenerator {
    public:
     virtual ~WeightsGenerator() = default;
     [[nodiscard]] virtual bool RequiresIndex() const = 0;
-    virtual std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                         double norm_order, bool use_cache) = 0;
+    virtual std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                                         float norm_order, bool use_cache) = 0;
 };
 
 // --------------------------------------------------
@@ -26,8 +26,8 @@ class UniformWeightsGenerator : public WeightsGenerator {
    public:
     UniformWeightsGenerator() = default;
     [[nodiscard]] bool RequiresIndex() const override;
-    std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
+    std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                                 float norm_order, bool use_cache) override;
 };
 
 // --------------------------------------------------
@@ -35,14 +35,14 @@ class UniformWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
-    explicit QalshWeightsGenerator(double approximation_ratio = Global::kDefaultApproximationRatio);
+    explicit QalshWeightsGenerator(float approximation_ratio = Global::kDefaultApproximationRatio);
     [[nodiscard]] bool RequiresIndex() const override;
-    [[nodiscard]] QalshConfig BuildConfig(unsigned int num_points, double norm_order) const;
+    [[nodiscard]] QalshConfig BuildConfig(unsigned int num_points, float norm_order) const;
     [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
-    std::vector<double> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                                 double norm_order, bool use_cache) override;
+    std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                                 float norm_order, bool use_cache) override;
 
    private:
-    double approximation_ratio_{Global::kDefaultApproximationRatio};
+    float approximation_ratio_{Global::kDefaultApproximationRatio};
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };

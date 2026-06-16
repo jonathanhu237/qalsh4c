@@ -28,7 +28,7 @@ int main() {
     base_points.reserve(150);
     base_points.push_back(Point{0.0});
     for (unsigned int point_id = 1; point_id < 150; ++point_id) {
-        base_points.push_back(Point{1000.0 + static_cast<double>(point_id)});
+        base_points.push_back(Point{1000.0F + static_cast<float>(point_id)});
     }
     WritePointFile(temp_dir / "base.bin", base_points);
 

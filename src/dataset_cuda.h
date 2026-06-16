@@ -18,7 +18,7 @@ enum class CudaChamferStatus {
 
 struct CudaChamferResult {
     CudaChamferStatus status{CudaChamferStatus::kFailed};
-    double value{0.0};
+    float value{0.0};
     std::string message;
 };
 
@@ -32,7 +32,7 @@ struct CudaChamferOptions {
 using CudaProgressCallback = std::function<void(size_t)>;
 
 CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>& from, const std::vector<Point>& to,
-                                             double norm_order, const CudaProgressCallback& progress_callback,
+                                             float norm_order, const CudaProgressCallback& progress_callback,
                                              CudaChamferOptions options = {});
 
 }  // namespace DatasetPrep

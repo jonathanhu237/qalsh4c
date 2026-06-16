@@ -68,7 +68,7 @@ std::vector<Point> LoadSampledQueryPoints(const PointSetMetadata& metadata,
     return query_points;
 }
 
-void InitExactScanSearcher(LinearScanAnnSearcher& ann_searcher, const PointSetMetadata& metadata, double norm_order,
+void InitExactScanSearcher(LinearScanAnnSearcher& ann_searcher, const PointSetMetadata& metadata, float norm_order,
                            const std::shared_ptr<const std::vector<Point>>& loaded_target_points) {
     if (loaded_target_points) {
         if (loaded_target_points->size() != metadata.num_points) {
@@ -131,7 +131,7 @@ void ReadPointIntoBuffer(std::ifstream& input, const PointSetMetadata& metadata,
 }
 
 void ScanDiskTargetBlocks(const std::vector<Coordinate>& query_batch, unsigned int query_count,
-                          const PointSetMetadata& target_metadata, double norm_order, unsigned int disk_block_size,
+                          const PointSetMetadata& target_metadata, float norm_order, unsigned int disk_block_size,
                           std::ifstream& target_input, std::vector<Coordinate>& target_block,
                           std::vector<AnnResult>& batch_results) {
     target_input.clear();
@@ -155,7 +155,7 @@ void ScanDiskTargetBlocks(const std::vector<Coordinate>& query_batch, unsigned i
             for (unsigned int target_index = 0; target_index < target_count; ++target_index) {
                 const Coordinate* target_data =
                     target_block.data() + static_cast<size_t>(target_index) * target_metadata.num_dimensions;
-                const double distance = Calc::LpDistanceBoundedRaw(target_data, query_data,
+                const float distance = Calc::LpDistanceBoundedRaw(target_data, query_data,
                                                                    target_metadata.num_dimensions, norm_order,
                                                                    result.distance);
                 if (distance < result.distance) {
@@ -168,11 +168,11 @@ void ScanDiskTargetBlocks(const std::vector<Coordinate>& query_batch, unsigned i
 }
 
 std::vector<AnnResult> InitBatchResults(unsigned int query_count) {
-    return std::vector<AnnResult>(query_count, AnnResult{.distance = std::numeric_limits<double>::infinity(),
+    return std::vector<AnnResult>(query_count, AnnResult{.distance = std::numeric_limits<float>::infinity(),
                                                         .point_id = 0});
 }
 
-double EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
+float EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
                                    unsigned int disk_block_size, unsigned int disk_query_batch_size) {
     ValidateDiskScanMetadata(from, to);
 
@@ -185,7 +185,7 @@ double EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetM
     std::vector<Coordinate> target_block;
     query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
     target_block.reserve(static_cast<size_t>(disk_block_size) * to.num_dimensions);
-    double estimation = 0.0;
+    float estimation = 0.0;
 
     for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
         const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
@@ -203,7 +203,7 @@ double EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetM
     return estimation;
 }
 
-double EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order,
+float EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
                                         unsigned int num_samples, unsigned int disk_block_size,
                                         unsigned int disk_query_batch_size) {
     ValidateDiskScanMetadata(from, to);
@@ -212,7 +212,7 @@ double EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const Poin
     }
 
     std::mt19937 gen = Random::SeededGenerator();
-    std::uniform_real_distribution<double> distribution(0.0, static_cast<double>(from.num_points));
+    std::uniform_real_distribution<float> distribution(0.0, static_cast<float>(from.num_points));
     std::unordered_map<unsigned int, unsigned int> sample_count_map;
     sample_count_map.reserve(num_samples);
     for (unsigned int sample_index = 0; sample_index < num_samples; ++sample_index) {
@@ -240,8 +240,8 @@ double EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const Poin
     std::vector<Coordinate> target_block;
     query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
     target_block.reserve(static_cast<size_t>(disk_block_size) * to.num_dimensions);
-    double estimation = 0.0;
-    const double sum = static_cast<double>(from.num_points);
+    float estimation = 0.0;
+    const float sum = static_cast<float>(from.num_points);
 
     for (size_t batch_begin = 0; batch_begin < sample_counts.size(); batch_begin += disk_query_batch_size) {
         const size_t batch_end = std::min(batch_begin + static_cast<size_t>(disk_query_batch_size),
@@ -263,20 +263,20 @@ double EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const Poin
 
         for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
             const unsigned int count = sample_counts[batch_begin + batch_index].second;
-            estimation += static_cast<double>(count) * sum * batch_results[batch_index].distance;
+            estimation += static_cast<float>(count) * sum * batch_results[batch_index].distance;
         }
     }
 
-    return estimation / static_cast<double>(num_samples);
+    return estimation / static_cast<float>(num_samples);
 }
 
-double BinaryKlDivergence(double x, double y) {
-    if (x < 0.0 || x > 1.0 || y <= 0.0 || y >= 1.0) {
+float BinaryKlDivergence(float x, float y) {
+    if (x < 0.0F || x > 1.0F || y <= 0.0F || y >= 1.0F) {
         Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
     }
 
-    const double left = x <= 0.0 ? 0.0 : x * std::log(x / y);
-    const double right = x >= 1.0 ? 0.0 : (1.0 - x) * std::log((1.0 - x) / (1.0 - y));
+    const float left = x <= 0.0F ? 0.0F : x * std::log(x / y);
+    const float right = x >= 1.0F ? 0.0F : (1.0F - x) * std::log((1.0F - x) / (1.0F - y));
     return left + right;
 }
 
@@ -303,7 +303,7 @@ bool AnnEstimator::RequiresIndex() const {
     return ann_searcher_ && ann_searcher_->RequiresIndex();
 }
 
-double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, double norm_order) {
+float AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order) {
     // Check the ANN searcher
     if (!ann_searcher_) {
         Log::error("The ANN searcher is not set.");
@@ -318,7 +318,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 
     ann_searcher_->Init(to, norm_order);
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-    std::vector<double> distances(from.num_points, 0.0);
+    std::vector<Distance> distances(from.num_points, 0.0F);
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
@@ -337,7 +337,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
     }
 #endif
 
-    return std::accumulate(distances.begin(), distances.end(), 0.0);
+    return std::accumulate(distances.begin(), distances.end(), 0.0F);
 }
 
 // --------------------------------------------------
@@ -345,7 +345,7 @@ double AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointS
 // --------------------------------------------------
 SamplingEstimator::SamplingEstimator(std::unique_ptr<WeightsGenerator> weights_generator,
                                      unsigned int num_samples_default, unsigned int num_samples_ab,
-                                     unsigned int num_samples_ba, double epsilon, double delta, bool use_cache,
+                                     unsigned int num_samples_ba, float epsilon, float delta, bool use_cache,
                                      unsigned int exact_batch_size, bool disk_based, unsigned int disk_block_size,
                                      unsigned int disk_query_batch_size)
     : weights_generator_(std::move(weights_generator)),
@@ -371,8 +371,8 @@ bool SamplingEstimator::RequiresIndex() const {
     return weights_generator_ && weights_generator_->RequiresIndex();
 }
 
-double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
-                                           double norm_order) {
+float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
+                                           float norm_order) {
     // Check the ANN searcher
     if (!weights_generator_) {
         Log::error("The ANN searcher is not set.");
@@ -410,15 +410,15 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     }
 
     // Update the num_samples
-    double updated_num_samples = base_num_samples;
-    if (updated_num_samples == 0) {
+    float updated_num_samples = static_cast<float>(base_num_samples);
+    if (updated_num_samples == 0.0F) {
         if (weights_are_upper_bounds) {
-            const double epsilon = epsilon_;
-            const double delta = delta_;
-            if (epsilon <= 0.0) {
+            const float epsilon = epsilon_;
+            const float delta = delta_;
+            if (epsilon <= 0.0F) {
                 Log::error("Epsilon must be positive for automatic QALSH sampling.");
             }
-            if (delta <= 0.0 || delta >= 1.0) {
+            if (delta <= 0.0F || delta >= 1.0F) {
                 Log::error("Delta must be in (0, 1) for automatic QALSH sampling.");
             }
 
@@ -426,43 +426,43 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
             const unsigned int m = qalsh_config.num_hash_tables;
             const unsigned int l = qalsh_config.collision_threshold;
-            const double c = qalsh_config.approximation_ratio;
+            const float c = qalsh_config.approximation_ratio;
             if (m == 0) {
                 Log::error("QALSH index has zero hash tables.");
             }
 
-            double p1 = 0.0;
-            if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-                p1 = Calc::L1Probability(qalsh_config.bucket_width / 2.0);
-            } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-                p1 = Calc::L2Probability(qalsh_config.bucket_width / 2.0);
+            float p1 = 0.0F;
+            if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+                p1 = Calc::L1Probability(qalsh_config.bucket_width / 2.0F);
+            } else if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
+                p1 = Calc::L2Probability(qalsh_config.bucket_width / 2.0F);
             } else {
                 Log::error("Unsupported norm order: {}", norm_order);
-                return 0.0;
+                return 0.0F;
             }
 
-            const double theta = (static_cast<double>(l) - 1.0) / static_cast<double>(m);
-            if (theta < 0.0 || theta >= p1) {
+            const float theta = (static_cast<float>(l) - 1.0F) / static_cast<float>(m);
+            if (theta < 0.0F || theta >= p1) {
                 Log::error("Invalid QALSH threshold ratio for automatic sampling: theta={}, p1={}", theta, p1);
             }
 
-            const double kl_divergence = BinaryKlDivergence(theta, p1);
-            const double delta0 = std::exp(-static_cast<double>(m) * kl_divergence);
-            if (c * delta0 >= 1.0) {
+            const float kl_divergence = BinaryKlDivergence(theta, p1);
+            const float delta0 = std::exp(-static_cast<float>(m) * kl_divergence);
+            if (c * delta0 >= 1.0F) {
                 Log::error("Automatic QALSH sampling requires c * delta0 < 1, got c={}, delta0={}", c, delta0);
             }
 
-            const double kappa_exp = (c * c) * (1.0 - delta0) / (1.0 - (c * delta0));
-            const double min_samples = (kappa_exp - 1.0) / (delta * epsilon * epsilon);
-            updated_num_samples = static_cast<unsigned int>(std::ceil(min_samples));
+            const float kappa_exp = (c * c) * (1.0F - delta0) / (1.0F - (c * delta0));
+            const float min_samples = (kappa_exp - 1.0F) / (delta * epsilon * epsilon);
+            updated_num_samples = static_cast<float>(static_cast<unsigned int>(std::ceil(min_samples)));
 
             Log::info("SamplingEstimator automatically selected {} samples.", updated_num_samples);
         } else if (uniform_weights_generator != nullptr) {
             Log::error("You must specify num_samples for UniformWeightsGenerator.");
-            return 0.0;
+            return 0.0F;
         } else {
             Log::error("Unknown WeightsGenerator type.");
-            return 0.0;
+            return 0.0F;
         }
     }
 
@@ -477,7 +477,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     // Generate weights.
     Log::info("Generating weights...");
-    std::vector<double> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
+    std::vector<Weight> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
@@ -488,7 +488,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
 
     // Sample the points using the generated weights.
     WeightedSampler sampler(weights);
-    const double sum = sampler.Total();
+    const Weight sum = sampler.Total();
     Log::info("Total sum of weights: {}", sum);
 
     std::unordered_map<unsigned int, unsigned int> sample_count_map;
@@ -516,7 +516,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
     LinearScanAnnSearcher shared_ann_searcher;
     InitExactScanSearcher(shared_ann_searcher, to, norm_order, loaded_target_points);
-    double estimation = 0.0;
+    Estimate estimation = 0.0F;
 
 #pragma omp parallel reduction(+ : estimation)
     {
@@ -527,17 +527,17 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             for (long long sample_index = 0; sample_index < static_cast<long long>(sample_counts.size());
                  ++sample_index) {
                 const auto& [point_id, count] = sample_counts[static_cast<size_t>(sample_index)];
-                const double initial_upper_bound =
-                    weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
-                const double nearest_distance =
+                const Distance initial_upper_bound =
+                    weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<float>::infinity();
+                const Distance nearest_distance =
                     ann_searcher.SearchWithUpperBound(query_points[static_cast<size_t>(sample_index)],
                                                       initial_upper_bound)
                         .distance;
-                estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+                estimation += (static_cast<float>(count) * sum * nearest_distance / weights[point_id]);
             }
         } else {
             std::vector<Point> batch_queries;
-            std::vector<double> batch_upper_bounds;
+            std::vector<Distance> batch_upper_bounds;
             std::vector<unsigned int> batch_point_ids;
             std::vector<unsigned int> batch_counts;
             batch_queries.reserve(exact_batch_size);
@@ -562,7 +562,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                     batch_counts.push_back(count);
                     batch_queries.push_back(query_points[sample_index]);
                     batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
-                                                                          : std::numeric_limits<double>::infinity());
+                                                                          : std::numeric_limits<float>::infinity());
                 }
 
                 std::vector<AnnResult> batch_results =
@@ -570,14 +570,14 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
                     const unsigned int point_id = batch_point_ids[batch_index];
                     const unsigned int count = batch_counts[batch_index];
-                    const double nearest_distance = batch_results[batch_index].distance;
-                    estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+                    const Distance nearest_distance = batch_results[batch_index].distance;
+                    estimation += (static_cast<float>(count) * sum * nearest_distance / weights[point_id]);
                 }
             }
         }
     }
 #else
-    double estimation = 0.0;
+    Estimate estimation = 0.0F;
     LinearScanAnnSearcher ann_searcher;
     InitExactScanSearcher(ann_searcher, to, norm_order, loaded_target_points);
 
@@ -586,15 +586,15 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
     if (exact_batch_size == 1) {
         for (size_t sample_index = 0; sample_index < sample_counts.size(); ++sample_index) {
             const auto& [point_id, count] = sample_counts[sample_index];
-            const double initial_upper_bound =
-                weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<double>::infinity();
-            const double nearest_distance =
+            const Distance initial_upper_bound =
+                weights_are_upper_bounds ? weights[point_id] : std::numeric_limits<float>::infinity();
+            const Distance nearest_distance =
                 ann_searcher.SearchWithUpperBound(query_points[sample_index], initial_upper_bound).distance;
-            estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+            estimation += (static_cast<float>(count) * sum * nearest_distance / weights[point_id]);
         }
     } else {
         std::vector<Point> batch_queries;
-        std::vector<double> batch_upper_bounds;
+        std::vector<Distance> batch_upper_bounds;
         std::vector<unsigned int> batch_point_ids;
         std::vector<unsigned int> batch_counts;
         batch_queries.reserve(exact_batch_size);
@@ -616,7 +616,7 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
                 batch_counts.push_back(count);
                 batch_queries.push_back(query_points[sample_index]);
                 batch_upper_bounds.push_back(weights_are_upper_bounds ? weights[point_id]
-                                                                      : std::numeric_limits<double>::infinity());
+                                                                      : std::numeric_limits<float>::infinity());
             }
 
             std::vector<AnnResult> batch_results =
@@ -624,8 +624,8 @@ double SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const P
             for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
                 const unsigned int point_id = batch_point_ids[batch_index];
                 const unsigned int count = batch_counts[batch_index];
-                const double nearest_distance = batch_results[batch_index].distance;
-                estimation += (static_cast<double>(count) * sum * nearest_distance / weights[point_id]);
+                const Distance nearest_distance = batch_results[batch_index].distance;
+                estimation += (static_cast<float>(count) * sum * nearest_distance / weights[point_id]);
             }
         }
     }

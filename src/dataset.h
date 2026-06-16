@@ -27,7 +27,7 @@ enum class GroundTruthDevice {
 };
 
 struct GroundTruthTask {
-    double norm_order{0.0};
+    float norm_order{0.0};
     ChamferDirection direction{ChamferDirection::kAb};
 };
 
@@ -45,8 +45,8 @@ struct GmmOptions {
     unsigned int num_points_a{1000};
     unsigned int num_points_b{1000};
     unsigned int num_dimensions{256};
-    double outlier_fraction{0.1};
-    double outlier_scale{4096.0};
+    float outlier_fraction{0.1F};
+    float outlier_scale{4096.0F};
     std::optional<unsigned int> seed;
 };
 
@@ -73,7 +73,7 @@ GroundTruthDevice ParseGroundTruthDevice(std::string_view value);
 std::vector<GroundTruthTask> ParseGroundTruthTasks(const std::string& specs);
 
 void WritePointSet(const std::filesystem::path& file_path, const std::vector<Point>& points);
-double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
+float ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, float norm_order,
                               const std::string& label, bool show_progress,
                               GroundTruthDevice ground_truth_device = GroundTruthDevice::kCpu,
                               size_t cuda_batch_size = 0);

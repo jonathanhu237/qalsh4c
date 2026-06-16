@@ -15,73 +15,76 @@
 #include "global.h"
 #include "log.h"
 
-double Calc::LpDistance(const Point &pt1, const Point &pt2, double norm_order) {
-    Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
-    Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
+Distance Calc::LpDistance(const Point &pt1, const Point &pt2, float norm_order) {
+    Eigen::Map<const Eigen::VectorXf> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
+    Eigen::Map<const Eigen::VectorXf> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
-    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-        return static_cast<double>((v1 - v2).lpNorm<1>());
+    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+        return static_cast<Distance>((v1 - v2).lpNorm<1>());
     }
     // NOLINTNEXTLINE(readability-magic-numbers)
-    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-        return static_cast<double>((v1 - v2).lpNorm<2>());
+    if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
+        return static_cast<Distance>((v1 - v2).lpNorm<2>());
     }
     Log::error("Unsupported norm order: {}", norm_order);
-    return 0.0;
+    return 0.0F;
 }
 
-double Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, double norm_order, double upper_bound) {
+Distance Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, float norm_order, Distance upper_bound) {
     if (std::isinf(upper_bound)) {
         return LpDistance(pt1, pt2, norm_order);
     }
     return LpDistanceBoundedRaw(pt1.data(), pt2.data(), pt1.size(), norm_order, upper_bound);
 }
 
-double Calc::LpDistanceBoundedRaw(const Coordinate* pt1, const Coordinate* pt2, size_t num_dimensions,
-                                  double norm_order, double upper_bound) {
-    if (upper_bound < 0.0) {
-        return std::numeric_limits<double>::infinity();
+Distance Calc::LpDistanceBoundedRaw(const Coordinate* pt1, const Coordinate* pt2, size_t num_dimensions,
+                                    float norm_order, Distance upper_bound) {
+    if (upper_bound < 0.0F) {
+        return std::numeric_limits<float>::infinity();
     }
 
-    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-        double sum = 0.0;
+    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+        Distance sum = 0.0F;
         for (size_t i = 0; i < num_dimensions; ++i) {
             sum += std::abs(pt1[i] - pt2[i]);
             if (sum > upper_bound) {
-                return std::numeric_limits<double>::infinity();
+                return std::numeric_limits<float>::infinity();
             }
         }
         return sum;
     }
 
     // NOLINTNEXTLINE(readability-magic-numbers)
-    if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-        const double upper_bound_sq = upper_bound * upper_bound;
-        double sum_sq = 0.0;
+    if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
+        const float upper_bound_sq = upper_bound * upper_bound;
+        float sum_sq = 0.0;
         for (size_t i = 0; i < num_dimensions; ++i) {
-            const double diff = pt1[i] - pt2[i];
+            const float diff = pt1[i] - pt2[i];
             sum_sq += diff * diff;
             if (sum_sq > upper_bound_sq) {
-                return std::numeric_limits<double>::infinity();
+                return std::numeric_limits<float>::infinity();
             }
         }
         return std::sqrt(sum_sq);
     }
 
     Log::error("Unsupported norm order: {}", norm_order);
-    return 0.0;
+    return 0.0F;
 }
 
-double Calc::DotProduct(const Point &pt1, const Point &pt2) {
-    Eigen::Map<const Eigen::VectorXd> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
-    Eigen::Map<const Eigen::VectorXd> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
+Projection Calc::DotProduct(const Point &pt1, const Point &pt2) {
+    Eigen::Map<const Eigen::VectorXf> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
+    Eigen::Map<const Eigen::VectorXf> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
 
     return v1.dot(v2);
 }
 
-double Calc::L1Probability(double x) { return 2.0 / std::numbers::pi_v<double> * atan(x); }  // 2 / pi * atan(x)
+float Calc::L1Probability(float x) { return 2.0F / std::numbers::pi_v<float> * std::atan(x); }  // 2 / pi * atan(x)
 
-double Calc::L2Probability(double x) { return std::erf(x * M_SQRT1_2); }  // 2 * Phi(x) - 1
+float Calc::L2Probability(float x) {
+    constexpr float kInverseSqrt2 = 0.7071067811865476F;
+    return std::erf(x * kInverseSqrt2);
+}  // 2 * Phi(x) - 1
 
 std::mt19937 Random::SeededGenerator() {
     if (Global::kUseFixedSeed) {
@@ -90,7 +93,7 @@ std::mt19937 Random::SeededGenerator() {
     return std::mt19937(std::random_device{}());
 }
 
-double Memory::Usage() {
+float Memory::Usage() {
     std::ifstream status_file("/proc/self/status");
     std::string line;
     size_t memory_usage = 0;
@@ -106,30 +109,30 @@ double Memory::Usage() {
     }
 
     // Convert from KB to MB
-    return static_cast<double>(memory_usage) / 1024.0;  // NOLINT: readability-magic-numbers
+    return static_cast<float>(memory_usage) / 1024.0F;  // NOLINT: readability-magic-numbers
 }
 
-unsigned int Sample::FromWeights(const std::vector<double> &weights) {
-    double total_sum = std::accumulate(weights.begin(), weights.end(), 0.0);
+unsigned int Sample::FromWeights(const std::vector<Weight> &weights) {
+    Weight total_sum = std::accumulate(weights.begin(), weights.end(), 0.0F);
     if (total_sum <= 0) {
         throw std::runtime_error("Total sum of weights must be positive.");
     }
 
-    std::vector<double> cumulative_weights;
+    std::vector<Weight> cumulative_weights;
     cumulative_weights.reserve(weights.size());
     std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights));
 
     static std::mt19937 gen = Random::SeededGenerator();
-    std::uniform_real_distribution<> dis(0.0, total_sum);
-    double random_value = dis(gen);
+    std::uniform_real_distribution<Weight> dis(0.0F, total_sum);
+    Weight random_value = dis(gen);
 
     auto it = std::ranges::upper_bound(cumulative_weights, random_value);
 
     return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
 }
 
-WeightedSampler::WeightedSampler(const std::vector<double> &weights) : gen_(Random::SeededGenerator()) {
-    total_ = std::accumulate(weights.begin(), weights.end(), 0.0);
+WeightedSampler::WeightedSampler(const std::vector<Weight> &weights) : gen_(Random::SeededGenerator()) {
+    total_ = std::accumulate(weights.begin(), weights.end(), 0.0F);
     if (total_ <= 0) {
         throw std::runtime_error("Total sum of weights must be positive.");
     }
@@ -139,8 +142,8 @@ WeightedSampler::WeightedSampler(const std::vector<double> &weights) : gen_(Rand
 }
 
 unsigned int WeightedSampler::Sample() {
-    std::uniform_real_distribution<double> dis(0.0, total_);
-    const double random_value = dis(gen_);
+    std::uniform_real_distribution<Weight> dis(0.0F, total_);
+    const Weight random_value = dis(gen_);
     auto it = std::ranges::upper_bound(cumulative_weights_, random_value);
     if (it == cumulative_weights_.end()) {
         return static_cast<unsigned int>(cumulative_weights_.size() - 1);
@@ -148,6 +151,6 @@ unsigned int WeightedSampler::Sample() {
     return static_cast<unsigned int>(std::distance(cumulative_weights_.begin(), it));
 }
 
-double WeightedSampler::Total() const {
+Weight WeightedSampler::Total() const {
     return total_;
 }

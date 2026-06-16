@@ -10,7 +10,7 @@ endforeach()
 
 file(READ "${dataset_dir}/metadata.json" metadata)
 string(JSON num_points_a GET "${metadata}" num_points a)
-math(EXPR expected_cache_size "${num_points_a} * 8")
+math(EXPR expected_cache_size "${num_points_a} * 4")
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
@@ -60,6 +60,6 @@ if(short_result EQUAL 0)
     message(FATAL_ERROR "Expected short QALSH cache file to fail\n${short_stdout}\n${short_stderr}")
 endif()
 string(CONCAT short_output "${short_stdout}" "${short_stderr}")
-if(NOT short_output MATCHES "cache file is incomplete")
-    message(FATAL_ERROR "Short QALSH cache failure did not report incomplete cache:\n${short_output}")
+if(NOT short_output MATCHES "unexpected size")
+    message(FATAL_ERROR "Short QALSH cache failure did not report unexpected size:\n${short_output}")
 endif()

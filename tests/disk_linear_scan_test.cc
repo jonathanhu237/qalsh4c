@@ -18,7 +18,7 @@ void WritePointFile(const std::filesystem::path& path, const std::vector<Point>&
     }
 }
 
-bool AlmostEqual(double lhs, double rhs) {
+bool AlmostEqual(float lhs, float rhs) {
     return std::abs(lhs - rhs) < 1e-9;
 }
 
@@ -46,32 +46,32 @@ int main() {
     };
 
     AnnEstimator disk_estimator(std::make_unique<LinearScanAnnSearcher>(), true, 2, 2);
-    const double disk_estimate = disk_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
+    const float disk_estimate = disk_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
     if (!AlmostEqual(disk_estimate, 3.0)) {
         std::filesystem::remove_all(temp_dir);
         return 1;
     }
 
     AnnEstimator memory_estimator(std::make_unique<LinearScanAnnSearcher>());
-    const double memory_estimate = memory_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
+    const float memory_estimate = memory_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
     if (!AlmostEqual(disk_estimate, memory_estimate)) {
         std::filesystem::remove_all(temp_dir);
         return 2;
     }
 
     DiskBasedLinearScanAnnSearcher disk_searcher(2);
-    disk_searcher.Init(target_metadata, 2.0);
-    const AnnResult tie_result = disk_searcher.Search(Point{0.0, 0.0});
-    if (tie_result.point_id != 0 || !AlmostEqual(tie_result.distance, 1.0)) {
+    disk_searcher.Init(target_metadata, 2.0F);
+    const AnnResult tie_result = disk_searcher.Search(Point{0.0F, 0.0F});
+    if (tie_result.point_id != 0 || !AlmostEqual(tie_result.distance, 1.0F)) {
         std::filesystem::remove_all(temp_dir);
         return 3;
     }
 
-    SamplingEstimator disk_uniform_estimator(std::make_unique<UniformWeightsGenerator>(), 5, 0, 0, 1.0, 0.1, false, 0,
+    SamplingEstimator disk_uniform_estimator(std::make_unique<UniformWeightsGenerator>(), 5, 0, 0, 1.0F, 0.1F, false, 0,
                                              true, 2, 2);
-    const double disk_uniform_estimate =
-        disk_uniform_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
-    if (!AlmostEqual(disk_uniform_estimate, 3.0)) {
+    const float disk_uniform_estimate =
+        disk_uniform_estimator.EstimateDistance(query_metadata, target_metadata, 2.0F);
+    if (!AlmostEqual(disk_uniform_estimate, 3.0F)) {
         std::filesystem::remove_all(temp_dir);
         return 4;
     }

@@ -26,7 +26,7 @@ endif()
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" dataset ground-truth
-        -d "${QALSH4C_SOURCE_DIR}/data/gmm"
+        -d "${QALSH4C_SOURCE_DIR}/data/federalist"
         --ground-truth ","
         --no-progress
     RESULT_VARIABLE empty_result

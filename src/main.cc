@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
         command->Execute();
     });
 
-    double norm_order{0.0};
+    float norm_order{0.0};
     std::string direction_value{"ab"};
     std::filesystem::path dataset_directory;
 
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
     // qalsh ann estimate
     // ------------------------------
     CLI::App* qalsh_ann = ann->add_subcommand("qalsh", "Use QALSH for ANN.");
-    double qalsh_ann_approximation_ratio{Global::kDefaultApproximationRatio};
+    float qalsh_ann_approximation_ratio{Global::kDefaultApproximationRatio};
     qalsh_ann
         ->add_option("-c,--approximation-ratio", qalsh_ann_approximation_ratio,
                      "Approximation ratio for in-memory QALSH")
@@ -152,10 +152,10 @@ int main(int argc, char** argv) {
     sampling->add_option("--num-samples-ab", num_samples_ab, "Number of samples for A->B direction (overrides -n)");
     sampling->add_option("--num-samples-ba", num_samples_ba, "Number of samples for B->A direction (overrides -n)");
 
-    double epsilon{0.0};
+    float epsilon{0.0};
     sampling->add_option("-e,--epsilon", epsilon, "Epsilon for the algorithm")->default_val(Global::kQalsh4cEpsilon);
 
-    double delta{0.0};
+    float delta{0.0};
     sampling->add_option("--delta", delta, "Failure probability for automatic QALSH sample count")
         ->default_val(Global::kQalsh4cDelta);
 
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
     // qalsh sampling estimate
     // ------------------------------
     CLI::App* qalsh_sampling = sampling->add_subcommand("qalsh", "Generate samples using QALSH.");
-    double qalsh_sampling_approximation_ratio{Global::kDefaultApproximationRatio};
+    float qalsh_sampling_approximation_ratio{Global::kDefaultApproximationRatio};
     qalsh_sampling
         ->add_option("-c,--approximation-ratio", qalsh_sampling_approximation_ratio,
                      "Approximation ratio for in-memory QALSH")
@@ -211,8 +211,8 @@ int main(int argc, char** argv) {
     unsigned int gmm_num_points_a{1000};
     unsigned int gmm_num_points_b{1000};
     unsigned int gmm_num_dimensions{256};
-    double gmm_outlier_fraction{0.1};
-    double gmm_outlier_scale{4096.0};
+    float gmm_outlier_fraction{0.1F};
+    float gmm_outlier_scale{4096.0F};
     std::filesystem::path gmm_output_directory;
     std::string gmm_ground_truth_specs;
     std::string gmm_ground_truth_device{"auto"};

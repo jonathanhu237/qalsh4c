@@ -11,15 +11,15 @@
 
 namespace {
 
-std::optional<double> ReadOptionalDouble(const nlohmann::json& value) {
+std::optional<float> ReadOptionalFloat(const nlohmann::json& value) {
     if (value.is_null()) {
         return std::nullopt;
     }
-    return value.get<double>();
+    return value.get<float>();
 }
 
-void WriteOptionalDouble(nlohmann::json& metadata, const std::string& norm, const std::string& direction,
-                         const std::optional<double>& value) {
+void WriteOptionalFloat(nlohmann::json& metadata, const std::string& norm, const std::string& direction,
+                         const std::optional<float>& value) {
     if (value.has_value()) {
         metadata["chamfer_distances"][norm][direction] = *value;
     } else {
@@ -27,7 +27,7 @@ void WriteOptionalDouble(nlohmann::json& metadata, const std::string& norm, cons
     }
 }
 
-std::optional<double> SumOptional(const std::optional<double>& left, const std::optional<double>& right) {
+std::optional<float> SumOptional(const std::optional<float>& left, const std::optional<float>& right) {
     if (!left.has_value() || !right.has_value()) {
         return std::nullopt;
     }
@@ -88,10 +88,10 @@ void DatasetMetadata::Load(const std::filesystem::path &file_path) {
         metadata.at("num_points").at("a").get_to(num_points_a);
         metadata.at("num_points").at("b").get_to(num_points_b);
         metadata.at("num_dimensions").get_to(num_dimensions);
-        chamfer_distance_l1_ab = ReadOptionalDouble(metadata.at("chamfer_distances").at("l1").at("ab"));
-        chamfer_distance_l1_ba = ReadOptionalDouble(metadata.at("chamfer_distances").at("l1").at("ba"));
-        chamfer_distance_l2_ab = ReadOptionalDouble(metadata.at("chamfer_distances").at("l2").at("ab"));
-        chamfer_distance_l2_ba = ReadOptionalDouble(metadata.at("chamfer_distances").at("l2").at("ba"));
+        chamfer_distance_l1_ab = ReadOptionalFloat(metadata.at("chamfer_distances").at("l1").at("ab"));
+        chamfer_distance_l1_ba = ReadOptionalFloat(metadata.at("chamfer_distances").at("l1").at("ba"));
+        chamfer_distance_l2_ab = ReadOptionalFloat(metadata.at("chamfer_distances").at("l2").at("ab"));
+        chamfer_distance_l2_ba = ReadOptionalFloat(metadata.at("chamfer_distances").at("l2").at("ba"));
     } catch (nlohmann::json::exception &e) {
         Log::error("JSON format error: {}", e.what());
     }
@@ -102,10 +102,10 @@ void DatasetMetadata::Save(const std::filesystem::path &file_path) const {
     metadata["num_dimensions"] = num_dimensions;
     metadata["num_points"]["a"] = num_points_a;
     metadata["num_points"]["b"] = num_points_b;
-    WriteOptionalDouble(metadata, "l1", "ab", chamfer_distance_l1_ab);
-    WriteOptionalDouble(metadata, "l1", "ba", chamfer_distance_l1_ba);
-    WriteOptionalDouble(metadata, "l2", "ab", chamfer_distance_l2_ab);
-    WriteOptionalDouble(metadata, "l2", "ba", chamfer_distance_l2_ba);
+    WriteOptionalFloat(metadata, "l1", "ab", chamfer_distance_l1_ab);
+    WriteOptionalFloat(metadata, "l1", "ba", chamfer_distance_l1_ba);
+    WriteOptionalFloat(metadata, "l2", "ab", chamfer_distance_l2_ab);
+    WriteOptionalFloat(metadata, "l2", "ba", chamfer_distance_l2_ba);
 
     std::ofstream ofs(file_path);
     if (!ofs.is_open()) {
@@ -114,14 +114,14 @@ void DatasetMetadata::Save(const std::filesystem::path &file_path) const {
     ofs << metadata.dump(4);
 }
 
-std::optional<double> DatasetMetadata::GroundTruth(double norm_order, ChamferDirection direction) const {
-    std::optional<double> distance_ab;
-    std::optional<double> distance_ba;
+std::optional<float> DatasetMetadata::GroundTruth(float norm_order, ChamferDirection direction) const {
+    std::optional<float> distance_ab;
+    std::optional<float> distance_ba;
 
-    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
+    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
         distance_ab = chamfer_distance_l1_ab;
         distance_ba = chamfer_distance_l1_ba;
-    } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
+    } else if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
         distance_ab = chamfer_distance_l2_ab;
         distance_ba = chamfer_distance_l2_ba;
     } else {
@@ -140,33 +140,33 @@ std::optional<double> DatasetMetadata::GroundTruth(double norm_order, ChamferDir
     Log::error("Unsupported Chamfer direction.");
 }
 
-void QalshConfig::Regularize(unsigned int num_points, double norm_order) {
-    double beta = std::min(Global::kNumCandidates / static_cast<double>(num_points), 1.0);
+void QalshConfig::Regularize(unsigned int num_points, float norm_order) {
+    float beta = std::min(Global::kNumCandidates / static_cast<float>(num_points), 1.0F);
     error_probability = Global::kQalshDefaultErrorProbability;
-    double term1 = std::sqrt(std::log(2.0 / beta));
-    double term2 = std::sqrt(std::log(1.0 / error_probability));
-    double numerator = std::pow(term1 + term2, 2.0);
-    double eta = term1 / term2;
+    float term1 = std::sqrt(std::log(2.0F / beta));
+    float term2 = std::sqrt(std::log(1.0F / error_probability));
+    float numerator = std::pow(term1 + term2, 2.0F);
+    float eta = term1 / term2;
 
-    double p1{0.0};
-    double p2{0.0};
+    float p1{0.0F};
+    float p2{0.0F};
 
-    if (std::abs(norm_order - 1.0) < Global::kEpsilon) {
-        bucket_width = 2.0 * std::sqrt(approximation_ratio);
-        p1 = Calc::L1Probability(bucket_width / 2.0);
-        p2 = Calc::L1Probability(bucket_width / (2.0 * approximation_ratio));
-    } else if (std::abs(norm_order - 2.0) < Global::kEpsilon) {
-        bucket_width = std::sqrt((8.0 * std::pow(approximation_ratio, 2.0) * std::log(approximation_ratio)) /
-                                 (std::pow(approximation_ratio, 2.0) - 1));
-        p1 = Calc::L2Probability(bucket_width / 2.0);
-        p2 = Calc::L2Probability(bucket_width / (2.0 * approximation_ratio));
+    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+        bucket_width = 2.0F * std::sqrt(approximation_ratio);
+        p1 = Calc::L1Probability(bucket_width / 2.0F);
+        p2 = Calc::L1Probability(bucket_width / (2.0F * approximation_ratio));
+    } else if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
+        bucket_width = std::sqrt((8.0F * std::pow(approximation_ratio, 2.0F) * std::log(approximation_ratio)) /
+                                 (std::pow(approximation_ratio, 2.0F) - 1.0F));
+        p1 = Calc::L2Probability(bucket_width / 2.0F);
+        p2 = Calc::L2Probability(bucket_width / (2.0F * approximation_ratio));
     } else {
         Log::error("Unsupported norm order: {}", norm_order);
     }
 
-    double denominator = 2.0 * std::pow(p1 - p2, 2.0);
+    float denominator = 2.0F * std::pow(p1 - p2, 2.0F);
     num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
 
-    double alpha = (eta * p1 + p2) / (1 + eta);
-    collision_threshold = static_cast<unsigned int>(std::ceil(alpha * num_hash_tables));
+    float alpha = (eta * p1 + p2) / (1.0F + eta);
+    collision_threshold = static_cast<unsigned int>(std::ceil(alpha * static_cast<float>(num_hash_tables)));
 }

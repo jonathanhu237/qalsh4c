@@ -8,9 +8,10 @@
 #include <vector>
 
 #include "global.h"
+#include "point_set.h"
 
 struct DotProductPointIdPair {
-    double dot_product{0.0};
+    Projection dot_product{0.0};
     unsigned int point_id{0};
 };
 
@@ -24,7 +25,7 @@ struct DotProductPointIdPairLess {
 };
 
 struct InMemoryQalshTableCursor {
-    double query_key{0.0};
+    Projection query_key{0.0};
     std::optional<size_t> left;
     std::optional<size_t> right;
 };
@@ -40,9 +41,9 @@ class InMemoryQalshTable {
         std::ranges::sort(entries_, DotProductPointIdPairLess{});
     }
 
-    [[nodiscard]] InMemoryQalshTableCursor InitCursor(double query_key) const {
+    [[nodiscard]] InMemoryQalshTableCursor InitCursor(Projection query_key) const {
         auto it = std::lower_bound(entries_.begin(), entries_.end(), query_key,
-                                   [](const DotProductPointIdPair& entry, double key) {
+                                   [](const DotProductPointIdPair& entry, Projection key) {
                                        return entry.dot_product < key;
                                    });
         const size_t index = static_cast<size_t>(std::distance(entries_.begin(), it));
@@ -54,21 +55,21 @@ class InMemoryQalshTable {
         };
     }
 
-    template <std::invocable<unsigned int, double> Handler>
-    bool IncrementalSearch(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
+    template <std::invocable<unsigned int, Projection> Handler>
+    bool IncrementalSearch(InMemoryQalshTableCursor& cursor, Projection bound, Handler&& handler) const;
 
    private:
-    template <std::invocable<unsigned int, double> Handler>
-    bool IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
+    template <std::invocable<unsigned int, Projection> Handler>
+    bool IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, Projection bound, Handler&& handler) const;
 
-    template <std::invocable<unsigned int, double> Handler>
-    bool IncrementalSearchRight(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const;
+    template <std::invocable<unsigned int, Projection> Handler>
+    bool IncrementalSearchRight(InMemoryQalshTableCursor& cursor, Projection bound, Handler&& handler) const;
 
     std::vector<DotProductPointIdPair> entries_;
 };
 
-template <std::invocable<unsigned int, double> Handler>
-bool InMemoryQalshTable::IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, double bound,
+template <std::invocable<unsigned int, Projection> Handler>
+bool InMemoryQalshTable::IncrementalSearchLeft(InMemoryQalshTableCursor& cursor, Projection bound,
                                                Handler&& handler) const {
     if (!cursor.left.has_value()) {
         return true;
@@ -94,8 +95,8 @@ bool InMemoryQalshTable::IncrementalSearchLeft(InMemoryQalshTableCursor& cursor,
     return false;
 }
 
-template <std::invocable<unsigned int, double> Handler>
-bool InMemoryQalshTable::IncrementalSearchRight(InMemoryQalshTableCursor& cursor, double bound,
+template <std::invocable<unsigned int, Projection> Handler>
+bool InMemoryQalshTable::IncrementalSearchRight(InMemoryQalshTableCursor& cursor, Projection bound,
                                                 Handler&& handler) const {
     if (!cursor.right.has_value()) {
         return true;
@@ -122,8 +123,8 @@ bool InMemoryQalshTable::IncrementalSearchRight(InMemoryQalshTableCursor& cursor
     return false;
 }
 
-template <std::invocable<unsigned int, double> Handler>
-bool InMemoryQalshTable::IncrementalSearch(InMemoryQalshTableCursor& cursor, double bound, Handler&& handler) const {
+template <std::invocable<unsigned int, Projection> Handler>
+bool InMemoryQalshTable::IncrementalSearch(InMemoryQalshTableCursor& cursor, Projection bound, Handler&& handler) const {
     bool left_finished = IncrementalSearchLeft(cursor, bound, std::forward<Handler>(handler));
     bool right_finished = IncrementalSearchRight(cursor, bound, std::forward<Handler>(handler));
     return left_finished && right_finished;

@@ -2,7 +2,7 @@
 
 namespace DatasetPrep {
 
-CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>&, const std::vector<Point>&, double,
+CudaChamferResult ComputeDirectedChamferCuda(const std::vector<Point>&, const std::vector<Point>&, float,
                                              const CudaProgressCallback&, CudaChamferOptions) {
     return CudaChamferResult{.status = CudaChamferStatus::kFallbackAllowed,
                              .value = 0.0,

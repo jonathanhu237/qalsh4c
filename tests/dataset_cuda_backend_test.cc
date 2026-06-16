@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-bool Near(double actual, double expected) {
+bool Near(float actual, float expected) {
     return std::abs(actual - expected) < 1e-9;
 }
 
@@ -25,7 +25,7 @@ int main() {
         std::cerr << l2_result.message << '\n';
         return 1;
     }
-    const double l2_cpu =
+    const float l2_cpu =
         DatasetPrep::ComputeDirectedChamfer(a, b, 2.0, "cuda test l2", false, DatasetPrep::GroundTruthDevice::kCpu);
     if (!Near(l2_result.value, l2_cpu) || progress_value != a.size()) {
         return 2;
@@ -36,7 +36,7 @@ int main() {
         std::cerr << l1_result.message << '\n';
         return 3;
     }
-    const double l1_cpu =
+    const float l1_cpu =
         DatasetPrep::ComputeDirectedChamfer(a, b, 1.0, "cuda test l1", false, DatasetPrep::GroundTruthDevice::kCpu);
     if (!Near(l1_result.value, l1_cpu)) {
         return 4;
@@ -54,7 +54,7 @@ int main() {
         std::cerr << batched_result.message << '\n';
         return 5;
     }
-    const double batched_cpu = DatasetPrep::ComputeDirectedChamfer(
+    const float batched_cpu = DatasetPrep::ComputeDirectedChamfer(
         batched_source, b, 2.0, "cuda test batched", false, DatasetPrep::GroundTruthDevice::kCpu);
     const bool progress_is_monotonic = std::is_sorted(batch_progress_values.begin(), batch_progress_values.end());
     if (!Near(batched_result.value, batched_cpu) || batch_progress_values.empty() ||

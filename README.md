@@ -50,14 +50,13 @@ cmake --workflow --preset release
 
 ## Sample Datasets
 
-The repository includes committed canonical sample datasets:
+The repository includes one committed canonical sample dataset:
 
-- `data/gmm`: synthetic Gaussian-mixture sample generated with 1024 points in A, 1024 points in B, 128 dimensions, seed `42`, and all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
 - `data/federalist`: 300-dimensional Federalist sample with 1880 points in A and 1178 points in B, with all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
 
 ## Dataset Preparation
 
-Datasets are prepared through the C++ CLI. A dataset directory contains `A.bin`, `B.bin`, and `metadata.json`; point files store row-major `double` values, and metadata stores point counts plus optional directed ground truth fields:
+Datasets are prepared through the C++ CLI. A dataset directory contains `A.bin`, `B.bin`, and `metadata.json`; point files store row-major float32 values, and metadata stores point counts plus optional directed ground truth fields. This is a breaking data-format fork: older double-encoded point files must be regenerated or reconverted.
 
 ```json
 {
@@ -109,7 +108,7 @@ work begins. Use `cpu` to force the existing CPU/OpenMP path, or `cuda` to
 require CUDA and fail if CUDA support or device memory is unavailable. CUDA
 acceleration only applies to exact directed Chamfer ground-truth calculation;
 raw dataset parsing, shuffling, and writing remain CPU-side. The CUDA backend
-uses double precision and batches source points from runtime free-memory
+uses float32 precision and batches source points from runtime free-memory
 information while keeping target points resident on the default CUDA device.
 Use `--cuda-batch-size N` to explicitly cap CUDA source batch size for
 ground-truth computation; the default `0` keeps the automatic maximum batch.
@@ -153,14 +152,14 @@ For QALSH sampling, omit `--num-samples` to let the implementation choose the sa
 `ceil((c^2 * (1 - delta0) / (1 - c * delta0) - 1) / (delta * epsilon^2))`, where
 `delta0 = exp(-m * KL((l - 1) / m, p1))`; tune the estimator with `--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
 
-`sampling qalsh --use-cache` still stores and reads raw `double` weight files such as `l2_qalsh_weights_A.bin`. When the cache exists, QALSH sampling reads those weights directly and skips QALSH weight generation for that direction.
+`sampling qalsh --use-cache` stores and reads raw float32 weight files such as `l2_qalsh_weights_A.bin`. Cache filenames are unchanged from earlier releases, but stale double-encoded caches are rejected by file-size validation and should be deleted.
 
-The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the GMM sample dataset to check the exact directed distances without building an index:
+The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
 
 ```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ab ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction ba ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/gmm --direction both ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ba ann linear_scan
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction both ann linear_scan
 ```
 
 Pass `--disk-based` at the `estimate` level to use an external-memory

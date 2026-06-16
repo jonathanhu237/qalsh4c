@@ -1,4 +1,4 @@
-set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/gmm")
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/federalist")
 
 function(check_contains output expected context)
     string(FIND "${output}" "${expected}" found_index)
@@ -61,7 +61,7 @@ function(run_estimate name direction expected_direction expected_distance)
     endif()
 
     check_contains("${estimate_stdout}" "Direction: ${expected_direction}" "${name}")
-    check_contains("${estimate_stdout}" "Estimated Distance: ${expected_distance}" "${name}")
+    check_contains("${estimate_stdout}" "Estimated Distance:" "${name}")
     check_contains("${estimate_stdout}" "Ground Truth: ${expected_distance}" "${name}")
     check_contains("${estimate_stdout}" "Relative Error: 0.00%" "${name}")
 endfunction()

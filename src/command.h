@@ -15,13 +15,13 @@ class Command {
 
 class EstimateCommand : public Command {
    public:
-    EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order, std::filesystem::path dataset_directory,
+    EstimateCommand(std::unique_ptr<Estimator> estimator, float norm_order, std::filesystem::path dataset_directory,
                     ChamferDirection direction);
     void Execute() override;
 
    private:
     std::unique_ptr<Estimator> estimator_;
-    double norm_order_;
+    float norm_order_;
     std::filesystem::path dataset_directory_;
     ChamferDirection direction_;
 };

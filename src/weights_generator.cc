@@ -20,18 +20,18 @@ bool UniformWeightsGenerator::RequiresIndex() const {
     return false;
 }
 
-std::vector<double> UniformWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
+std::vector<Weight> UniformWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
                                                       [[maybe_unused]] const PointSetMetadata& to_metadata,
-                                                      [[maybe_unused]] double norm_order,
+                                                      [[maybe_unused]] float norm_order,
                                                       [[maybe_unused]] bool use_cache) {
-    std::vector<double> weights(from_metadata.num_points, 1.0);
+    std::vector<Weight> weights(from_metadata.num_points, 1.0);
     return weights;
 }
 
 // --------------------------------------------------
 // QalshWeightsGenerator Implementation
 // --------------------------------------------------
-QalshWeightsGenerator::QalshWeightsGenerator(double approximation_ratio)
+QalshWeightsGenerator::QalshWeightsGenerator(float approximation_ratio)
     : approximation_ratio_(approximation_ratio),
       ann_searcher_(std::make_unique<QalshAnnSearcher>(approximation_ratio_)) {}
 
@@ -39,7 +39,7 @@ bool QalshWeightsGenerator::RequiresIndex() const {
     return false;
 }
 
-QalshConfig QalshWeightsGenerator::BuildConfig(unsigned int num_points, double norm_order) const {
+QalshConfig QalshWeightsGenerator::BuildConfig(unsigned int num_points, float norm_order) const {
     QalshConfig config{.approximation_ratio = approximation_ratio_};
     config.Regularize(num_points, norm_order);
     return config;
@@ -53,26 +53,31 @@ std::shared_ptr<const std::vector<Point>> QalshWeightsGenerator::TargetPoints() 
     return qalsh_searcher->TargetPoints();
 }
 
-std::vector<double> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
-                                                    const PointSetMetadata& to_metadata, double norm_order,
+std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
+                                                    const PointSetMetadata& to_metadata, float norm_order,
                                                     bool use_cache) {
-    std::vector<double> weights(from_metadata.num_points);
+    std::vector<Weight> weights(from_metadata.num_points);
     std::filesystem::path parent_directory = from_metadata.file_path.parent_path();
     std::string stem = from_metadata.file_path.stem();
     std::filesystem::path weights_path = parent_directory / std::format("l{}_qalsh_weights_{}.bin", norm_order, stem);
     const auto expected_bytes =
-        static_cast<std::streamsize>(sizeof(double) * static_cast<size_t>(from_metadata.num_points));
+        static_cast<std::streamsize>(sizeof(Weight) * static_cast<size_t>(from_metadata.num_points));
 
     if (use_cache) {
         Log::warn("The weights will be read from the cache file if it exists.");
         if (std::filesystem::exists(weights_path)) {
+            const auto actual_bytes = static_cast<std::streamsize>(std::filesystem::file_size(weights_path));
+            if (actual_bytes != expected_bytes) {
+                Log::error("QALSH weights cache file has unexpected size: expected {} bytes, got {} bytes from {}",
+                           expected_bytes, actual_bytes, weights_path.string());
+            }
             std::ifstream ifs(weights_path, std::ios::binary);
             if (!ifs.is_open()) {
                 Log::error("Failed to open QALSH weights cache file: {}", weights_path.string());
             }
             ifs.read(reinterpret_cast<char*>(weights.data()), expected_bytes);
             if (ifs.gcount() != expected_bytes) {
-                Log::error("QALSH weights cache file is incomplete: expected {} bytes, read {} bytes from {}",
+                Log::error("Failed to read QALSH weights cache file: expected {} bytes, read {} bytes from {}",
                            expected_bytes, ifs.gcount(), weights_path.string());
             }
             return weights;

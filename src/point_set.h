@@ -4,7 +4,11 @@
 #include <fstream>
 #include <vector>
 
-using Coordinate = double;
+using Coordinate = float;
+using Distance = float;
+using Estimate = float;
+using Projection = float;
+using Weight = float;
 using Point = std::vector<Coordinate>;
 
 struct PointSetMetadata {

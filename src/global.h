@@ -5,9 +5,9 @@
 
 class Global {
    public:
-    static constexpr double kEpsilon = 1e-6;
-    static constexpr double kQalshDefaultErrorProbability = 1.0 / std::numbers::e_v<double>;
-    static constexpr double kDefaultApproximationRatio = 2.0;
+    static constexpr float kEpsilon = 1e-6F;
+    static constexpr float kQalshDefaultErrorProbability = 1.0F / std::numbers::e_v<float>;
+    static constexpr float kDefaultApproximationRatio = 2.0F;
     static constexpr unsigned int kNumCandidates = 100;
     static constexpr unsigned int kScanSize = 128;
 
@@ -17,6 +17,6 @@ class Global {
     static constexpr unsigned int kDefaultDiskQueryBatchSize = 64;
 
     // qalsh4c
-    static constexpr double kQalsh4cEpsilon = 1.0;
-    static constexpr double kQalsh4cDelta = 0.1;
+    static constexpr float kQalsh4cEpsilon = 1.0F;
+    static constexpr float kQalsh4cDelta = 0.1F;
 };

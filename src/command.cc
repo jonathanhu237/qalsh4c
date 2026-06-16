@@ -29,9 +29,9 @@ PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_direc
     };
 }
 
-double RelativeErrorPercentage(double estimation, double ground_truth) {
+float RelativeErrorPercentage(float estimation, float ground_truth) {
     if (std::abs(ground_truth) < Global::kEpsilon) {
-        return std::abs(estimation) < Global::kEpsilon ? 0.0 : std::numeric_limits<double>::infinity();
+        return std::abs(estimation) < Global::kEpsilon ? 0.0 : std::numeric_limits<float>::infinity();
     }
 
     return std::fabs(estimation - ground_truth) / ground_truth * 100;  // NOLINT: readability-magic-numbers
@@ -42,7 +42,7 @@ double RelativeErrorPercentage(double estimation, double ground_truth) {
 // --------------------------------------------------
 // EstimateCommand Implementation
 // --------------------------------------------------
-EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, double norm_order,
+EstimateCommand::EstimateCommand(std::unique_ptr<Estimator> estimator, float norm_order,
                                  std::filesystem::path dataset_directory, ChamferDirection direction)
     : estimator_(std::move(estimator)),
       norm_order_(norm_order),
@@ -60,8 +60,8 @@ void EstimateCommand::Execute() {
     PointSetMetadata point_set_metadata_b = MakePointSetMetadata(dataset_directory_, dataset_metadata, "B");
 
     auto start = std::chrono::high_resolution_clock::now();
-    double memory_before = Memory::Usage();
-    double estimation{0.0};
+    float memory_before = Memory::Usage();
+    float estimation{0.0};
 
     if (direction_ == ChamferDirection::kAb || direction_ == ChamferDirection::kBoth) {
         Log::info("Calculating the distance from A to B...");
@@ -74,15 +74,15 @@ void EstimateCommand::Execute() {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    double memory_after = Memory::Usage();
+    float memory_after = Memory::Usage();
 
     // Output the result.
-    std::optional<double> ground_truth = dataset_metadata.GroundTruth(norm_order_, direction_);
-    double elapsed_time = std::chrono::duration<double, std::milli>(end - start).count();
-    double memory_usage = memory_after - memory_before;
+    std::optional<float> ground_truth = dataset_metadata.GroundTruth(norm_order_, direction_);
+    float elapsed_time = std::chrono::duration<float, std::milli>(end - start).count();
+    float memory_usage = memory_after - memory_before;
 
     if (ground_truth.has_value()) {
-        double relative_error_percentage = RelativeErrorPercentage(estimation, *ground_truth);
+        float relative_error_percentage = RelativeErrorPercentage(estimation, *ground_truth);
         std::cout << std::format(
             "Direction: {}\n"
             "Estimated Distance: {:.6f}\n"

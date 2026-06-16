@@ -10,7 +10,7 @@
 #include "qalsh_index.h"
 
 struct AnnResult {
-    double distance{0.0};
+    Distance distance{0.0};
     unsigned int point_id{0};
 };
 
@@ -26,7 +26,7 @@ class AnnSearcher {
     virtual ~AnnSearcher() = default;
     [[nodiscard]] virtual bool RequiresIndex() const = 0;
     [[nodiscard]] virtual std::unique_ptr<AnnSearcher> Clone() const = 0;
-    virtual void Init(const PointSetMetadata& metadata, double norm_order) = 0;
+    virtual void Init(const PointSetMetadata& metadata, float norm_order) = 0;
     virtual AnnResult Search(const Point& query_point) = 0;
 };
 
@@ -38,16 +38,16 @@ class LinearScanAnnSearcher : public AnnSearcher {
     LinearScanAnnSearcher() = default;
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
-    void Init(const PointSetMetadata& metadata, double norm_order) override;
+    void Init(const PointSetMetadata& metadata, float norm_order) override;
     void InitLoaded(std::shared_ptr<const std::vector<Point>> base_points, unsigned int num_dimensions,
-                    double norm_order);
+                    float norm_order);
     AnnResult Search(const Point& query_point) override;
-    AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
+    AnnResult SearchWithUpperBound(const Point& query_point, Distance initial_upper_bound);
     std::vector<AnnResult> SearchBatchWithUpperBounds(const std::vector<Point>& query_points,
-                                                      const std::vector<double>& initial_upper_bounds);
+                                                      const std::vector<Distance>& initial_upper_bounds);
 
    private:
-    double norm_order_{0.0};
+    float norm_order_{0.0};
     unsigned int num_points_{0};
     unsigned int num_dimensions_{0};
     std::shared_ptr<const std::vector<Point>> base_points_;
@@ -61,12 +61,12 @@ class DiskBasedLinearScanAnnSearcher : public AnnSearcher {
     explicit DiskBasedLinearScanAnnSearcher(unsigned int block_size = Global::kDefaultDiskBlockSize);
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
-    void Init(const PointSetMetadata& metadata, double norm_order) override;
+    void Init(const PointSetMetadata& metadata, float norm_order) override;
     AnnResult Search(const Point& query_point) override;
-    AnnResult SearchWithUpperBound(const Point& query_point, double initial_upper_bound);
+    AnnResult SearchWithUpperBound(const Point& query_point, Distance initial_upper_bound);
 
    private:
-    double norm_order_{0.0};
+    float norm_order_{0.0};
     PointSetMetadata metadata_;
     unsigned int block_size_{Global::kDefaultDiskBlockSize};
     bool initialized_{false};
@@ -74,7 +74,7 @@ class DiskBasedLinearScanAnnSearcher : public AnnSearcher {
 };
 
 struct QalshAnnIndexData {
-    double norm_order{0.0};
+    float norm_order{0.0};
     unsigned int num_points{0};
     unsigned int num_dimensions{0};
     QalshConfig qalsh_config;
@@ -94,16 +94,16 @@ struct QalshSearchState {
 // ---------------------------------------------
 class QalshAnnSearcher : public AnnSearcher {
    public:
-    explicit QalshAnnSearcher(double approximation_ratio = Global::kDefaultApproximationRatio);
-    QalshAnnSearcher(double approximation_ratio, std::mt19937::result_type random_seed);
+    explicit QalshAnnSearcher(float approximation_ratio = Global::kDefaultApproximationRatio);
+    QalshAnnSearcher(float approximation_ratio, std::mt19937::result_type random_seed);
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
-    void Init(const PointSetMetadata& metadata, double norm_order) override;
+    void Init(const PointSetMetadata& metadata, float norm_order) override;
     AnnResult Search(const Point& query_point) override;
 
    private:
-    double approximation_ratio_{Global::kDefaultApproximationRatio};
+    float approximation_ratio_{Global::kDefaultApproximationRatio};
     std::mt19937::result_type random_seed_{Global::kDefaultSeed};
     std::shared_ptr<const QalshAnnIndexData> index_data_;
     std::vector<InMemoryQalshTableCursor> search_cursors_;

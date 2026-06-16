@@ -50,7 +50,7 @@ constexpr unsigned int kMnistImageMagic = 2051;
 
 using Clock = std::chrono::steady_clock;
 
-std::string FormatDuration(double seconds) {
+std::string FormatDuration(float seconds) {
     const auto whole = static_cast<unsigned long long>(seconds);
     const unsigned long long hours = whole / 3600;
     const unsigned long long minutes = (whole % 3600) / 60;
@@ -59,7 +59,7 @@ std::string FormatDuration(double seconds) {
 }
 
 std::string FormatElapsed(Clock::time_point start) {
-    return FormatDuration(std::chrono::duration<double>(Clock::now() - start).count());
+    return FormatDuration(std::chrono::duration<float>(Clock::now() - start).count());
 }
 
 template <typename... Args>
@@ -160,19 +160,19 @@ class ProgressReporter {
 
     void Render(bool force) {
         const auto now = std::chrono::steady_clock::now();
-        const double elapsed = std::chrono::duration<double>(now - start_).count();
-        const double since_last = std::chrono::duration<double>(now - last_render_).count();
-        if (!force && since_last < 0.2) {
+        const float elapsed = std::chrono::duration<float>(now - start_).count();
+        const float since_last = std::chrono::duration<float>(now - last_render_).count();
+        if (!force && since_last < 0.2F) {
             return;
         }
 
-        const double percent = total_ == 0 ? 100.0 : (static_cast<double>(current_) / static_cast<double>(total_)) * 100.0;
-        const double rate = elapsed <= 0.0 ? 0.0 : static_cast<double>(current_) / elapsed;
+        const float percent = total_ == 0 ? 100.0F : (static_cast<float>(current_) / static_cast<float>(total_)) * 100.0F;
+        const float rate = elapsed <= 0.0F ? 0.0F : static_cast<float>(current_) / elapsed;
 
         if (interactive_) {
             last_render_ = now;
             constexpr unsigned int bar_width = 24;
-            const auto filled = static_cast<unsigned int>(std::round(percent / 100.0 * bar_width));
+            const auto filled = static_cast<unsigned int>(std::round(percent / 100.0F * static_cast<float>(bar_width)));
             std::string bar(filled, '#');
             bar.append(bar_width - filled, '-');
             std::fprintf(stderr, "\r\033[2K%s [%s] %5.1f%%  %llu/%llu  %.1f/s  elapsed %s", label_.c_str(),
@@ -254,7 +254,7 @@ std::string GroundTruthDeviceValue(GroundTruthDevice ground_truth_device) {
     Log::error("Unsupported ground-truth device.");
 }
 
-std::optional<double>& MetadataField(DatasetMetadata& metadata, const GroundTruthTask& task) {
+std::optional<float>& MetadataField(DatasetMetadata& metadata, const GroundTruthTask& task) {
     if (std::abs(task.norm_order - 1.0) < Global::kEpsilon) {
         if (task.direction == ChamferDirection::kAb) {
             return metadata.chamfer_distance_l1_ab;
@@ -340,14 +340,14 @@ void ComputeTasks(const std::vector<Point>& a, const std::vector<Point>& b, cons
         return;
     }
     for (const GroundTruthTask& task : tasks) {
-        std::optional<double>& target = MetadataField(metadata, task);
+        std::optional<float>& target = MetadataField(metadata, task);
         if (target.has_value() && !overwrite) {
             Log::error("Ground truth {} already exists. Use --overwrite to recompute it.", TaskKey(task));
         }
         const Clock::time_point start = Clock::now();
         LogStage(show_progress, "Computing ground truth {} with device mode {}.", TaskKey(task),
                  GroundTruthDeviceValue(ground_truth_device));
-        const double value =
+        const float value =
             ComputeDirectedChamfer(FromPoints(a, b, task.direction), ToPoints(a, b, task.direction), task.norm_order,
                                    std::format("Ground truth {}", TaskKey(task)), show_progress,
                                    ground_truth_device, cuda_batch_size);
@@ -457,7 +457,7 @@ std::vector<Point> LoadMnistImages(const std::filesystem::path& image_file, bool
         Point point;
         point.reserve(dimensions);
         for (unsigned char pixel : pixels) {
-            point.push_back(static_cast<double>(pixel));
+            point.push_back(static_cast<float>(pixel));
         }
         points.push_back(std::move(point));
     }
@@ -535,7 +535,7 @@ std::vector<Point> LoadP53(const std::filesystem::path& raw_directory, bool show
         Point point;
         point.reserve(expected_feature_width);
         for (size_t i = 0; i < expected_feature_width; ++i) {
-            point.push_back(std::stod(entries[i]));
+            point.push_back(std::stof(entries[i]));
         }
         points.push_back(std::move(point));
     }
@@ -580,7 +580,7 @@ std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path, bool sh
         Point point;
         point.reserve(dimension);
         for (float value : values) {
-            point.push_back(static_cast<double>(value));
+            point.push_back(static_cast<float>(value));
         }
         points.push_back(std::move(point));
     }
@@ -593,12 +593,12 @@ std::vector<Point> LoadFvecsFile(const std::filesystem::path& file_path, bool sh
 struct BmpImage {
     unsigned int width{0};
     unsigned int height{0};
-    std::vector<double> grayscale;
+    std::vector<float> grayscale;
 };
 
-double RgbToGray(unsigned char red, unsigned char green, unsigned char blue) {
-    return (0.299 * static_cast<double>(red)) + (0.587 * static_cast<double>(green)) +
-           (0.114 * static_cast<double>(blue));
+float RgbToGray(unsigned char red, unsigned char green, unsigned char blue) {
+    return (0.299F * static_cast<float>(red)) + (0.587F * static_cast<float>(green)) +
+           (0.114F * static_cast<float>(blue));
 }
 
 BmpImage LoadBmp(const std::filesystem::path& file_path) {
@@ -639,7 +639,7 @@ BmpImage LoadBmp(const std::filesystem::path& file_path) {
         ifs.seekg(static_cast<std::streamoff>(14 + dib_size), std::ios::beg);
     }
 
-    std::vector<double> palette;
+    std::vector<float> palette;
     if (bits_per_pixel == 8) {
         const uint32_t palette_entries = colors_used == 0 ? 256 : colors_used;
         palette.reserve(palette_entries);
@@ -657,7 +657,7 @@ BmpImage LoadBmp(const std::filesystem::path& file_path) {
     const auto unsigned_width = static_cast<unsigned int>(width);
     const unsigned int row_stride = ((static_cast<unsigned int>(bits_per_pixel) * unsigned_width + 31U) / 32U) * 4U;
     std::vector<unsigned char> row(row_stride);
-    BmpImage image{.width = unsigned_width, .height = height, .grayscale = std::vector<double>(static_cast<size_t>(unsigned_width) * height)};
+    BmpImage image{.width = unsigned_width, .height = height, .grayscale = std::vector<float>(static_cast<size_t>(unsigned_width) * height)};
     for (unsigned int file_row = 0; file_row < height; ++file_row) {
         ifs.read(reinterpret_cast<char*>(row.data()), static_cast<std::streamsize>(row.size()));
         if (!ifs) {
@@ -665,13 +665,13 @@ BmpImage LoadBmp(const std::filesystem::path& file_path) {
         }
         const unsigned int y = top_down ? file_row : (height - 1U - file_row);
         for (unsigned int x = 0; x < unsigned_width; ++x) {
-            double gray = 0.0;
+            float gray = 0.0;
             if (bits_per_pixel == 24) {
                 const size_t offset = static_cast<size_t>(x) * 3U;
                 gray = RgbToGray(row[offset + 2], row[offset + 1], row[offset]);
             } else {
                 const unsigned char index = row[x];
-                gray = index < palette.size() ? palette[index] : static_cast<double>(index);
+                gray = index < palette.size() ? palette[index] : static_cast<float>(index);
             }
             image.grayscale[static_cast<size_t>(y) * unsigned_width + x] = gray;
         }
@@ -784,46 +784,46 @@ std::pair<std::vector<Point>, std::vector<Point>> SplitPoints(std::vector<Point>
 }
 
 struct GmmParameters {
-    Eigen::VectorXd core_mean;
-    Eigen::VectorXd outlier_mean;
-    Eigen::MatrixXd core_cholesky;
-    Eigen::MatrixXd outlier_cholesky;
+    Eigen::VectorXf core_mean;
+    Eigen::VectorXf outlier_mean;
+    Eigen::MatrixXf core_cholesky;
+    Eigen::MatrixXf outlier_cholesky;
 };
 
-GmmParameters GenerateGmmParameters(unsigned int num_dimensions, double outlier_scale, std::mt19937& gen) {
-    std::uniform_real_distribution<double> mean_dist(-512.0, 512.0);
-    std::normal_distribution<double> normal_dist(0.0, 1.0);
+GmmParameters GenerateGmmParameters(unsigned int num_dimensions, float outlier_scale, std::mt19937& gen) {
+    std::uniform_real_distribution<float> mean_dist(-512.0, 512.0);
+    std::normal_distribution<float> normal_dist(0.0, 1.0);
 
-    Eigen::VectorXd core_mean(num_dimensions);
-    Eigen::VectorXd outlier_mean(num_dimensions);
+    Eigen::VectorXf core_mean(num_dimensions);
+    Eigen::VectorXf outlier_mean(num_dimensions);
     for (unsigned int i = 0; i < num_dimensions; ++i) {
         core_mean(static_cast<Eigen::Index>(i)) = mean_dist(gen);
         outlier_mean(static_cast<Eigen::Index>(i)) = mean_dist(gen);
     }
 
-    Eigen::MatrixXd random_matrix(num_dimensions, num_dimensions);
+    Eigen::MatrixXf random_matrix(num_dimensions, num_dimensions);
     for (unsigned int row = 0; row < num_dimensions; ++row) {
         for (unsigned int col = 0; col < num_dimensions; ++col) {
             random_matrix(static_cast<Eigen::Index>(row), static_cast<Eigen::Index>(col)) = normal_dist(gen);
         }
     }
-    Eigen::MatrixXd core_covariance = (random_matrix * random_matrix.transpose()) +
-                                      Eigen::MatrixXd::Identity(num_dimensions, num_dimensions);
-    Eigen::LLT<Eigen::MatrixXd> llt(core_covariance);
+    Eigen::MatrixXf core_covariance = (random_matrix * random_matrix.transpose()) +
+                                      Eigen::MatrixXf::Identity(num_dimensions, num_dimensions);
+    Eigen::LLT<Eigen::MatrixXf> llt(core_covariance);
     if (llt.info() != Eigen::Success) {
         Log::error("Failed to decompose generated GMM covariance.");
     }
 
-    Eigen::MatrixXd core_cholesky = llt.matrixL();
-    Eigen::MatrixXd outlier_cholesky = core_cholesky * std::sqrt(outlier_scale);
+    Eigen::MatrixXf core_cholesky = llt.matrixL();
+    Eigen::MatrixXf outlier_cholesky = core_cholesky * std::sqrt(outlier_scale);
     return GmmParameters{.core_mean = std::move(core_mean),
                          .outlier_mean = std::move(outlier_mean),
                          .core_cholesky = std::move(core_cholesky),
                          .outlier_cholesky = std::move(outlier_cholesky)};
 }
 
-std::vector<Point> SampleGmm(unsigned int num_points, unsigned int num_dimensions, double outlier_fraction,
-                             double outlier_scale, std::mt19937& gen) {
+std::vector<Point> SampleGmm(unsigned int num_points, unsigned int num_dimensions, float outlier_fraction,
+                             float outlier_scale, std::mt19937& gen) {
     if (num_points == 0 || num_dimensions == 0) {
         Log::error("GMM point count and dimensions must be positive.");
     }
@@ -836,17 +836,17 @@ std::vector<Point> SampleGmm(unsigned int num_points, unsigned int num_dimension
 
     GmmParameters params = GenerateGmmParameters(num_dimensions, outlier_scale, gen);
     std::bernoulli_distribution outlier_dist(outlier_fraction);
-    std::normal_distribution<double> normal_dist(0.0, 1.0);
+    std::normal_distribution<float> normal_dist(0.0, 1.0);
 
     std::vector<Point> points;
     points.reserve(num_points);
     for (unsigned int point_index = 0; point_index < num_points; ++point_index) {
         const bool is_outlier = outlier_dist(gen);
-        Eigen::VectorXd z(num_dimensions);
+        Eigen::VectorXf z(num_dimensions);
         for (unsigned int dim = 0; dim < num_dimensions; ++dim) {
             z(static_cast<Eigen::Index>(dim)) = normal_dist(gen);
         }
-        Eigen::VectorXd sample =
+        Eigen::VectorXf sample =
             (is_outlier ? params.outlier_mean : params.core_mean) +
             ((is_outlier ? params.outlier_cholesky : params.core_cholesky) * z);
 
@@ -911,7 +911,7 @@ void WritePointSet(const std::filesystem::path& file_path, const std::vector<Poi
     WritePointSetToFile(file_path, points);
 }
 
-double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, double norm_order,
+float ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<Point>& to, float norm_order,
                               const std::string& label, bool show_progress,
                               GroundTruthDevice ground_truth_device, size_t cuda_batch_size) {
     ValidatePair(from, to);
@@ -920,14 +920,14 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
         LogStage(show_progress, "{}: running CPU exact scan.", label);
         ProgressReporter progress(label, from.size(), show_progress);
         progress.Start();
-        std::vector<double> distances(from.size(), 0.0);
+        std::vector<float> distances(from.size(), 0.0);
         std::atomic<unsigned long long> completed{0};
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
         for (long long source_index = 0; source_index < static_cast<long long>(from.size()); ++source_index) {
             const Point& source = from[static_cast<size_t>(source_index)];
-            double min_distance = std::numeric_limits<double>::max();
+            float min_distance = std::numeric_limits<float>::max();
             for (const Point& target : to) {
                 min_distance = std::min(min_distance, Calc::LpDistance(source, target, norm_order));
             }
@@ -939,7 +939,7 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
         }
 #else
         for (size_t source_index = 0; source_index < from.size(); ++source_index) {
-            double min_distance = std::numeric_limits<double>::max();
+            float min_distance = std::numeric_limits<float>::max();
             for (const Point& target : to) {
                 min_distance = std::min(min_distance, Calc::LpDistance(from[source_index], target, norm_order));
             }
@@ -949,7 +949,7 @@ double ComputeDirectedChamfer(const std::vector<Point>& from, const std::vector<
 #endif
 
         progress.Finish();
-        return std::accumulate(distances.begin(), distances.end(), 0.0);
+        return std::accumulate(distances.begin(), distances.end(), 0.0F);
     };
 
     if (ground_truth_device == GroundTruthDevice::kCpu) {
