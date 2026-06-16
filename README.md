@@ -164,17 +164,18 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ```
 
 Pass `--disk-based` at the `estimate` level to use an external-memory
-implementation where available. The first disk-based implementation is exact
-linear scan; it streams query points from disk in batches and scans target
-points in blocks instead of loading either point set in full. Tune the target
-block size with `--disk-block-size` and the query batch size with
-`--disk-query-batch-size`:
+implementation where available. Disk-based exact linear scan streams query
+points from disk in batches and scans target points in blocks instead of loading
+either point set in full. Disk-based uniform sampling samples query point ids
+without materializing a full weight vector, then uses the same disk-based exact
+scan for sampled points. Tune the target block size with `--disk-block-size` and
+the query batch size with `--disk-query-batch-size`:
 
 ```bash
 ./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 --disk-query-batch-size 64 -p 2 -d ./data/federalist --direction ab ann linear_scan
 ```
 
-Disk-based mode currently reports an error for QALSH ANN and sampling
-estimators instead of falling back to their in-memory implementations.
+Disk-based mode currently reports an error for QALSH ANN and QALSH sampling
+instead of falling back to their in-memory implementations.
 
 The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.

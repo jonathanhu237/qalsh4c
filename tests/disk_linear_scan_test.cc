@@ -67,6 +67,15 @@ int main() {
         return 3;
     }
 
+    SamplingEstimator disk_uniform_estimator(std::make_unique<UniformWeightsGenerator>(), 5, 0, 0, 1.0, 0.1, false, 0,
+                                             true, 2, 2);
+    const double disk_uniform_estimate =
+        disk_uniform_estimator.EstimateDistance(query_metadata, target_metadata, 2.0);
+    if (!AlmostEqual(disk_uniform_estimate, 3.0)) {
+        std::filesystem::remove_all(temp_dir);
+        return 4;
+    }
+
     std::filesystem::remove_all(temp_dir);
     return 0;
 }
