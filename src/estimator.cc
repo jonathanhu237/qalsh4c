@@ -221,6 +221,11 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
                                  AnnSearcher& ann_searcher, unsigned int disk_query_batch_size) {
     ValidateDiskScanMetadata(from, to);
 
+    auto* root_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(&ann_searcher);
+    if (root_disk_qalsh_searcher != nullptr) {
+        root_disk_qalsh_searcher->ResetProfile();
+    }
+
     ann_searcher.Init(to, norm_order);
 
     std::ifstream query_input;
@@ -250,6 +255,15 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
                 std::copy_n(query_data, from.num_dimensions, query_point.begin());
                 distances[local_query_index] = local_searcher->Search(query_point).distance;
             }
+
+            if (root_disk_qalsh_searcher != nullptr) {
+                auto* local_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
+                if (local_disk_qalsh_searcher != nullptr) {
+                    const DiskQalshProfileSnapshot snapshot = local_disk_qalsh_searcher->ProfileSnapshot();
+#pragma omp critical(disk_qalsh_profile_merge)
+                    root_disk_qalsh_searcher->MergeProfile(snapshot);
+                }
+            }
         }
 #else
         Point query_point(from.num_dimensions);
@@ -262,6 +276,10 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
 #endif
 
         estimation += std::accumulate(distances.begin(), distances.end(), 0.0F);
+    }
+
+    if (root_disk_qalsh_searcher != nullptr) {
+        root_disk_qalsh_searcher->PrintProfile();
     }
 
     return estimation;

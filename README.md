@@ -192,4 +192,15 @@ linear scan when an index is missing or mismatched. If `-c/--approximation-ratio
 is omitted, disk QALSH uses the value stored in `meta.json`; if it is provided,
 it must match the index metadata.
 
+Disk QALSH caches contiguous blocks from `tables.bin` inside each searcher
+clone. This preserves the index file format while avoiding one `pread` per table
+entry during ANN search. Tune the table cache with
+`--disk-qalsh-table-block-size` (bytes per cached table block, default 65536)
+and `--disk-qalsh-table-cache-blocks` (cached blocks per searcher, default 64).
+These options do not change candidate point reads; candidate vectors are still
+read as individual point records from the target point file. Pass
+`--disk-qalsh-profile` to print aggregate query, table block, cache hit/miss,
+candidate read, and search-time counters for disk QALSH ANN or disk QALSH
+sampling weight generation.
+
 The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.

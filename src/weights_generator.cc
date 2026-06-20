@@ -96,6 +96,11 @@ void GenerateWeightsFromSearcherStreaming(AnnSearcher& ann_searcher, const Point
         Log::error("Disk query batch size must be positive.");
     }
 
+    auto* root_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(&ann_searcher);
+    if (root_disk_qalsh_searcher != nullptr) {
+        root_disk_qalsh_searcher->ResetProfile();
+    }
+
     std::ifstream query_input(from_metadata.file_path, std::ios::binary);
     if (!query_input.is_open()) {
         Log::error("Could not open query point set file: {}", from_metadata.file_path.string());
@@ -121,6 +126,15 @@ void GenerateWeightsFromSearcherStreaming(AnnSearcher& ann_searcher, const Point
                     query_batch.data() + static_cast<size_t>(local_query_index) * from_metadata.num_dimensions;
                 std::copy_n(query_data, from_metadata.num_dimensions, query_point.begin());
                 weights[batch_begin + local_query_index] = local_searcher->Search(query_point).distance;
+            }
+
+            if (root_disk_qalsh_searcher != nullptr) {
+                auto* local_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
+                if (local_disk_qalsh_searcher != nullptr) {
+                    const DiskQalshProfileSnapshot snapshot = local_disk_qalsh_searcher->ProfileSnapshot();
+#pragma omp critical(disk_qalsh_profile_merge)
+                    root_disk_qalsh_searcher->MergeProfile(snapshot);
+                }
             }
         }
 #else
@@ -160,12 +174,15 @@ QalshWeightsGenerator::QalshWeightsGenerator(float approximation_ratio)
       ann_searcher_(std::make_unique<QalshAnnSearcher>(approximation_ratio_)) {}
 
 QalshWeightsGenerator::QalshWeightsGenerator(std::optional<float> expected_approximation_ratio,
-                                             unsigned int disk_query_batch_size)
+                                             unsigned int disk_query_batch_size,
+                                             DiskQalshSearchOptions disk_qalsh_options)
     : approximation_ratio_(expected_approximation_ratio.value_or(Global::kDefaultApproximationRatio)),
       disk_based_(true),
       disk_query_batch_size_(disk_query_batch_size),
+      disk_qalsh_options_(disk_qalsh_options),
       expected_approximation_ratio_(expected_approximation_ratio),
-      ann_searcher_(std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_)) {}
+      ann_searcher_(std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_,
+                                                                 disk_qalsh_options_)) {}
 
 bool QalshWeightsGenerator::RequiresIndex() const {
     return false;
@@ -242,6 +259,10 @@ std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from
 
     if (disk_based_) {
         GenerateWeightsFromSearcherStreaming(*ann_searcher_, from_metadata, disk_query_batch_size_, weights);
+        auto* disk_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(ann_searcher_.get());
+        if (disk_searcher != nullptr) {
+            disk_searcher->PrintProfile();
+        }
         if (use_cache) {
             WriteQalshWeightsCache(from_metadata, norm_order, weights);
         }

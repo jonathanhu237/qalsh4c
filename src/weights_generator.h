@@ -37,7 +37,8 @@ class UniformWeightsGenerator : public WeightsGenerator {
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
     explicit QalshWeightsGenerator(float approximation_ratio = Global::kDefaultApproximationRatio);
-    QalshWeightsGenerator(std::optional<float> expected_approximation_ratio, unsigned int disk_query_batch_size);
+    QalshWeightsGenerator(std::optional<float> expected_approximation_ratio, unsigned int disk_query_batch_size,
+                          DiskQalshSearchOptions disk_qalsh_options = {});
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] QalshConfig BuildConfig(const PointSetMetadata& from_metadata,
                                           const PointSetMetadata& to_metadata, float norm_order,
@@ -52,6 +53,7 @@ class QalshWeightsGenerator : public WeightsGenerator {
     float approximation_ratio_{Global::kDefaultApproximationRatio};
     bool disk_based_{false};
     unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
+    DiskQalshSearchOptions disk_qalsh_options_{};
     std::optional<float> expected_approximation_ratio_;
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };

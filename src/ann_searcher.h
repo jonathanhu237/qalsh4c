@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <cstdint>
 #include <vector>
 
 #include "config.h"
@@ -127,12 +128,32 @@ struct DiskBasedQalshIndexData {
     std::vector<Point> dot_vectors;
 };
 
+struct DiskQalshSearchOptions {
+    unsigned int table_block_size{Global::kDefaultDiskQalshTableBlockSize};
+    unsigned int table_cache_blocks{Global::kDefaultDiskQalshTableCacheBlocks};
+    bool profile{false};
+};
+
+struct DiskQalshProfileSnapshot {
+    std::uint64_t queries{0};
+    std::uint64_t table_entry_reads{0};
+    std::uint64_t table_block_reads{0};
+    std::uint64_t table_cache_hits{0};
+    std::uint64_t table_cache_misses{0};
+    std::uint64_t candidate_point_reads{0};
+    std::uint64_t candidates_evaluated{0};
+    double total_search_time_ms{0.0};
+
+    void Merge(const DiskQalshProfileSnapshot& other);
+};
+
 // ---------------------------------------------
 // DiskBasedQalshAnnSearcher Definition
 // ---------------------------------------------
 class DiskBasedQalshAnnSearcher : public AnnSearcher {
    public:
-    explicit DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio = std::nullopt);
+    explicit DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio = std::nullopt,
+                                       DiskQalshSearchOptions options = {});
     ~DiskBasedQalshAnnSearcher() override;
     DiskBasedQalshAnnSearcher(const DiskBasedQalshAnnSearcher&) = delete;
     DiskBasedQalshAnnSearcher& operator=(const DiskBasedQalshAnnSearcher&) = delete;
@@ -144,9 +165,21 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     void Init(const PointSetMetadata& metadata, float norm_order) override;
     AnnResult Search(const Point& query_point) override;
     void PreflightIndex(const PointSetMetadata& metadata, float norm_order) const;
+    [[nodiscard]] bool ProfilingEnabled() const;
+    void ResetProfile();
+    void MergeProfile(const DiskQalshProfileSnapshot& snapshot);
+    [[nodiscard]] DiskQalshProfileSnapshot ProfileSnapshot() const;
+    void PrintProfile() const;
 
    private:
+    struct TableBlockCacheEntry {
+        std::uint64_t block_id{0};
+        std::vector<DiskQalsh::DiskQalshEntry> entries;
+        std::uint64_t last_used{0};
+    };
+
     std::optional<float> expected_approximation_ratio_;
+    DiskQalshSearchOptions options_;
     std::shared_ptr<const DiskBasedQalshIndexData> index_data_;
     int tables_fd_{-1};
     int dot_vectors_fd_{-1};
@@ -155,7 +188,13 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     std::vector<QalshSearchState> search_states_;
     std::vector<Coordinate> candidate_buffer_;
     unsigned int search_epoch_{0};
+    size_t table_entries_per_block_{0};
+    mutable std::vector<TableBlockCacheEntry> table_cache_;
+    mutable std::uint64_t table_cache_clock_{0};
+    mutable DiskQalshProfileSnapshot profile_;
 
+    void ValidateOptions() const;
+    void ResetTableCache();
     void OpenFiles();
     void CloseFiles();
     void ResetSearchState();

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -506,8 +507,24 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
 // ---------------------------------------------
 // DiskBasedQalshAnnSearcher Implementation
 // ---------------------------------------------
-DiskBasedQalshAnnSearcher::DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio)
-    : expected_approximation_ratio_(expected_approximation_ratio) {}
+void DiskQalshProfileSnapshot::Merge(const DiskQalshProfileSnapshot& other) {
+    queries += other.queries;
+    table_entry_reads += other.table_entry_reads;
+    table_block_reads += other.table_block_reads;
+    table_cache_hits += other.table_cache_hits;
+    table_cache_misses += other.table_cache_misses;
+    candidate_point_reads += other.candidate_point_reads;
+    candidates_evaluated += other.candidates_evaluated;
+    total_search_time_ms += other.total_search_time_ms;
+}
+
+DiskBasedQalshAnnSearcher::DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio,
+                                                     DiskQalshSearchOptions options)
+    : expected_approximation_ratio_(expected_approximation_ratio),
+      options_(options) {
+    ValidateOptions();
+    table_entries_per_block_ = options_.table_block_size / sizeof(DiskQalsh::DiskQalshEntry);
+}
 
 DiskBasedQalshAnnSearcher::~DiskBasedQalshAnnSearcher() {
     CloseFiles();
@@ -518,7 +535,7 @@ bool DiskBasedQalshAnnSearcher::RequiresIndex() const {
 }
 
 std::unique_ptr<AnnSearcher> DiskBasedQalshAnnSearcher::Clone() const {
-    auto clone = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_);
+    auto clone = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_, options_);
     clone->index_data_ = index_data_;
     if (clone->index_data_) {
         clone->OpenFiles();
@@ -529,6 +546,55 @@ std::unique_ptr<AnnSearcher> DiskBasedQalshAnnSearcher::Clone() const {
 
 void DiskBasedQalshAnnSearcher::PreflightIndex(const PointSetMetadata& metadata, float norm_order) const {
     (void)DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_);
+}
+
+bool DiskBasedQalshAnnSearcher::ProfilingEnabled() const {
+    return options_.profile;
+}
+
+void DiskBasedQalshAnnSearcher::ResetProfile() {
+    profile_ = DiskQalshProfileSnapshot{};
+}
+
+void DiskBasedQalshAnnSearcher::MergeProfile(const DiskQalshProfileSnapshot& snapshot) {
+    profile_.Merge(snapshot);
+}
+
+DiskQalshProfileSnapshot DiskBasedQalshAnnSearcher::ProfileSnapshot() const {
+    return profile_;
+}
+
+void DiskBasedQalshAnnSearcher::PrintProfile() const {
+    if (!options_.profile) {
+        return;
+    }
+
+    const std::uint64_t cache_lookups = profile_.table_cache_hits + profile_.table_cache_misses;
+    const double cache_hit_rate =
+        cache_lookups == 0 ? 0.0 : (100.0 * static_cast<double>(profile_.table_cache_hits)) /
+                                      static_cast<double>(cache_lookups);
+    Log::info(
+        "Disk QALSH profile: queries={}, total_search_time_ms={:.3f}, table_entry_reads={}, table_block_reads={}, "
+        "table_cache_hits={}, table_cache_misses={}, table_cache_hit_rate={:.2f}%, candidate_point_reads={}, "
+        "candidates_evaluated={}.",
+        profile_.queries, profile_.total_search_time_ms, profile_.table_entry_reads, profile_.table_block_reads,
+        profile_.table_cache_hits, profile_.table_cache_misses, cache_hit_rate, profile_.candidate_point_reads,
+        profile_.candidates_evaluated);
+}
+
+void DiskBasedQalshAnnSearcher::ValidateOptions() const {
+    if (options_.table_block_size < sizeof(DiskQalsh::DiskQalshEntry)) {
+        Log::error("Disk QALSH table block size must be at least {} bytes.", sizeof(DiskQalsh::DiskQalshEntry));
+    }
+    if (options_.table_cache_blocks == 0) {
+        Log::error("Disk QALSH table cache block count must be positive.");
+    }
+}
+
+void DiskBasedQalshAnnSearcher::ResetTableCache() {
+    table_cache_.clear();
+    table_cache_.reserve(options_.table_cache_blocks);
+    table_cache_clock_ = 0;
 }
 
 void DiskBasedQalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
@@ -571,6 +637,7 @@ void DiskBasedQalshAnnSearcher::OpenFiles() {
     }
 
     CloseFiles();
+    ResetTableCache();
     tables_fd_ = OpenReadOnlyFd(DiskQalsh::TablesPath(index_data_->index_directory), "tables.bin");
     dot_vectors_fd_ = OpenReadOnlyFd(DiskQalsh::DotVectorsPath(index_data_->index_directory), "dot_vectors.bin");
     target_fd_ = OpenReadOnlyFd(index_data_->target_metadata.file_path, "target point set");
@@ -587,6 +654,7 @@ void DiskBasedQalshAnnSearcher::ResetSearchState() {
         search_cursors_.clear();
         search_states_.clear();
         candidate_buffer_.clear();
+        ResetTableCache();
         search_epoch_ = 0;
         return;
     }
@@ -594,6 +662,7 @@ void DiskBasedQalshAnnSearcher::ResetSearchState() {
     search_cursors_.assign(index_data_->qalsh_config.num_hash_tables, InMemoryQalshTableCursor{});
     search_states_.assign(index_data_->metadata.num_points, QalshSearchState{});
     candidate_buffer_.assign(index_data_->metadata.num_dimensions, 0.0F);
+    ResetTableCache();
     search_epoch_ = 0;
 }
 
@@ -615,12 +684,72 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
         Log::error("Disk QALSH table read is out of range: table {}, entry {}.", table_id, entry_index);
     }
 
-    DiskQalsh::DiskQalshEntry entry;
+    if (options_.profile) {
+        ++profile_.table_entry_reads;
+    }
+
     const std::uint64_t linear_index = static_cast<std::uint64_t>(table_id) *
                                            static_cast<std::uint64_t>(index_data_->metadata.num_points) +
                                        static_cast<std::uint64_t>(entry_index);
-    const std::uint64_t offset = linear_index * static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry));
-    ReadExactAt(tables_fd_, &entry, sizeof(entry), offset, "tables.bin");
+    const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
+    const size_t block_entry_index = static_cast<size_t>(linear_index %
+                                                        static_cast<std::uint64_t>(table_entries_per_block_));
+
+    for (TableBlockCacheEntry& cached_block : table_cache_) {
+        if (cached_block.block_id == block_id) {
+            if (options_.profile) {
+                ++profile_.table_cache_hits;
+            }
+            cached_block.last_used = ++table_cache_clock_;
+            if (block_entry_index >= cached_block.entries.size()) {
+                Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                           block_entry_index);
+            }
+            const DiskQalsh::DiskQalshEntry entry = cached_block.entries[block_entry_index];
+            if (entry.point_id >= index_data_->metadata.num_points) {
+                Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
+            }
+            return entry;
+        }
+    }
+
+    if (options_.profile) {
+        ++profile_.table_cache_misses;
+        ++profile_.table_block_reads;
+    }
+
+    const std::uint64_t total_entries = static_cast<std::uint64_t>(index_data_->metadata.num_hash_tables) *
+                                        static_cast<std::uint64_t>(index_data_->metadata.num_points);
+    const std::uint64_t block_start_index = block_id * static_cast<std::uint64_t>(table_entries_per_block_);
+    const std::uint64_t remaining_entries = total_entries - block_start_index;
+    const size_t entries_to_read =
+        static_cast<size_t>(std::min<std::uint64_t>(table_entries_per_block_, remaining_entries));
+    std::vector<DiskQalsh::DiskQalshEntry> loaded_entries(entries_to_read);
+    const std::uint64_t offset =
+        block_start_index * static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry));
+    ReadExactAt(tables_fd_, loaded_entries.data(), loaded_entries.size() * sizeof(DiskQalsh::DiskQalshEntry), offset,
+                "tables.bin");
+
+    TableBlockCacheEntry* cache_slot = nullptr;
+    if (table_cache_.size() < options_.table_cache_blocks) {
+        table_cache_.push_back(TableBlockCacheEntry{});
+        cache_slot = &table_cache_.back();
+    } else {
+        auto evict_it = std::min_element(table_cache_.begin(), table_cache_.end(),
+                                         [](const TableBlockCacheEntry& lhs, const TableBlockCacheEntry& rhs) {
+                                             return lhs.last_used < rhs.last_used;
+                                         });
+        cache_slot = &(*evict_it);
+    }
+
+    cache_slot->block_id = block_id;
+    cache_slot->entries = std::move(loaded_entries);
+    cache_slot->last_used = ++table_cache_clock_;
+    if (block_entry_index >= cache_slot->entries.size()) {
+        Log::error("Disk QALSH loaded table block is shorter than expected: block {}, entry {}.", block_id,
+                   block_entry_index);
+    }
+    DiskQalsh::DiskQalshEntry entry = cache_slot->entries[block_entry_index];
     if (entry.point_id >= index_data_->metadata.num_points) {
         Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
     }
@@ -707,6 +836,9 @@ void DiskBasedQalshAnnSearcher::ReadCandidatePoint(unsigned int point_id) {
     if (candidate_buffer_.size() != index_data_->metadata.num_dimensions) {
         candidate_buffer_.assign(index_data_->metadata.num_dimensions, 0.0F);
     }
+    if (options_.profile) {
+        ++profile_.candidate_point_reads;
+    }
 
     const std::uint64_t offset = static_cast<std::uint64_t>(point_id) *
                                  static_cast<std::uint64_t>(index_data_->metadata.num_dimensions) *
@@ -723,6 +855,11 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
     if (query_point.size() != index_data_->metadata.num_dimensions) {
         Log::error("Query point dimension {} does not match disk QALSH target dimension {}.", query_point.size(),
                    index_data_->metadata.num_dimensions);
+    }
+
+    const auto search_start = std::chrono::steady_clock::now();
+    if (options_.profile) {
+        ++profile_.queries;
     }
 
     const unsigned int epoch = NextSearchEpoch();
@@ -787,6 +924,9 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
                     if (++state.collision_count >= collision_threshold) {
                         state.visited_stamp = epoch;
                         ReadCandidatePoint(point_id);
+                        if (options_.profile) {
+                            ++profile_.candidates_evaluated;
+                        }
                         const float distance =
                             Calc::LpDistanceBoundedRaw(candidate_buffer_.data(), query_point.data(),
                                                        index_data_->metadata.num_dimensions, index_data_->norm_order,
@@ -813,7 +953,7 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
         }
         if (cursors_exhausted()) {
             if (has_candidate) {
-                return best_candidate;
+                break;
             }
             Log::error("Disk QALSH search exhausted all table cursors without finding a candidate.");
         }
@@ -824,6 +964,11 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
 
     if (!has_candidate) {
         Log::error("Disk QALSH search did not find a candidate.");
+    }
+    if (options_.profile) {
+        const auto search_end = std::chrono::steady_clock::now();
+        profile_.total_search_time_ms +=
+            std::chrono::duration<double, std::milli>(search_end - search_start).count();
     }
     return best_candidate;
 }

@@ -15,6 +15,8 @@ class Global {
     static constexpr unsigned int kDefaultSeed = 42;
     static constexpr unsigned int kDefaultDiskBlockSize = 4096;
     static constexpr unsigned int kDefaultDiskQueryBatchSize = 64;
+    static constexpr unsigned int kDefaultDiskQalshTableBlockSize = 65536;
+    static constexpr unsigned int kDefaultDiskQalshTableCacheBlocks = 64;
 
     // qalsh4c
     static constexpr float kQalsh4cEpsilon = 1.0F;

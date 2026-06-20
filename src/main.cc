@@ -132,6 +132,22 @@ int main(int argc, char** argv) {
         ->default_val(Global::kDefaultDiskQueryBatchSize)
         ->check(CLI::PositiveNumber);
 
+    DiskQalshSearchOptions disk_qalsh_options;
+    estimate
+        ->add_option("--disk-qalsh-table-block-size", disk_qalsh_options.table_block_size,
+                     "Byte size of each cached tables.bin block for disk QALSH")
+        ->default_val(Global::kDefaultDiskQalshTableBlockSize)
+        ->check(CLI::PositiveNumber);
+    estimate
+        ->add_option("--disk-qalsh-table-cache-blocks", disk_qalsh_options.table_cache_blocks,
+                     "Maximum cached tables.bin blocks per disk QALSH searcher")
+        ->default_val(Global::kDefaultDiskQalshTableCacheBlocks)
+        ->check(CLI::PositiveNumber);
+    estimate->add_flag("--disk-qalsh-profile", disk_qalsh_options.profile,
+                       "Print disk QALSH table-cache profile counters")
+        ->default_val(false)
+        ->default_str(disk_qalsh_options.profile ? "True" : "False");
+
     std::unique_ptr<Estimator> estimator;
     estimate->require_subcommand(1);
     estimate->callback([&]() {
@@ -181,7 +197,8 @@ int main(int argc, char** argv) {
                 qalsh_ann_approximation_ratio_option->count() > 0
                     ? std::optional<float>(qalsh_ann_approximation_ratio)
                     : std::nullopt;
-            ann_searcher = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio);
+            ann_searcher = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio,
+                                                                       disk_qalsh_options);
             return;
         }
         ann_searcher = std::make_unique<QalshAnnSearcher>(qalsh_ann_approximation_ratio);
@@ -250,8 +267,9 @@ int main(int argc, char** argv) {
                 qalsh_sampling_approximation_ratio_option->count() > 0
                     ? std::optional<float>(qalsh_sampling_approximation_ratio)
                     : std::nullopt;
-            weights_generator =
-                std::make_unique<QalshWeightsGenerator>(expected_approximation_ratio, disk_query_batch_size);
+            weights_generator = std::make_unique<QalshWeightsGenerator>(expected_approximation_ratio,
+                                                                        disk_query_batch_size,
+                                                                        disk_qalsh_options);
             return;
         }
         weights_generator = std::make_unique<QalshWeightsGenerator>(qalsh_sampling_approximation_ratio);

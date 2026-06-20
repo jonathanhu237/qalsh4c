@@ -41,6 +41,13 @@ foreach(option "--target" "--seed" "--overwrite" "--approximation-ratio")
     endif()
 endforeach()
 
+run_ok(estimate_help estimate --help)
+foreach(option "--disk-qalsh-table-block-size" "--disk-qalsh-table-cache-blocks" "--disk-qalsh-profile")
+    if(NOT estimate_help_output MATCHES "${option}")
+        message(FATAL_ERROR "Expected estimate help to include ${option}:\n${estimate_help_output}")
+    endif()
+endforeach()
+
 run_ok(generate dataset generate gmm
     -a 24
     -b 20
@@ -160,10 +167,33 @@ endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" -E copy "${l2_b_dir}/dot_vectors.good.bin" "${l2_b_dir}/dot_vectors.bin")
 file(REMOVE "${l2_b_dir}/dot_vectors.good.bin")
 
-run_ok(ann_ab -T 2 estimate --disk-based -p 2 -d "${dataset_dir}" --direction ab ann qalsh)
+run_fail(invalid_table_block_zero -T 2 estimate --disk-based --disk-qalsh-table-block-size 0
+    -p 2 -d "${dataset_dir}" --direction ab ann qalsh
+)
+run_fail(invalid_table_cache_zero -T 2 estimate --disk-based --disk-qalsh-table-cache-blocks 0
+    -p 2 -d "${dataset_dir}" --direction ab ann qalsh
+)
+
+run_ok(ann_ab -T 2 estimate --disk-based --disk-qalsh-table-block-size 512 --disk-qalsh-table-cache-blocks 2
+    -p 2 -d "${dataset_dir}" --direction ab ann qalsh
+)
 if(NOT ann_ab_output MATCHES "Estimated Distance:")
     message(FATAL_ERROR "Expected disk QALSH ANN A->B estimate:\n${ann_ab_output}")
 endif()
+if(ann_ab_output MATCHES "Disk QALSH profile")
+    message(FATAL_ERROR "Disk QALSH profile printed without --disk-qalsh-profile:\n${ann_ab_output}")
+endif()
+
+run_ok(ann_profile -T 2 estimate --disk-based --disk-qalsh-table-block-size 512 --disk-qalsh-table-cache-blocks 2
+    --disk-qalsh-profile -p 2 -d "${dataset_dir}" --direction ab ann qalsh
+)
+foreach(profile_field "Disk QALSH profile" "queries" "total_search_time_ms" "table_entry_reads"
+        "table_block_reads" "table_cache_hits" "table_cache_misses" "candidate_point_reads"
+        "candidates_evaluated")
+    if(NOT ann_profile_output MATCHES "${profile_field}")
+        message(FATAL_ERROR "Expected ANN profile output to include ${profile_field}:\n${ann_profile_output}")
+    endif()
+endforeach()
 
 run_ok(ann_ba -T 2 estimate --disk-based -p 2 -d "${dataset_dir}" --direction ba ann qalsh)
 if(NOT ann_ba_output MATCHES "Direction: B -> A")
@@ -179,6 +209,18 @@ run_fail(ann_c_mismatch -T 2 estimate --disk-based -p 2 -d "${dataset_dir}" --di
 if(NOT ann_c_mismatch_output MATCHES "approximation ratio mismatch")
     message(FATAL_ERROR "Expected explicit approximation ratio mismatch:\n${ann_c_mismatch_output}")
 endif()
+
+run_ok(sampling_profile -T 2 estimate --disk-based --disk-query-batch-size 8 --disk-qalsh-table-block-size 512
+    --disk-qalsh-table-cache-blocks 2 --disk-qalsh-profile -p 2 -d "${dataset_dir}"
+    --direction ab sampling -n 4 qalsh
+)
+foreach(profile_field "Disk QALSH profile" "queries" "total_search_time_ms" "table_entry_reads"
+        "table_block_reads" "table_cache_hits" "table_cache_misses" "candidate_point_reads"
+        "candidates_evaluated")
+    if(NOT sampling_profile_output MATCHES "${profile_field}")
+        message(FATAL_ERROR "Expected sampling profile output to include ${profile_field}:\n${sampling_profile_output}")
+    endif()
+endforeach()
 
 run_ok(sampling_miss -T 2 estimate --disk-based --disk-query-batch-size 8 -p 2 -d "${dataset_dir}"
     --direction ab sampling --use-cache -n 4 qalsh
