@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <queue>
 #include <random>
@@ -594,7 +595,10 @@ void DiskBasedQalshAnnSearcher::ValidateOptions() const {
 void DiskBasedQalshAnnSearcher::ResetTableCache() {
     table_cache_.clear();
     table_cache_.reserve(options_.table_cache_blocks);
+    table_cache_positions_.clear();
+    table_cache_positions_.reserve(options_.table_cache_blocks);
     table_cache_clock_ = 0;
+    last_table_cache_slot_ = std::nullopt;
 }
 
 void DiskBasedQalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
@@ -695,22 +699,37 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
     const size_t block_entry_index = static_cast<size_t>(linear_index %
                                                         static_cast<std::uint64_t>(table_entries_per_block_));
 
-    for (TableBlockCacheEntry& cached_block : table_cache_) {
-        if (cached_block.block_id == block_id) {
+    auto read_cached_entry = [&](size_t cache_slot) {
+        TableBlockCacheEntry& cached_block = table_cache_[cache_slot];
+        cached_block.last_used = ++table_cache_clock_;
+        last_table_cache_slot_ = cache_slot;
+        if (block_entry_index >= cached_block.entries.size()) {
+            Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                       block_entry_index);
+        }
+        const DiskQalsh::DiskQalshEntry entry = cached_block.entries[block_entry_index];
+        if (entry.point_id >= index_data_->metadata.num_points) {
+            Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
+        }
+        return entry;
+    };
+
+    if (last_table_cache_slot_.has_value()) {
+        const size_t cache_slot = *last_table_cache_slot_;
+        if (cache_slot < table_cache_.size() && table_cache_[cache_slot].block_id == block_id) {
             if (options_.profile) {
                 ++profile_.table_cache_hits;
             }
-            cached_block.last_used = ++table_cache_clock_;
-            if (block_entry_index >= cached_block.entries.size()) {
-                Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
-                           block_entry_index);
-            }
-            const DiskQalsh::DiskQalshEntry entry = cached_block.entries[block_entry_index];
-            if (entry.point_id >= index_data_->metadata.num_points) {
-                Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
-            }
-            return entry;
+            return read_cached_entry(cache_slot);
         }
+    }
+
+    const auto cache_position = table_cache_positions_.find(block_id);
+    if (cache_position != table_cache_positions_.end()) {
+        if (options_.profile) {
+            ++profile_.table_cache_hits;
+        }
+        return read_cached_entry(cache_position->second);
     }
 
     if (options_.profile) {
@@ -731,20 +750,26 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
                 "tables.bin");
 
     TableBlockCacheEntry* cache_slot = nullptr;
+    size_t cache_slot_index = 0;
     if (table_cache_.size() < options_.table_cache_blocks) {
         table_cache_.push_back(TableBlockCacheEntry{});
-        cache_slot = &table_cache_.back();
+        cache_slot_index = table_cache_.size() - 1;
+        cache_slot = &table_cache_[cache_slot_index];
     } else {
         auto evict_it = std::min_element(table_cache_.begin(), table_cache_.end(),
                                          [](const TableBlockCacheEntry& lhs, const TableBlockCacheEntry& rhs) {
                                              return lhs.last_used < rhs.last_used;
                                          });
-        cache_slot = &(*evict_it);
+        cache_slot_index = static_cast<size_t>(std::distance(table_cache_.begin(), evict_it));
+        cache_slot = &table_cache_[cache_slot_index];
+        table_cache_positions_.erase(cache_slot->block_id);
     }
 
     cache_slot->block_id = block_id;
     cache_slot->entries = std::move(loaded_entries);
     cache_slot->last_used = ++table_cache_clock_;
+    table_cache_positions_[block_id] = cache_slot_index;
+    last_table_cache_slot_ = cache_slot_index;
     if (block_entry_index >= cache_slot->entries.size()) {
         Log::error("Disk QALSH loaded table block is shorter than expected: block {}, entry {}.", block_id,
                    block_entry_index);

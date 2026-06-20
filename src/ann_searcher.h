@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include "config.h"
@@ -190,7 +191,9 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     unsigned int search_epoch_{0};
     size_t table_entries_per_block_{0};
     mutable std::vector<TableBlockCacheEntry> table_cache_;
+    mutable std::unordered_map<std::uint64_t, size_t> table_cache_positions_;
     mutable std::uint64_t table_cache_clock_{0};
+    mutable std::optional<size_t> last_table_cache_slot_;
     mutable DiskQalshProfileSnapshot profile_;
 
     void ValidateOptions() const;
