@@ -195,8 +195,9 @@ it must match the index metadata.
 Disk QALSH caches contiguous blocks from `tables.bin` inside each searcher
 clone. This preserves the index file format while avoiding one `pread` per table
 entry during ANN search. Tune the table cache with
-`--disk-qalsh-table-block-size` (bytes per cached table block, default 65536)
+`--disk-qalsh-table-block-size` (bytes per cached table block, default 262144)
 and `--disk-qalsh-table-cache-blocks` (cached blocks per searcher, default 64).
+The default table cache budget is 16 MiB per searcher clone.
 These options do not change candidate point reads; candidate vectors are still
 read as individual point records from the target point file. Pass
 `--disk-qalsh-profile` to print aggregate query, table block, cache hit/miss,
