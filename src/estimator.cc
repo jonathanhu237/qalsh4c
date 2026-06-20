@@ -233,19 +233,23 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
 
     std::vector<Coordinate> query_batch;
     query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
+    std::vector<Distance> distances(disk_query_batch_size, 0.0F);
     float estimation = 0.0F;
-
-    for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
-        const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
-        ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
-
-        std::vector<Distance> distances(query_count, 0.0F);
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
-        {
-            std::unique_ptr<AnnSearcher> local_searcher = ann_searcher.Clone();
-            Point query_point(from.num_dimensions);
+    {
+        std::unique_ptr<AnnSearcher> local_searcher = ann_searcher.Clone();
+        Point query_point(from.num_dimensions);
+
+        for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
+            const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
+
+#pragma omp single
+            {
+                ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
+                distances.assign(query_count, 0.0F);
+            }
 
 #pragma omp for schedule(dynamic)
             for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
@@ -256,16 +260,24 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
                 distances[local_query_index] = local_searcher->Search(query_point).distance;
             }
 
-            if (root_disk_qalsh_searcher != nullptr) {
-                auto* local_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
-                if (local_disk_qalsh_searcher != nullptr) {
-                    const DiskQalshProfileSnapshot snapshot = local_disk_qalsh_searcher->ProfileSnapshot();
+#pragma omp single
+            estimation += std::accumulate(distances.begin(), distances.end(), 0.0F);
+        }
+
+        if (root_disk_qalsh_searcher != nullptr) {
+            auto* local_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
+            if (local_disk_qalsh_searcher != nullptr) {
+                const DiskQalshProfileSnapshot snapshot = local_disk_qalsh_searcher->ProfileSnapshot();
 #pragma omp critical(disk_qalsh_profile_merge)
-                    root_disk_qalsh_searcher->MergeProfile(snapshot);
-                }
+                root_disk_qalsh_searcher->MergeProfile(snapshot);
             }
         }
+    }
 #else
+    for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
+        const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
+        ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
+        distances.assign(query_count, 0.0F);
         Point query_point(from.num_dimensions);
         for (unsigned int local_query_index = 0; local_query_index < query_count; ++local_query_index) {
             const Coordinate* query_data =
@@ -273,10 +285,10 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
             std::copy_n(query_data, from.num_dimensions, query_point.begin());
             distances[local_query_index] = ann_searcher.Search(query_point).distance;
         }
-#endif
 
         estimation += std::accumulate(distances.begin(), distances.end(), 0.0F);
     }
+#endif
 
     if (root_disk_qalsh_searcher != nullptr) {
         root_disk_qalsh_searcher->PrintProfile();
