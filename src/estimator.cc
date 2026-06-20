@@ -172,6 +172,20 @@ std::vector<AnnResult> InitBatchResults(unsigned int query_count) {
                                                         .point_id = 0});
 }
 
+std::vector<AnnResult> InitBatchResultsWithUpperBounds(
+    const std::vector<std::pair<unsigned int, unsigned int>>& sample_counts, size_t batch_begin,
+    unsigned int query_count, const std::vector<Weight>& weights, bool use_upper_bounds) {
+    std::vector<AnnResult> batch_results(query_count);
+    for (unsigned int batch_index = 0; batch_index < query_count; ++batch_index) {
+        const unsigned int point_id = sample_counts[batch_begin + batch_index].first;
+        batch_results[batch_index] = AnnResult{
+            .distance = use_upper_bounds ? weights[point_id] : std::numeric_limits<float>::infinity(),
+            .point_id = 0,
+        };
+    }
+    return batch_results;
+}
+
 float EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
                                    unsigned int disk_block_size, unsigned int disk_query_batch_size) {
     ValidateDiskScanMetadata(from, to);
@@ -198,6 +212,56 @@ float EstimateDiskBasedLinearScan(const PointSetMetadata& from, const PointSetMe
         for (const AnnResult& result : batch_results) {
             estimation += result.distance;
         }
+    }
+
+    return estimation;
+}
+
+float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
+                                 AnnSearcher& ann_searcher, unsigned int disk_query_batch_size) {
+    ValidateDiskScanMetadata(from, to);
+
+    ann_searcher.Init(to, norm_order);
+
+    std::ifstream query_input;
+    OpenPointSetForRead(query_input, from.file_path, "query");
+
+    std::vector<Coordinate> query_batch;
+    query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
+    float estimation = 0.0F;
+
+    for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
+        const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
+        ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
+
+        std::vector<Distance> distances(query_count, 0.0F);
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+        {
+            std::unique_ptr<AnnSearcher> local_searcher = ann_searcher.Clone();
+            Point query_point(from.num_dimensions);
+
+#pragma omp for schedule(dynamic)
+            for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+                const auto local_query_index = static_cast<unsigned int>(query_index);
+                const Coordinate* query_data =
+                    query_batch.data() + static_cast<size_t>(local_query_index) * from.num_dimensions;
+                std::copy_n(query_data, from.num_dimensions, query_point.begin());
+                distances[local_query_index] = local_searcher->Search(query_point).distance;
+            }
+        }
+#else
+        Point query_point(from.num_dimensions);
+        for (unsigned int local_query_index = 0; local_query_index < query_count; ++local_query_index) {
+            const Coordinate* query_data =
+                query_batch.data() + static_cast<size_t>(local_query_index) * from.num_dimensions;
+            std::copy_n(query_data, from.num_dimensions, query_point.begin());
+            distances[local_query_index] = ann_searcher.Search(query_point).distance;
+        }
+#endif
+
+        estimation += std::accumulate(distances.begin(), distances.end(), 0.0F);
     }
 
     return estimation;
@@ -270,6 +334,77 @@ float EstimateDiskBasedUniformSampling(const PointSetMetadata& from, const Point
     return estimation / static_cast<float>(num_samples);
 }
 
+float EstimateDiskBasedWeightedSampling(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
+                                        unsigned int num_samples, const std::vector<Weight>& weights,
+                                        bool weights_are_upper_bounds, unsigned int disk_block_size,
+                                        unsigned int disk_query_batch_size) {
+    ValidateDiskScanMetadata(from, to);
+    if (num_samples == 0) {
+        Log::error("Weighted sampling requires a positive sample count.");
+    }
+    if (weights.size() != from.num_points) {
+        Log::error("Weights size does not match the number of query points in the dataset.");
+    }
+
+    WeightedSampler sampler(weights);
+    const Weight sum = sampler.Total();
+    Log::info("Total sum of weights: {}", sum);
+
+    std::unordered_map<unsigned int, unsigned int> sample_count_map;
+    sample_count_map.reserve(num_samples);
+    for (unsigned int sample_index = 0; sample_index < num_samples; ++sample_index) {
+        ++sample_count_map[sampler.Sample()];
+    }
+
+    std::vector<std::pair<unsigned int, unsigned int>> sample_counts;
+    sample_counts.reserve(sample_count_map.size());
+    for (const auto& [point_id, count] : sample_count_map) {
+        sample_counts.emplace_back(point_id, count);
+    }
+    std::ranges::sort(sample_counts);
+
+    std::ifstream query_input;
+    std::ifstream target_input;
+    OpenPointSetForRead(query_input, from.file_path, "query");
+    OpenPointSetForRead(target_input, to.file_path, "target");
+
+    std::vector<Coordinate> query_batch;
+    std::vector<Coordinate> target_block;
+    query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
+    target_block.reserve(static_cast<size_t>(disk_block_size) * to.num_dimensions);
+    float estimation = 0.0F;
+
+    for (size_t batch_begin = 0; batch_begin < sample_counts.size(); batch_begin += disk_query_batch_size) {
+        const size_t batch_end =
+            std::min(batch_begin + static_cast<size_t>(disk_query_batch_size), sample_counts.size());
+        const unsigned int query_count = static_cast<unsigned int>(batch_end - batch_begin);
+        query_batch.resize(static_cast<size_t>(query_count) * from.num_dimensions);
+
+        for (size_t sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
+            const unsigned int point_id = sample_counts[sample_index].first;
+            Coordinate* output =
+                query_batch.data() + (sample_index - batch_begin) * static_cast<size_t>(from.num_dimensions);
+            ReadPointIntoBuffer(query_input, from, point_id, output, "query");
+        }
+
+        std::vector<AnnResult> batch_results =
+            InitBatchResultsWithUpperBounds(sample_counts, batch_begin, query_count, weights, weights_are_upper_bounds);
+        ScanDiskTargetBlocks(query_batch, query_count, to, norm_order, disk_block_size, target_input, target_block,
+                             batch_results);
+
+        for (size_t batch_index = 0; batch_index < batch_results.size(); ++batch_index) {
+            const unsigned int point_id = sample_counts[batch_begin + batch_index].first;
+            const unsigned int count = sample_counts[batch_begin + batch_index].second;
+            if (weights[point_id] <= 0.0F) {
+                Log::error("Sampled point {} has non-positive weight {}.", point_id, weights[point_id]);
+            }
+            estimation += static_cast<float>(count) * sum * batch_results[batch_index].distance / weights[point_id];
+        }
+    }
+
+    return estimation / static_cast<float>(num_samples);
+}
+
 float BinaryKlDivergence(float x, float y) {
     if (x < 0.0F || x > 1.0F || y <= 0.0F || y >= 1.0F) {
         Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
@@ -281,6 +416,10 @@ float BinaryKlDivergence(float x, float y) {
 }
 
 }  // namespace
+
+void Estimator::PreflightBothDirections([[maybe_unused]] const PointSetMetadata& a_metadata,
+                                        [[maybe_unused]] const PointSetMetadata& b_metadata,
+                                        [[maybe_unused]] float norm_order) {}
 
 // --------------------------------------------------
 // AnnEstimator Implementation
@@ -303,6 +442,20 @@ bool AnnEstimator::RequiresIndex() const {
     return ann_searcher_ && ann_searcher_->RequiresIndex();
 }
 
+void AnnEstimator::PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
+                                           float norm_order) {
+    if (!disk_based_) {
+        return;
+    }
+    auto* disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(ann_searcher_.get());
+    if (disk_qalsh_searcher == nullptr) {
+        return;
+    }
+
+    disk_qalsh_searcher->PreflightIndex(b_metadata, norm_order);
+    disk_qalsh_searcher->PreflightIndex(a_metadata, norm_order);
+}
+
 float AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order) {
     // Check the ANN searcher
     if (!ann_searcher_) {
@@ -310,10 +463,14 @@ float AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSe
     }
 
     if (disk_based_) {
-        if (dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get()) == nullptr) {
-            Log::error("Disk-based mode is currently implemented only for ANN linear_scan.");
+        if (dynamic_cast<LinearScanAnnSearcher*>(ann_searcher_.get()) != nullptr) {
+            return EstimateDiskBasedLinearScan(from, to, norm_order, disk_block_size_, disk_query_batch_size_);
         }
-        return EstimateDiskBasedLinearScan(from, to, norm_order, disk_block_size_, disk_query_batch_size_);
+        auto* disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(ann_searcher_.get());
+        if (disk_qalsh_searcher != nullptr) {
+            return EstimateDiskBasedAnnSearch(from, to, norm_order, *disk_qalsh_searcher, disk_query_batch_size_);
+        }
+        Log::error("Disk-based mode is currently implemented only for ANN linear_scan and qalsh.");
     }
 
     ann_searcher_->Init(to, norm_order);
@@ -371,6 +528,20 @@ bool SamplingEstimator::RequiresIndex() const {
     return weights_generator_ && weights_generator_->RequiresIndex();
 }
 
+void SamplingEstimator::PreflightBothDirections(const PointSetMetadata& a_metadata,
+                                                const PointSetMetadata& b_metadata, float norm_order) {
+    if (!disk_based_) {
+        return;
+    }
+    auto* qalsh_weights_generator = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get());
+    if (qalsh_weights_generator == nullptr) {
+        return;
+    }
+
+    qalsh_weights_generator->PreflightGenerate(a_metadata, b_metadata, norm_order, use_cache_);
+    qalsh_weights_generator->PreflightGenerate(b_metadata, a_metadata, norm_order, use_cache_);
+}
+
 float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
                                            float norm_order) {
     // Check the ANN searcher
@@ -422,7 +593,7 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
                 Log::error("Delta must be in (0, 1) for automatic QALSH sampling.");
             }
 
-            QalshConfig qalsh_config = qalsh_weights_generator->BuildConfig(to.num_points, norm_order);
+            QalshConfig qalsh_config = qalsh_weights_generator->BuildConfig(from, to, norm_order, use_cache_);
 
             const unsigned int m = qalsh_config.num_hash_tables;
             const unsigned int l = qalsh_config.collision_threshold;
@@ -468,11 +639,18 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
 
     const unsigned int num_samples = static_cast<unsigned int>(updated_num_samples);
     if (disk_based_) {
-        if (uniform_weights_generator == nullptr) {
-            Log::error("Disk-based mode is currently implemented only for uniform sampling estimators.");
+        if (uniform_weights_generator != nullptr) {
+            return EstimateDiskBasedUniformSampling(from, to, norm_order, num_samples, disk_block_size_,
+                                                    disk_query_batch_size_);
         }
-        return EstimateDiskBasedUniformSampling(from, to, norm_order, num_samples, disk_block_size_,
-                                                disk_query_batch_size_);
+        if (qalsh_weights_generator != nullptr) {
+            Log::info("Generating weights...");
+            std::vector<Weight> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
+            return EstimateDiskBasedWeightedSampling(from, to, norm_order, num_samples, weights,
+                                                     weights_are_upper_bounds, disk_block_size_,
+                                                     disk_query_batch_size_);
+        }
+        Log::error("Disk-based mode is currently implemented only for uniform and QALSH sampling estimators.");
     }
 
     // Generate weights.

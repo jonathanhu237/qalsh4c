@@ -57,6 +57,7 @@ add_executable(qalsh4c
     src/command.cc
     src/config.cc
     src/dataset.cc
+    src/disk_qalsh_index.cc
     ${QALSH4C_DATASET_CUDA_SOURCE}
     src/estimator.cc
     src/global.cc
@@ -88,6 +89,7 @@ if(BUILD_TESTING)
         tests/ann_searcher_clone_test.cc
         src/ann_searcher.cc
         src/config.cc
+        src/disk_qalsh_index.cc
         src/global.cc
         src/point_set.cc
         src/utils.cc
@@ -101,6 +103,7 @@ if(BUILD_TESTING)
         tests/disk_linear_scan_test.cc
         src/ann_searcher.cc
         src/config.cc
+        src/disk_qalsh_index.cc
         src/estimator.cc
         src/global.cc
         src/point_set.cc
@@ -257,6 +260,14 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh_ann_help.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_disk_qalsh
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_disk_qalsh.cmake
     )
 
     add_test(

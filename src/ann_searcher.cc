@@ -1,13 +1,19 @@
 #include "ann_searcher.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <functional>
 #include <limits>
 #include <queue>
 #include <random>
+#include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "global.h"
@@ -36,6 +42,42 @@ float DotProductRaw(const Point& lhs, const Point& rhs) {
 bool IsBetterAnnResult(const AnnResult& candidate, const AnnResult& best) {
     return candidate.distance < best.distance ||
            (candidate.distance == best.distance && candidate.point_id < best.point_id);
+}
+
+int OpenReadOnlyFd(const std::filesystem::path& path, const std::string& label) {
+    const int fd = ::open(path.c_str(), O_RDONLY);
+    if (fd < 0) {
+        Log::error("Failed to open {} for disk QALSH search: {} ({})", label, path.string(), std::strerror(errno));
+    }
+    return fd;
+}
+
+void CloseFd(int& fd) {
+    if (fd >= 0) {
+        ::close(fd);
+        fd = -1;
+    }
+}
+
+void ReadExactAt(int fd, void* output, size_t bytes, std::uint64_t offset, const std::string& label) {
+    auto* data = static_cast<char*>(output);
+    size_t total_read = 0;
+    while (total_read < bytes) {
+        const ssize_t read_count =
+            ::pread(fd, data + total_read, bytes - total_read, static_cast<off_t>(offset + total_read));
+        if (read_count < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            Log::error("Failed to read {} for disk QALSH search at offset {}: {}", label, offset + total_read,
+                       std::strerror(errno));
+        }
+        if (read_count == 0) {
+            Log::error("Unexpected EOF while reading {} for disk QALSH search at offset {}.", label,
+                       offset + total_read);
+        }
+        total_read += static_cast<size_t>(read_count);
+    }
 }
 
 }  // namespace
@@ -458,5 +500,330 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
         bound = bucket_width * radius / 2.0F;
     }
 
+    return best_candidate;
+}
+
+// ---------------------------------------------
+// DiskBasedQalshAnnSearcher Implementation
+// ---------------------------------------------
+DiskBasedQalshAnnSearcher::DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio)
+    : expected_approximation_ratio_(expected_approximation_ratio) {}
+
+DiskBasedQalshAnnSearcher::~DiskBasedQalshAnnSearcher() {
+    CloseFiles();
+}
+
+bool DiskBasedQalshAnnSearcher::RequiresIndex() const {
+    return true;
+}
+
+std::unique_ptr<AnnSearcher> DiskBasedQalshAnnSearcher::Clone() const {
+    auto clone = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_);
+    clone->index_data_ = index_data_;
+    if (clone->index_data_) {
+        clone->OpenFiles();
+    }
+    clone->ResetSearchState();
+    return clone;
+}
+
+void DiskBasedQalshAnnSearcher::PreflightIndex(const PointSetMetadata& metadata, float norm_order) const {
+    (void)DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_);
+}
+
+void DiskBasedQalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
+    if (metadata.num_points == 0 || metadata.num_dimensions == 0) {
+        Log::error("Disk QALSH requires a non-empty target point set with non-zero dimensions.");
+    }
+
+    const DiskQalsh::Target target = DiskQalsh::ParseTargetFromPointSetPath(metadata.file_path);
+    const std::filesystem::path dataset_directory = metadata.file_path.parent_path();
+    auto index_data = std::make_shared<DiskBasedQalshIndexData>();
+    index_data->norm_order = norm_order;
+    index_data->target_metadata = metadata;
+    index_data->index_directory = DiskQalsh::IndexDirectory(dataset_directory, norm_order, target);
+    index_data->metadata = DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_);
+    index_data->qalsh_config = index_data->metadata.ToConfig();
+
+    CloseFiles();
+    index_data_ = index_data;
+    OpenFiles();
+
+    index_data->dot_vectors.resize(index_data->metadata.num_hash_tables);
+    for (unsigned int table_id = 0; table_id < index_data->metadata.num_hash_tables; ++table_id) {
+        Point& dot_vector = index_data->dot_vectors[table_id];
+        dot_vector.resize(index_data->metadata.num_dimensions);
+        const std::uint64_t offset = static_cast<std::uint64_t>(table_id) *
+                                     static_cast<std::uint64_t>(index_data->metadata.num_dimensions) *
+                                     static_cast<std::uint64_t>(sizeof(Coordinate));
+        ReadExactAt(dot_vectors_fd_, dot_vector.data(),
+                    static_cast<size_t>(index_data->metadata.num_dimensions) * sizeof(Coordinate), offset,
+                    "dot_vectors.bin");
+    }
+
+    ResetSearchState();
+    Log::info("Using disk QALSH index at {}.", index_data_->index_directory.string());
+}
+
+void DiskBasedQalshAnnSearcher::OpenFiles() {
+    if (!index_data_) {
+        Log::error("Disk QALSH index data is not initialized.");
+    }
+
+    CloseFiles();
+    tables_fd_ = OpenReadOnlyFd(DiskQalsh::TablesPath(index_data_->index_directory), "tables.bin");
+    dot_vectors_fd_ = OpenReadOnlyFd(DiskQalsh::DotVectorsPath(index_data_->index_directory), "dot_vectors.bin");
+    target_fd_ = OpenReadOnlyFd(index_data_->target_metadata.file_path, "target point set");
+}
+
+void DiskBasedQalshAnnSearcher::CloseFiles() {
+    CloseFd(tables_fd_);
+    CloseFd(dot_vectors_fd_);
+    CloseFd(target_fd_);
+}
+
+void DiskBasedQalshAnnSearcher::ResetSearchState() {
+    if (!index_data_) {
+        search_cursors_.clear();
+        search_states_.clear();
+        candidate_buffer_.clear();
+        search_epoch_ = 0;
+        return;
+    }
+
+    search_cursors_.assign(index_data_->qalsh_config.num_hash_tables, InMemoryQalshTableCursor{});
+    search_states_.assign(index_data_->metadata.num_points, QalshSearchState{});
+    candidate_buffer_.assign(index_data_->metadata.num_dimensions, 0.0F);
+    search_epoch_ = 0;
+}
+
+unsigned int DiskBasedQalshAnnSearcher::NextSearchEpoch() {
+    ++search_epoch_;
+    if (search_epoch_ == 0) {
+        std::ranges::fill(search_states_, QalshSearchState{});
+        search_epoch_ = 1;
+    }
+    return search_epoch_;
+}
+
+DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int table_id,
+                                                                     size_t entry_index) const {
+    if (!index_data_) {
+        Log::error("Disk QALSH searcher is not initialized.");
+    }
+    if (table_id >= index_data_->metadata.num_hash_tables || entry_index >= index_data_->metadata.num_points) {
+        Log::error("Disk QALSH table read is out of range: table {}, entry {}.", table_id, entry_index);
+    }
+
+    DiskQalsh::DiskQalshEntry entry;
+    const std::uint64_t linear_index = static_cast<std::uint64_t>(table_id) *
+                                           static_cast<std::uint64_t>(index_data_->metadata.num_points) +
+                                       static_cast<std::uint64_t>(entry_index);
+    const std::uint64_t offset = linear_index * static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry));
+    ReadExactAt(tables_fd_, &entry, sizeof(entry), offset, "tables.bin");
+    if (entry.point_id >= index_data_->metadata.num_points) {
+        Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
+    }
+    return entry;
+}
+
+InMemoryQalshTableCursor DiskBasedQalshAnnSearcher::InitCursor(unsigned int table_id, Projection query_key) const {
+    size_t left = 0;
+    size_t right = index_data_->metadata.num_points;
+    while (left < right) {
+        const size_t mid = left + (right - left) / 2;
+        const DiskQalsh::DiskQalshEntry entry = ReadTableEntry(table_id, mid);
+        if (entry.projection < query_key) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    }
+
+    return InMemoryQalshTableCursor{
+        .query_key = query_key,
+        .left = left == 0 ? std::nullopt : std::optional<size_t>{left - 1},
+        .right = left == index_data_->metadata.num_points ? std::nullopt : std::optional<size_t>{left},
+    };
+}
+
+bool DiskBasedQalshAnnSearcher::IncrementalSearch(
+    unsigned int table_id, InMemoryQalshTableCursor& cursor, Projection bound,
+    const std::function<void(unsigned int, Projection)>& handler) const {
+    bool left_finished = true;
+    if (cursor.left.has_value()) {
+        left_finished = false;
+        for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
+            const size_t index = *cursor.left;
+            const DiskQalsh::DiskQalshEntry entry = ReadTableEntry(table_id, index);
+            if (cursor.query_key - entry.projection > bound) {
+                left_finished = true;
+                break;
+            }
+
+            handler(entry.point_id, entry.projection);
+
+            if (index == 0) {
+                cursor.left = std::nullopt;
+                left_finished = true;
+                break;
+            }
+            cursor.left = index - 1;
+        }
+    }
+
+    bool right_finished = true;
+    if (cursor.right.has_value()) {
+        right_finished = false;
+        for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
+            const size_t index = *cursor.right;
+            const DiskQalsh::DiskQalshEntry entry = ReadTableEntry(table_id, index);
+            if (entry.projection - cursor.query_key > bound) {
+                right_finished = true;
+                break;
+            }
+
+            handler(entry.point_id, entry.projection);
+
+            if (index + 1 >= index_data_->metadata.num_points) {
+                cursor.right = std::nullopt;
+                right_finished = true;
+                break;
+            }
+            cursor.right = index + 1;
+        }
+    }
+
+    return left_finished && right_finished;
+}
+
+void DiskBasedQalshAnnSearcher::ReadCandidatePoint(unsigned int point_id) {
+    if (!index_data_) {
+        Log::error("Disk QALSH searcher is not initialized.");
+    }
+    if (point_id >= index_data_->metadata.num_points) {
+        Log::error("Disk QALSH candidate point id {} is out of range.", point_id);
+    }
+    if (candidate_buffer_.size() != index_data_->metadata.num_dimensions) {
+        candidate_buffer_.assign(index_data_->metadata.num_dimensions, 0.0F);
+    }
+
+    const std::uint64_t offset = static_cast<std::uint64_t>(point_id) *
+                                 static_cast<std::uint64_t>(index_data_->metadata.num_dimensions) *
+                                 static_cast<std::uint64_t>(sizeof(Coordinate));
+    ReadExactAt(target_fd_, candidate_buffer_.data(),
+                static_cast<size_t>(index_data_->metadata.num_dimensions) * sizeof(Coordinate), offset,
+                "target point set");
+}
+
+AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
+    if (!index_data_) {
+        Log::error("Disk QALSH searcher is not initialized.");
+    }
+    if (query_point.size() != index_data_->metadata.num_dimensions) {
+        Log::error("Query point dimension {} does not match disk QALSH target dimension {}.", query_point.size(),
+                   index_data_->metadata.num_dimensions);
+    }
+
+    const unsigned int epoch = NextSearchEpoch();
+    bool has_candidate = false;
+    AnnResult best_candidate{.distance = std::numeric_limits<float>::infinity(), .point_id = 0};
+
+    const unsigned int num_hash_tables = index_data_->qalsh_config.num_hash_tables;
+    const unsigned int collision_threshold = index_data_->qalsh_config.collision_threshold;
+    const float bucket_width = index_data_->qalsh_config.bucket_width;
+    const float approximation_ratio = index_data_->qalsh_config.approximation_ratio;
+
+    for (unsigned int table_id = 0; table_id < num_hash_tables; ++table_id) {
+        search_cursors_[table_id] =
+            InitCursor(table_id, DotProductRaw(query_point, index_data_->dot_vectors[table_id]));
+    }
+
+    float radius = 1.0F;
+    float bound = bucket_width * radius / 2.0F;
+    bool should_terminate = false;
+
+    auto t1_satisfied = [&]() {
+        return has_candidate && best_candidate.distance <= approximation_ratio * radius;
+    };
+
+    auto cursors_exhausted = [&]() {
+        return std::ranges::all_of(search_cursors_, [](const InMemoryQalshTableCursor& cursor) {
+            return !cursor.left.has_value() && !cursor.right.has_value();
+        });
+    };
+
+    while (!should_terminate) {
+        if (t1_satisfied()) {
+            break;
+        }
+
+        std::queue<unsigned int> active_tables;
+        for (unsigned int table_id = 0; table_id < num_hash_tables; ++table_id) {
+            active_tables.push(table_id);
+        }
+
+        while (!active_tables.empty() && !should_terminate) {
+            const unsigned int table_id = active_tables.front();
+            active_tables.pop();
+
+            const bool table_done = IncrementalSearch(
+                table_id, search_cursors_[table_id], bound,
+                [&](unsigned int point_id, [[maybe_unused]] Projection projection) {
+                    if (should_terminate) {
+                        return;
+                    }
+
+                    QalshSearchState& state = search_states_[point_id];
+                    if (state.visited_stamp == epoch) {
+                        return;
+                    }
+
+                    if (state.collision_stamp != epoch) {
+                        state.collision_stamp = epoch;
+                        state.collision_count = 0;
+                    }
+
+                    if (++state.collision_count >= collision_threshold) {
+                        state.visited_stamp = epoch;
+                        ReadCandidatePoint(point_id);
+                        const float distance =
+                            Calc::LpDistanceBoundedRaw(candidate_buffer_.data(), query_point.data(),
+                                                       index_data_->metadata.num_dimensions, index_data_->norm_order,
+                                                       best_candidate.distance);
+                        const AnnResult candidate{.distance = distance, .point_id = point_id};
+                        if (IsBetterAnnResult(candidate, best_candidate)) {
+                            has_candidate = true;
+                            best_candidate = candidate;
+                        }
+
+                        if (t1_satisfied()) {
+                            should_terminate = true;
+                        }
+                    }
+                });
+
+            if (!table_done) {
+                active_tables.push(table_id);
+            }
+        }
+
+        if (t1_satisfied()) {
+            break;
+        }
+        if (cursors_exhausted()) {
+            if (has_candidate) {
+                return best_candidate;
+            }
+            Log::error("Disk QALSH search exhausted all table cursors without finding a candidate.");
+        }
+
+        radius *= approximation_ratio;
+        bound = bucket_width * radius / 2.0F;
+    }
+
+    if (!has_candidate) {
+        Log::error("Disk QALSH search did not find a candidate.");
+    }
     return best_candidate;
 }

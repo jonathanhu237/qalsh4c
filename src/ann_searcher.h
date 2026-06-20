@@ -1,10 +1,14 @@
 #pragma once
 
+#include <filesystem>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <random>
 #include <vector>
 
 #include "config.h"
+#include "disk_qalsh_index.h"
 #include "global.h"
 #include "point_set.h"
 #include "qalsh_index.h"
@@ -112,4 +116,53 @@ class QalshAnnSearcher : public AnnSearcher {
 
     void ResetSearchState();
     unsigned int NextSearchEpoch();
+};
+
+struct DiskBasedQalshIndexData {
+    float norm_order{0.0F};
+    PointSetMetadata target_metadata;
+    std::filesystem::path index_directory;
+    DiskQalsh::IndexMetadata metadata;
+    QalshConfig qalsh_config;
+    std::vector<Point> dot_vectors;
+};
+
+// ---------------------------------------------
+// DiskBasedQalshAnnSearcher Definition
+// ---------------------------------------------
+class DiskBasedQalshAnnSearcher : public AnnSearcher {
+   public:
+    explicit DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio = std::nullopt);
+    ~DiskBasedQalshAnnSearcher() override;
+    DiskBasedQalshAnnSearcher(const DiskBasedQalshAnnSearcher&) = delete;
+    DiskBasedQalshAnnSearcher& operator=(const DiskBasedQalshAnnSearcher&) = delete;
+    DiskBasedQalshAnnSearcher(DiskBasedQalshAnnSearcher&&) = delete;
+    DiskBasedQalshAnnSearcher& operator=(DiskBasedQalshAnnSearcher&&) = delete;
+
+    [[nodiscard]] bool RequiresIndex() const override;
+    [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
+    void Init(const PointSetMetadata& metadata, float norm_order) override;
+    AnnResult Search(const Point& query_point) override;
+    void PreflightIndex(const PointSetMetadata& metadata, float norm_order) const;
+
+   private:
+    std::optional<float> expected_approximation_ratio_;
+    std::shared_ptr<const DiskBasedQalshIndexData> index_data_;
+    int tables_fd_{-1};
+    int dot_vectors_fd_{-1};
+    int target_fd_{-1};
+    std::vector<InMemoryQalshTableCursor> search_cursors_;
+    std::vector<QalshSearchState> search_states_;
+    std::vector<Coordinate> candidate_buffer_;
+    unsigned int search_epoch_{0};
+
+    void OpenFiles();
+    void CloseFiles();
+    void ResetSearchState();
+    unsigned int NextSearchEpoch();
+    [[nodiscard]] DiskQalsh::DiskQalshEntry ReadTableEntry(unsigned int table_id, size_t entry_index) const;
+    [[nodiscard]] InMemoryQalshTableCursor InitCursor(unsigned int table_id, Projection query_key) const;
+    [[nodiscard]] bool IncrementalSearch(unsigned int table_id, InMemoryQalshTableCursor& cursor, Projection bound,
+                                         const std::function<void(unsigned int, Projection)>& handler) const;
+    void ReadCandidatePoint(unsigned int point_id);
 };

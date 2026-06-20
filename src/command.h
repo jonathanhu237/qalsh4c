@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "dataset.h"
+#include "disk_qalsh_index.h"
 #include "estimator.h"
 
 class Command {
@@ -24,6 +25,15 @@ class EstimateCommand : public Command {
     float norm_order_;
     std::filesystem::path dataset_directory_;
     ChamferDirection direction_;
+};
+
+class QalshIndexCommand : public Command {
+   public:
+    explicit QalshIndexCommand(DiskQalsh::BuildRequest request);
+    void Execute() override;
+
+   private:
+    DiskQalsh::BuildRequest request_;
 };
 
 class DatasetGenerateGmmCommand : public Command {

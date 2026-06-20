@@ -8,30 +8,6 @@ foreach(file_name A.bin B.bin metadata.json)
 endforeach()
 
 execute_process(
-    COMMAND "${QALSH4C_BIN}" --help
-    RESULT_VARIABLE help_result
-    OUTPUT_VARIABLE help_stdout
-    ERROR_VARIABLE help_stderr
-)
-if(NOT help_result EQUAL 0)
-    message(FATAL_ERROR "Running qalsh4c --help failed with exit code ${help_result}")
-endif()
-string(CONCAT help_output "${help_stdout}" "${help_stderr}")
-if(help_output MATCHES "[\r\n][ \t]+index[ \t\r\n]")
-    message(FATAL_ERROR "Top-level help still lists removed index command:\n${help_output}")
-endif()
-
-execute_process(
-    COMMAND "${QALSH4C_BIN}" index
-    RESULT_VARIABLE index_result
-    OUTPUT_VARIABLE index_stdout
-    ERROR_VARIABLE index_stderr
-)
-if(index_result EQUAL 0)
-    message(FATAL_ERROR "Expected removed index command to fail\n${index_stdout}\n${index_stderr}")
-endif()
-
-execute_process(
     COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab ann qalsh -c 2.2
     RESULT_VARIABLE ab_result
     OUTPUT_VARIABLE ab_stdout

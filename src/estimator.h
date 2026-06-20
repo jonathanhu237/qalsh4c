@@ -9,6 +9,8 @@ class Estimator {
    public:
     virtual ~Estimator() = default;
     [[nodiscard]] virtual bool RequiresIndex() const = 0;
+    virtual void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
+                                         float norm_order);
     virtual float EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order) = 0;
 };
 
@@ -18,6 +20,8 @@ class AnnEstimator : public Estimator {
                  unsigned int disk_block_size = Global::kDefaultDiskBlockSize,
                  unsigned int disk_query_batch_size = Global::kDefaultDiskQueryBatchSize);
     [[nodiscard]] bool RequiresIndex() const override;
+    void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
+                                 float norm_order) override;
     float EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order) override;
 
    private:
@@ -35,6 +39,8 @@ class SamplingEstimator : public Estimator {
                       unsigned int disk_block_size = Global::kDefaultDiskBlockSize,
                       unsigned int disk_query_batch_size = Global::kDefaultDiskQueryBatchSize);
     [[nodiscard]] bool RequiresIndex() const override;
+    void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
+                                 float norm_order) override;
     float EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order) override;
 
    private:

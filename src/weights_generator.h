@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ann_searcher.h"
@@ -36,13 +37,21 @@ class UniformWeightsGenerator : public WeightsGenerator {
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
     explicit QalshWeightsGenerator(float approximation_ratio = Global::kDefaultApproximationRatio);
+    QalshWeightsGenerator(std::optional<float> expected_approximation_ratio, unsigned int disk_query_batch_size);
     [[nodiscard]] bool RequiresIndex() const override;
-    [[nodiscard]] QalshConfig BuildConfig(unsigned int num_points, float norm_order) const;
+    [[nodiscard]] QalshConfig BuildConfig(const PointSetMetadata& from_metadata,
+                                          const PointSetMetadata& to_metadata, float norm_order,
+                                          bool use_cache) const;
     [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
+    void PreflightGenerate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                           float norm_order, bool use_cache) const;
     std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  float norm_order, bool use_cache) override;
 
    private:
     float approximation_ratio_{Global::kDefaultApproximationRatio};
+    bool disk_based_{false};
+    unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
+    std::optional<float> expected_approximation_ratio_;
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };

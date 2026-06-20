@@ -59,6 +59,10 @@ void EstimateCommand::Execute() {
     PointSetMetadata point_set_metadata_a = MakePointSetMetadata(dataset_directory_, dataset_metadata, "A");
     PointSetMetadata point_set_metadata_b = MakePointSetMetadata(dataset_directory_, dataset_metadata, "B");
 
+    if (direction_ == ChamferDirection::kBoth) {
+        estimator_->PreflightBothDirections(point_set_metadata_a, point_set_metadata_b, norm_order_);
+    }
+
     auto start = std::chrono::high_resolution_clock::now();
     float memory_before = Memory::Usage();
     float estimation{0.0};
@@ -103,6 +107,16 @@ void EstimateCommand::Execute() {
         "Memory Usage: {:.2f} MB\n"
         "Relative Error: unavailable\n",
         ChamferDirectionLabel(direction_), estimation, elapsed_time, memory_usage);
+}
+
+// --------------------------------------------------
+// QalshIndexCommand Implementation
+// --------------------------------------------------
+QalshIndexCommand::QalshIndexCommand(DiskQalsh::BuildRequest request) : request_(std::move(request)) {}
+
+void QalshIndexCommand::Execute() {
+    DiskQalsh::BuildIndexes(request_);
+    std::cout << std::format("Dataset Directory: {}\n", request_.dataset_directory.string());
 }
 
 // --------------------------------------------------

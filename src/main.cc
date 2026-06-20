@@ -61,6 +61,44 @@ int main(int argc, char** argv) {
     std::filesystem::path dataset_directory;
 
     // ------------------------------
+    // index
+    // ------------------------------
+    CLI::App* index = app.add_subcommand("index", "Build persistent indexes.");
+    index->require_subcommand(1);
+
+    CLI::App* qalsh_index = index->add_subcommand("qalsh", "Build a disk QALSH index.");
+    float qalsh_index_norm_order{0.0F};
+    std::filesystem::path qalsh_index_dataset_directory;
+    std::string qalsh_index_target{"b"};
+    unsigned int qalsh_index_seed{Global::kDefaultSeed};
+    float qalsh_index_approximation_ratio{Global::kDefaultApproximationRatio};
+    bool qalsh_index_overwrite{false};
+    qalsh_index->add_option("-p,--norm-order", qalsh_index_norm_order, "Norm order")
+        ->required()
+        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
+    qalsh_index->add_option("-d,--dataset-directory", qalsh_index_dataset_directory, "Directory for the dataset")
+        ->required();
+    qalsh_index->add_option("--target", qalsh_index_target, "Target point set to index: a, b, or both")
+        ->default_val("b")
+        ->check(CLI::IsMember({"a", "b", "both"}));
+    qalsh_index->add_option("--seed", qalsh_index_seed, "Seed for deterministic QALSH index vectors")
+        ->default_val(Global::kDefaultSeed);
+    qalsh_index
+        ->add_option("-c,--approximation-ratio", qalsh_index_approximation_ratio,
+                     "Approximation ratio to store in the disk QALSH index")
+        ->default_val(Global::kDefaultApproximationRatio);
+    qalsh_index->add_flag("--overwrite", qalsh_index_overwrite, "Overwrite an existing selected target index");
+    qalsh_index->callback([&]() {
+        command = std::make_unique<QalshIndexCommand>(
+            DiskQalsh::BuildRequest{.dataset_directory = qalsh_index_dataset_directory,
+                                    .norm_order = qalsh_index_norm_order,
+                                    .target_selection = DiskQalsh::ParseTargetSelection(qalsh_index_target),
+                                    .seed = qalsh_index_seed,
+                                    .approximation_ratio = qalsh_index_approximation_ratio,
+                                    .overwrite = qalsh_index_overwrite});
+    });
+
+    // ------------------------------
     // estimate
     // ------------------------------
     CLI::App* estimate = app.add_subcommand("estimate", "Estimate Chamfer distance.");
@@ -133,11 +171,21 @@ int main(int argc, char** argv) {
     float qalsh_ann_approximation_ratio{Global::kDefaultApproximationRatio};
     qalsh_ann
         ->add_option("-c,--approximation-ratio", qalsh_ann_approximation_ratio,
-                     "Approximation ratio for in-memory QALSH")
+                     "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
 
-    qalsh_ann->callback(
-        [&] { ann_searcher = std::make_unique<QalshAnnSearcher>(qalsh_ann_approximation_ratio); });
+    const CLI::Option* qalsh_ann_approximation_ratio_option = (*qalsh_ann)["--approximation-ratio"];
+    qalsh_ann->callback([&] {
+        if (disk_based) {
+            const std::optional<float> expected_approximation_ratio =
+                qalsh_ann_approximation_ratio_option->count() > 0
+                    ? std::optional<float>(qalsh_ann_approximation_ratio)
+                    : std::nullopt;
+            ann_searcher = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio);
+            return;
+        }
+        ann_searcher = std::make_unique<QalshAnnSearcher>(qalsh_ann_approximation_ratio);
+    });
 
     // ------------------------------
     // sampling estimate
@@ -193,10 +241,21 @@ int main(int argc, char** argv) {
     float qalsh_sampling_approximation_ratio{Global::kDefaultApproximationRatio};
     qalsh_sampling
         ->add_option("-c,--approximation-ratio", qalsh_sampling_approximation_ratio,
-                     "Approximation ratio for in-memory QALSH")
+                     "Approximation ratio for QALSH")
         ->default_val(Global::kDefaultApproximationRatio);
-    qalsh_sampling->callback(
-        [&]() { weights_generator = std::make_unique<QalshWeightsGenerator>(qalsh_sampling_approximation_ratio); });
+    const CLI::Option* qalsh_sampling_approximation_ratio_option = (*qalsh_sampling)["--approximation-ratio"];
+    qalsh_sampling->callback([&]() {
+        if (disk_based) {
+            const std::optional<float> expected_approximation_ratio =
+                qalsh_sampling_approximation_ratio_option->count() > 0
+                    ? std::optional<float>(qalsh_sampling_approximation_ratio)
+                    : std::nullopt;
+            weights_generator =
+                std::make_unique<QalshWeightsGenerator>(expected_approximation_ratio, disk_query_batch_size);
+            return;
+        }
+        weights_generator = std::make_unique<QalshWeightsGenerator>(qalsh_sampling_approximation_ratio);
+    });
 
     // ------------------------------
     // dataset

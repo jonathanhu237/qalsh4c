@@ -138,9 +138,8 @@ We provide four methods for estimating the Chamfer distance:
 - Uniform Sampling
 - QALSH Sampling
 
-QALSH now uses an in-memory index. There is no separate `index` command and no
-`data/<dataset>/index` directory is required. QALSH ANN and QALSH sampling build
-the needed target-side hash tables inside the current process from `A.bin` and
+Non-disk QALSH uses an in-memory index. QALSH ANN and QALSH sampling build the
+needed target-side hash tables inside the current process from `A.bin` and
 `B.bin`. Configure the approximation ratio on the QALSH subcommand:
 
 ```bash
@@ -174,7 +173,23 @@ the query batch size with `--disk-query-batch-size`:
 ./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 --disk-query-batch-size 64 -p 2 -d ./data/federalist --direction ab ann linear_scan
 ```
 
-Disk-based mode currently reports an error for QALSH ANN and QALSH sampling
-instead of falling back to their in-memory implementations.
+Disk-based QALSH requires an explicit target-side index. The default target is
+`b`, matching the default `--direction ab`; use `--target a` for `ba`, or
+`--target both` before bidirectional estimates. Indexes are written under
+`<dataset>/index/qalsh/<l1|l2>/<a|b>/` as `meta.json`, `dot_vectors.bin`, and
+`tables.bin`. Existing matching indexes are reused; pass `--overwrite` to
+rebuild a selected target index.
+
+```bash
+./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist
+./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist --target both --seed 42 --overwrite
+./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab ann qalsh
+./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab sampling --use-cache -n 100 qalsh
+```
+
+Disk QALSH estimates do not build indexes automatically and do not fall back to
+linear scan when an index is missing or mismatched. If `-c/--approximation-ratio`
+is omitted, disk QALSH uses the value stored in `meta.json`; if it is provided,
+it must match the index metadata.
 
 The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.
