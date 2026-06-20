@@ -21,6 +21,10 @@
 #include <unistd.h>
 #include <vector>
 
+#ifdef QALSH4C_USE_OPENMP
+#include <omp.h>
+#endif
+
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
@@ -28,20 +32,22 @@
 
 namespace {
 
-float DotProductRaw(const Point& lhs, const Point& rhs) {
+float DotProductRawData(const Coordinate* lhs_data, const Coordinate* rhs_data, size_t num_dimensions) {
     float result = 0.0;
-    const float* lhs_data = lhs.data();
-    const float* rhs_data = rhs.data();
-    const auto num_dimensions = static_cast<long long>(lhs.size());
+    const auto dimension_count = static_cast<long long>(num_dimensions);
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp simd reduction(+ : result)
 #endif
-    for (long long dimension = 0; dimension < num_dimensions; ++dimension) {
+    for (long long dimension = 0; dimension < dimension_count; ++dimension) {
         result += lhs_data[dimension] * rhs_data[dimension];
     }
 
     return result;
+}
+
+float DotProductRaw(const Point& lhs, const Point& rhs) {
+    return DotProductRawData(lhs.data(), rhs.data(), lhs.size());
 }
 
 bool IsBetterAnnResult(const AnnResult& candidate, const AnnResult& best) {
@@ -130,6 +136,46 @@ std::shared_ptr<const DiskQalshTableMapping> MapQalshTables(const DiskBasedQalsh
     return std::make_shared<DiskQalshTableMapping>(
         static_cast<const DiskQalsh::DiskQalshEntry*>(mapping), static_cast<size_t>(expected_entries), mapping_bytes);
 }
+
+struct DiskQalshBatchQueryState {
+    const Coordinate* query_data{nullptr};
+    std::vector<InMemoryQalshTableCursor> cursors;
+    std::vector<QalshSearchState> search_states;
+    std::vector<unsigned char> table_done;
+    float radius{1.0F};
+    float bound{0.0F};
+    bool has_candidate{false};
+    bool should_terminate{false};
+    bool done{false};
+    AnnResult best_candidate{.distance = std::numeric_limits<float>::infinity(), .point_id = 0};
+
+    void Reset(const Coordinate* data, unsigned int num_hash_tables, unsigned int num_points, float initial_bound) {
+        query_data = data;
+        cursors.assign(num_hash_tables, InMemoryQalshTableCursor{});
+        search_states.assign(num_points, QalshSearchState{});
+        table_done.assign(num_hash_tables, 0);
+        radius = 1.0F;
+        bound = initial_bound;
+        has_candidate = false;
+        should_terminate = false;
+        done = false;
+        best_candidate = AnnResult{.distance = std::numeric_limits<float>::infinity(), .point_id = 0};
+    }
+
+    [[nodiscard]] bool T1Satisfied(float approximation_ratio) const {
+        return has_candidate && best_candidate.distance <= approximation_ratio * radius;
+    }
+
+    [[nodiscard]] bool AllTablesDone() const {
+        return std::ranges::all_of(table_done, [](unsigned char done_value) { return done_value != 0; });
+    }
+
+    [[nodiscard]] bool CursorsExhausted() const {
+        return std::ranges::all_of(cursors, [](const InMemoryQalshTableCursor& cursor) {
+            return !cursor.left.has_value() && !cursor.right.has_value();
+        });
+    }
+};
 
 }  // namespace
 
@@ -879,6 +925,191 @@ InMemoryQalshTableCursor DiskBasedQalshAnnSearcher::InitCursor(unsigned int tabl
         .left = left == 0 ? std::nullopt : std::optional<size_t>{left - 1},
         .right = left == index_data_->metadata.num_points ? std::nullopt : std::optional<size_t>{left},
     };
+}
+
+void DiskBasedQalshAnnSearcher::SearchBatchContiguous(const Coordinate* query_data, unsigned int query_count,
+                                                       unsigned int num_dimensions,
+                                                       std::vector<AnnResult>& results) {
+    if (!index_data_) {
+        Log::error("Disk QALSH searcher is not initialized.");
+    }
+    if (query_count == 0) {
+        results.clear();
+        return;
+    }
+    if (query_data == nullptr) {
+        Log::error("Disk QALSH batch search requires non-null query data.");
+    }
+    if (num_dimensions != index_data_->metadata.num_dimensions) {
+        Log::error("Query point dimension {} does not match disk QALSH target dimension {}.", num_dimensions,
+                   index_data_->metadata.num_dimensions);
+    }
+
+#ifndef QALSH4C_USE_OPENMP
+    results.resize(query_count);
+    Point query_point(num_dimensions);
+    for (unsigned int query_index = 0; query_index < query_count; ++query_index) {
+        const Coordinate* local_query_data = query_data + static_cast<size_t>(query_index) * num_dimensions;
+        std::copy_n(local_query_data, num_dimensions, query_point.begin());
+        results[query_index] = Search(query_point);
+    }
+    return;
+#else
+    const auto batch_start = std::chrono::steady_clock::now();
+    const unsigned int num_hash_tables = index_data_->qalsh_config.num_hash_tables;
+    const unsigned int num_points = index_data_->metadata.num_points;
+    const unsigned int collision_threshold = index_data_->qalsh_config.collision_threshold;
+    const float bucket_width = index_data_->qalsh_config.bucket_width;
+    const float approximation_ratio = index_data_->qalsh_config.approximation_ratio;
+    constexpr unsigned int kBatchSearchEpoch = 1;
+
+    results.assign(query_count, AnnResult{.distance = std::numeric_limits<float>::infinity(), .point_id = 0});
+    std::vector<DiskQalshBatchQueryState> query_states(query_count);
+
+    bool all_queries_done = false;
+
+#pragma omp parallel
+    {
+        std::unique_ptr<AnnSearcher> local_searcher_base = Clone();
+        auto* local_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher_base.get());
+        if (local_searcher == nullptr) {
+            Log::error("Disk QALSH batch search clone has unexpected searcher type.");
+        }
+
+#pragma omp for schedule(static)
+        for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+            const auto local_query_index = static_cast<unsigned int>(query_index);
+            const Coordinate* local_query_data =
+                query_data + static_cast<size_t>(local_query_index) * num_dimensions;
+            query_states[local_query_index].Reset(local_query_data, num_hash_tables, num_points,
+                                                  bucket_width / 2.0F);
+        }
+
+        for (unsigned int table_id = 0; table_id < num_hash_tables; ++table_id) {
+#pragma omp for schedule(static)
+            for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+                const auto local_query_index = static_cast<unsigned int>(query_index);
+                DiskQalshBatchQueryState& state = query_states[local_query_index];
+                const float query_key =
+                    DotProductRawData(state.query_data, index_data_->dot_vectors[table_id].data(), num_dimensions);
+                state.cursors[table_id] = local_searcher->InitCursor(table_id, query_key);
+            }
+        }
+
+        while (true) {
+#pragma omp single
+            {
+                all_queries_done = std::ranges::all_of(
+                    query_states, [](const DiskQalshBatchQueryState& state) { return state.done; });
+            }
+            if (all_queries_done) {
+                break;
+            }
+
+            for (unsigned int table_id = 0; table_id < num_hash_tables; ++table_id) {
+#pragma omp for schedule(static)
+                for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+                    const auto local_query_index = static_cast<unsigned int>(query_index);
+                    DiskQalshBatchQueryState& state = query_states[local_query_index];
+                    if (state.done || state.table_done[table_id] != 0) {
+                        continue;
+                    }
+
+                    const bool table_done = local_searcher->IncrementalSearch(
+                        table_id, state.cursors[table_id], state.bound,
+                        [&](unsigned int point_id, [[maybe_unused]] Projection projection) {
+                            if (state.should_terminate) {
+                                return;
+                            }
+
+                            QalshSearchState& point_state = state.search_states[point_id];
+                            if (point_state.visited_stamp == kBatchSearchEpoch) {
+                                return;
+                            }
+
+                            if (point_state.collision_stamp != kBatchSearchEpoch) {
+                                point_state.collision_stamp = kBatchSearchEpoch;
+                                point_state.collision_count = 0;
+                            }
+
+                            if (++point_state.collision_count >= collision_threshold) {
+                                point_state.visited_stamp = kBatchSearchEpoch;
+                                local_searcher->ReadCandidatePoint(point_id);
+                                if (options_.profile) {
+                                    ++local_searcher->profile_.candidates_evaluated;
+                                }
+                                const float distance = Calc::LpDistanceBoundedRaw(
+                                    local_searcher->candidate_buffer_.data(), state.query_data,
+                                    index_data_->metadata.num_dimensions, index_data_->norm_order,
+                                    state.best_candidate.distance);
+                                const AnnResult candidate{.distance = distance, .point_id = point_id};
+                                if (IsBetterAnnResult(candidate, state.best_candidate)) {
+                                    state.has_candidate = true;
+                                    state.best_candidate = candidate;
+                                }
+
+                                if (state.T1Satisfied(approximation_ratio)) {
+                                    state.should_terminate = true;
+                                }
+                            }
+                        });
+
+                    if (table_done) {
+                        state.table_done[table_id] = 1;
+                    }
+                    if (state.should_terminate || state.T1Satisfied(approximation_ratio)) {
+                        state.done = true;
+                    }
+                }
+            }
+
+#pragma omp single
+            {
+                for (DiskQalshBatchQueryState& state : query_states) {
+                    if (state.done || !state.AllTablesDone()) {
+                        continue;
+                    }
+
+                    if (state.T1Satisfied(approximation_ratio)) {
+                        state.done = true;
+                    } else if (state.CursorsExhausted()) {
+                        if (state.has_candidate) {
+                            state.done = true;
+                        } else {
+                            Log::error("Disk QALSH batch search exhausted all table cursors without finding a "
+                                       "candidate.");
+                        }
+                    } else {
+                        state.radius *= approximation_ratio;
+                        state.bound = bucket_width * state.radius / 2.0F;
+                        std::ranges::fill(state.table_done, 0);
+                    }
+                }
+            }
+        }
+
+        if (options_.profile) {
+            const DiskQalshProfileSnapshot snapshot = local_searcher->ProfileSnapshot();
+#pragma omp critical(disk_qalsh_profile_merge)
+            MergeProfile(snapshot);
+        }
+    }
+
+    for (unsigned int query_index = 0; query_index < query_count; ++query_index) {
+        const DiskQalshBatchQueryState& state = query_states[query_index];
+        if (!state.has_candidate) {
+            Log::error("Disk QALSH batch search did not find a candidate.");
+        }
+        results[query_index] = state.best_candidate;
+    }
+
+    if (options_.profile) {
+        const auto batch_end = std::chrono::steady_clock::now();
+        profile_.queries += query_count;
+        profile_.total_search_time_ms +=
+            std::chrono::duration<double, std::milli>(batch_end - batch_start).count();
+    }
+#endif
 }
 
 void DiskBasedQalshAnnSearcher::ReadCandidatePoint(unsigned int point_id) {

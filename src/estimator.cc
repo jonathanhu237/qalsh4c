@@ -234,7 +234,23 @@ float EstimateDiskBasedAnnSearch(const PointSetMetadata& from, const PointSetMet
     std::vector<Coordinate> query_batch;
     query_batch.reserve(static_cast<size_t>(disk_query_batch_size) * from.num_dimensions);
     std::vector<Distance> distances(disk_query_batch_size, 0.0F);
+    std::vector<AnnResult> batch_results;
     float estimation = 0.0F;
+
+    if (root_disk_qalsh_searcher != nullptr) {
+        for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_query_batch_size) {
+            const unsigned int query_count = std::min(disk_query_batch_size, from.num_points - batch_begin);
+            ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
+            root_disk_qalsh_searcher->SearchBatchContiguous(query_batch.data(), query_count, from.num_dimensions,
+                                                            batch_results);
+            for (const AnnResult& result : batch_results) {
+                estimation += result.distance;
+            }
+        }
+
+        root_disk_qalsh_searcher->PrintProfile();
+        return estimation;
+    }
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel

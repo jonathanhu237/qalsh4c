@@ -188,6 +188,8 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     [[nodiscard]] std::unique_ptr<AnnSearcher> Clone() const override;
     void Init(const PointSetMetadata& metadata, float norm_order) override;
     AnnResult Search(const Point& query_point) override;
+    void SearchBatchContiguous(const Coordinate* query_data, unsigned int query_count, unsigned int num_dimensions,
+                               std::vector<AnnResult>& results);
     void PreflightIndex(const PointSetMetadata& metadata, float norm_order) const;
     [[nodiscard]] bool ProfilingEnabled() const;
     void ResetProfile();
