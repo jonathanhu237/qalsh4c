@@ -96,10 +96,6 @@ if(BUILD_TESTING)
     )
     target_include_directories(ann_searcher_clone_test PRIVATE src)
     target_link_libraries(ann_searcher_clone_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
-    if(OpenMP_CXX_FOUND)
-        target_link_libraries(ann_searcher_clone_test PRIVATE OpenMP::OpenMP_CXX)
-        target_compile_definitions(ann_searcher_clone_test PRIVATE QALSH4C_USE_OPENMP)
-    endif()
     add_test(NAME ann_searcher_clone_test COMMAND ann_searcher_clone_test)
 
     add_executable(

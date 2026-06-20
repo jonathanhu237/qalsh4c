@@ -109,20 +109,6 @@ void GenerateWeightsFromSearcherStreaming(AnnSearcher& ann_searcher, const Point
     std::vector<Coordinate> query_batch;
     query_batch.reserve(static_cast<size_t>(query_batch_size) * from_metadata.num_dimensions);
 
-    if (root_disk_qalsh_searcher != nullptr) {
-        std::vector<AnnResult> batch_results;
-        for (unsigned int batch_begin = 0; batch_begin < from_metadata.num_points; batch_begin += query_batch_size) {
-            const unsigned int query_count = std::min(query_batch_size, from_metadata.num_points - batch_begin);
-            ReadContiguousPointBatch(query_input, from_metadata, batch_begin, query_count, query_batch);
-            root_disk_qalsh_searcher->SearchBatchContiguous(query_batch.data(), query_count,
-                                                            from_metadata.num_dimensions, batch_results);
-            for (unsigned int local_query_index = 0; local_query_index < query_count; ++local_query_index) {
-                weights[batch_begin + local_query_index] = batch_results[local_query_index].distance;
-            }
-        }
-        return;
-    }
-
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
     {

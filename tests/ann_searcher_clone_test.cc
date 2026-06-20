@@ -3,11 +3,8 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <optional>
 #include <vector>
 
-#include "config.h"
-#include "disk_qalsh_index.h"
 #include "global.h"
 
 namespace {
@@ -70,65 +67,6 @@ int main() {
     if (std::filesystem::exists(temp_dir / "index")) {
         std::filesystem::remove_all(temp_dir);
         return 4;
-    }
-
-    const std::vector<Point> query_points{
-        Point{0.0F, 0.0F}, Point{1.0F, 1.0F}, Point{5.0F, -1.0F}, Point{1003.0F, 1002.0F},
-    };
-    std::vector<Point> disk_base_points;
-    disk_base_points.reserve(180);
-    for (unsigned int point_id = 0; point_id < 180; ++point_id) {
-        disk_base_points.push_back(Point{static_cast<float>(point_id), static_cast<float>(point_id % 7U)});
-    }
-    WritePointFile(temp_dir / "A.bin", query_points);
-    WritePointFile(temp_dir / "B.bin", disk_base_points);
-    DatasetMetadata dataset_metadata{
-        .num_points_a = static_cast<unsigned int>(query_points.size()),
-        .num_points_b = static_cast<unsigned int>(disk_base_points.size()),
-        .num_dimensions = 2,
-    };
-    dataset_metadata.Save(temp_dir / "metadata.json");
-
-    DiskQalsh::BuildIndexes(DiskQalsh::BuildRequest{.dataset_directory = temp_dir,
-                                                    .norm_order = 2.0F,
-                                                    .target_selection = DiskQalsh::TargetSelection::kB,
-                                                    .seed = 42,
-                                                    .approximation_ratio = 2.0F,
-                                                    .overwrite = true});
-
-    const PointSetMetadata disk_target_metadata{
-        .file_path = temp_dir / "B.bin",
-        .num_points = static_cast<unsigned int>(disk_base_points.size()),
-        .num_dimensions = 2,
-    };
-    DiskBasedQalshAnnSearcher disk_searcher(std::optional<float>{2.0F});
-    disk_searcher.Init(disk_target_metadata, 2.0F);
-
-    std::vector<AnnResult> single_results;
-    single_results.reserve(query_points.size());
-    for (const Point& query : query_points) {
-        single_results.push_back(disk_searcher.Search(query));
-    }
-
-    std::vector<Coordinate> flat_queries;
-    flat_queries.reserve(query_points.size() * dataset_metadata.num_dimensions);
-    for (const Point& query : query_points) {
-        flat_queries.insert(flat_queries.end(), query.begin(), query.end());
-    }
-
-    std::vector<AnnResult> batch_results;
-    disk_searcher.SearchBatchContiguous(flat_queries.data(), static_cast<unsigned int>(query_points.size()),
-                                        dataset_metadata.num_dimensions, batch_results);
-    if (batch_results.size() != single_results.size()) {
-        std::filesystem::remove_all(temp_dir);
-        return 5;
-    }
-    for (size_t i = 0; i < single_results.size(); ++i) {
-        if (batch_results[i].point_id != single_results[i].point_id ||
-            batch_results[i].distance != single_results[i].distance) {
-            std::filesystem::remove_all(temp_dir);
-            return 6;
-        }
     }
 
     std::filesystem::remove_all(temp_dir);
