@@ -202,6 +202,10 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     void CloseFiles();
     void ResetSearchState();
     unsigned int NextSearchEpoch();
+    [[nodiscard]] std::uint64_t TableLinearIndex(unsigned int table_id, size_t entry_index) const;
+    [[nodiscard]] const TableBlockCacheEntry& ReadTableBlock(std::uint64_t block_id) const;
+    void CountTableEntryRead() const;
+    void ValidateTableEntry(const DiskQalsh::DiskQalshEntry& entry) const;
     [[nodiscard]] DiskQalsh::DiskQalshEntry ReadTableEntry(unsigned int table_id, size_t entry_index) const;
     [[nodiscard]] InMemoryQalshTableCursor InitCursor(unsigned int table_id, Projection query_key) const;
     [[nodiscard]] bool IncrementalSearch(unsigned int table_id, InMemoryQalshTableCursor& cursor, Projection bound,

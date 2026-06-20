@@ -679,8 +679,7 @@ unsigned int DiskBasedQalshAnnSearcher::NextSearchEpoch() {
     return search_epoch_;
 }
 
-DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int table_id,
-                                                                     size_t entry_index) const {
+std::uint64_t DiskBasedQalshAnnSearcher::TableLinearIndex(unsigned int table_id, size_t entry_index) const {
     if (!index_data_) {
         Log::error("Disk QALSH searcher is not initialized.");
     }
@@ -688,30 +687,17 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
         Log::error("Disk QALSH table read is out of range: table {}, entry {}.", table_id, entry_index);
     }
 
-    if (options_.profile) {
-        ++profile_.table_entry_reads;
-    }
+    return static_cast<std::uint64_t>(table_id) * static_cast<std::uint64_t>(index_data_->metadata.num_points) +
+           static_cast<std::uint64_t>(entry_index);
+}
 
-    const std::uint64_t linear_index = static_cast<std::uint64_t>(table_id) *
-                                           static_cast<std::uint64_t>(index_data_->metadata.num_points) +
-                                       static_cast<std::uint64_t>(entry_index);
-    const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
-    const size_t block_entry_index = static_cast<size_t>(linear_index %
-                                                        static_cast<std::uint64_t>(table_entries_per_block_));
-
-    auto read_cached_entry = [&](size_t cache_slot) {
+const DiskBasedQalshAnnSearcher::TableBlockCacheEntry& DiskBasedQalshAnnSearcher::ReadTableBlock(
+    std::uint64_t block_id) const {
+    auto read_cached_block = [&](size_t cache_slot) -> const TableBlockCacheEntry& {
         TableBlockCacheEntry& cached_block = table_cache_[cache_slot];
         cached_block.last_used = ++table_cache_clock_;
         last_table_cache_slot_ = cache_slot;
-        if (block_entry_index >= cached_block.entries.size()) {
-            Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
-                       block_entry_index);
-        }
-        const DiskQalsh::DiskQalshEntry entry = cached_block.entries[block_entry_index];
-        if (entry.point_id >= index_data_->metadata.num_points) {
-            Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
-        }
-        return entry;
+        return cached_block;
     };
 
     if (last_table_cache_slot_.has_value()) {
@@ -720,7 +706,7 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
             if (options_.profile) {
                 ++profile_.table_cache_hits;
             }
-            return read_cached_entry(cache_slot);
+            return read_cached_block(cache_slot);
         }
     }
 
@@ -729,7 +715,7 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
         if (options_.profile) {
             ++profile_.table_cache_hits;
         }
-        return read_cached_entry(cache_position->second);
+        return read_cached_block(cache_position->second);
     }
 
     if (options_.profile) {
@@ -770,14 +756,37 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
     cache_slot->last_used = ++table_cache_clock_;
     table_cache_positions_[block_id] = cache_slot_index;
     last_table_cache_slot_ = cache_slot_index;
-    if (block_entry_index >= cache_slot->entries.size()) {
-        Log::error("Disk QALSH loaded table block is shorter than expected: block {}, entry {}.", block_id,
-                   block_entry_index);
+    if (cache_slot->entries.empty()) {
+        Log::error("Disk QALSH loaded table block is shorter than expected: block {}.", block_id);
     }
-    DiskQalsh::DiskQalshEntry entry = cache_slot->entries[block_entry_index];
+    return *cache_slot;
+}
+
+void DiskBasedQalshAnnSearcher::CountTableEntryRead() const {
+    if (options_.profile) {
+        ++profile_.table_entry_reads;
+    }
+}
+
+void DiskBasedQalshAnnSearcher::ValidateTableEntry(const DiskQalsh::DiskQalshEntry& entry) const {
     if (entry.point_id >= index_data_->metadata.num_points) {
         Log::error("Disk QALSH table entry has invalid point id {}.", entry.point_id);
     }
+}
+
+DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int table_id,
+                                                                     size_t entry_index) const {
+    CountTableEntryRead();
+    const std::uint64_t linear_index = TableLinearIndex(table_id, entry_index);
+    const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
+    const size_t block_entry_index = static_cast<size_t>(linear_index %
+                                                        static_cast<std::uint64_t>(table_entries_per_block_));
+    const TableBlockCacheEntry& block = ReadTableBlock(block_id);
+    if (block_entry_index >= block.entries.size()) {
+        Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id, block_entry_index);
+    }
+    const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
+    ValidateTableEntry(entry);
     return entry;
 }
 
@@ -807,44 +816,96 @@ bool DiskBasedQalshAnnSearcher::IncrementalSearch(
     bool left_finished = true;
     if (cursor.left.has_value()) {
         left_finished = false;
-        for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
-            const size_t index = *cursor.left;
-            const DiskQalsh::DiskQalshEntry entry = ReadTableEntry(table_id, index);
-            if (cursor.query_key - entry.projection > bound) {
-                left_finished = true;
-                break;
-            }
+        size_t entry_index = *cursor.left;
+        unsigned int scan_count = 0;
+        bool stop_left = false;
+        while (scan_count < Global::kScanSize && !stop_left) {
+            const std::uint64_t linear_index = TableLinearIndex(table_id, entry_index);
+            const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
+            size_t block_entry_index =
+                static_cast<size_t>(linear_index % static_cast<std::uint64_t>(table_entries_per_block_));
+            const TableBlockCacheEntry& block = ReadTableBlock(block_id);
 
-            handler(entry.point_id, entry.projection);
+            while (scan_count < Global::kScanSize) {
+                CountTableEntryRead();
+                if (block_entry_index >= block.entries.size()) {
+                    Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                               block_entry_index);
+                }
+                const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
+                ValidateTableEntry(entry);
+                if (cursor.query_key - entry.projection > bound) {
+                    cursor.left = entry_index;
+                    left_finished = true;
+                    stop_left = true;
+                    break;
+                }
 
-            if (index == 0) {
-                cursor.left = std::nullopt;
-                left_finished = true;
-                break;
+                handler(entry.point_id, entry.projection);
+                ++scan_count;
+
+                if (entry_index == 0) {
+                    cursor.left = std::nullopt;
+                    left_finished = true;
+                    stop_left = true;
+                    break;
+                }
+
+                --entry_index;
+                cursor.left = entry_index;
+                if (block_entry_index == 0) {
+                    break;
+                }
+                --block_entry_index;
             }
-            cursor.left = index - 1;
         }
     }
 
     bool right_finished = true;
     if (cursor.right.has_value()) {
         right_finished = false;
-        for (unsigned int scan_count = 0; scan_count < Global::kScanSize; ++scan_count) {
-            const size_t index = *cursor.right;
-            const DiskQalsh::DiskQalshEntry entry = ReadTableEntry(table_id, index);
-            if (entry.projection - cursor.query_key > bound) {
-                right_finished = true;
-                break;
-            }
+        size_t entry_index = *cursor.right;
+        unsigned int scan_count = 0;
+        bool stop_right = false;
+        while (scan_count < Global::kScanSize && !stop_right) {
+            const std::uint64_t linear_index = TableLinearIndex(table_id, entry_index);
+            const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
+            size_t block_entry_index =
+                static_cast<size_t>(linear_index % static_cast<std::uint64_t>(table_entries_per_block_));
+            const TableBlockCacheEntry& block = ReadTableBlock(block_id);
 
-            handler(entry.point_id, entry.projection);
+            while (scan_count < Global::kScanSize) {
+                CountTableEntryRead();
+                if (block_entry_index >= block.entries.size()) {
+                    Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                               block_entry_index);
+                }
+                const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
+                ValidateTableEntry(entry);
+                if (entry.projection - cursor.query_key > bound) {
+                    cursor.right = entry_index;
+                    right_finished = true;
+                    stop_right = true;
+                    break;
+                }
 
-            if (index + 1 >= index_data_->metadata.num_points) {
-                cursor.right = std::nullopt;
-                right_finished = true;
-                break;
+                handler(entry.point_id, entry.projection);
+                ++scan_count;
+
+                if (entry_index + 1 >= index_data_->metadata.num_points) {
+                    cursor.right = std::nullopt;
+                    right_finished = true;
+                    stop_right = true;
+                    break;
+                }
+
+                ++entry_index;
+                cursor.right = entry_index;
+                ++block_entry_index;
+                if (block_entry_index >= block.entries.size()) {
+                    break;
+                }
             }
-            cursor.right = index + 1;
         }
     }
 
