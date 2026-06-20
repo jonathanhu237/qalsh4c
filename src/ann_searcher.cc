@@ -12,9 +12,12 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <queue>
 #include <random>
 #include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
@@ -82,7 +85,73 @@ void ReadExactAt(int fd, void* output, size_t bytes, std::uint64_t offset, const
     }
 }
 
+std::shared_ptr<const DiskQalshTableMapping> MapQalshTables(const DiskBasedQalshIndexData& index_data) {
+    const std::uint64_t expected_entries = static_cast<std::uint64_t>(index_data.metadata.num_hash_tables) *
+                                           static_cast<std::uint64_t>(index_data.metadata.num_points);
+    if (expected_entries == 0) {
+        Log::error("Disk QALSH tables.bin mapping requires a non-empty index.");
+    }
+    if (expected_entries >
+        std::numeric_limits<std::uint64_t>::max() / static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry))) {
+        Log::error("Disk QALSH tables.bin entry count is too large to size: {} entries.", expected_entries);
+    }
+    const std::uint64_t expected_bytes =
+        expected_entries * static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry));
+    if (expected_entries > static_cast<std::uint64_t>(std::numeric_limits<size_t>::max()) ||
+        expected_bytes > static_cast<std::uint64_t>(std::numeric_limits<size_t>::max())) {
+        Log::error("Disk QALSH tables.bin is too large to map on this platform: {} bytes.", expected_bytes);
+    }
+
+    const std::filesystem::path table_path = DiskQalsh::TablesPath(index_data.index_directory);
+    int fd = OpenReadOnlyFd(table_path, "tables.bin");
+
+    struct stat table_stat {};
+    if (::fstat(fd, &table_stat) != 0) {
+        const std::string message = std::strerror(errno);
+        CloseFd(fd);
+        Log::error("Failed to stat tables.bin for disk QALSH search: {} ({})", table_path.string(), message);
+    }
+    if (table_stat.st_size < 0 || static_cast<std::uint64_t>(table_stat.st_size) != expected_bytes) {
+        const std::uint64_t actual_bytes =
+            table_stat.st_size < 0 ? 0 : static_cast<std::uint64_t>(table_stat.st_size);
+        CloseFd(fd);
+        Log::error("Disk QALSH tables.bin size mismatch: expected {} bytes, found {} bytes in {}.", expected_bytes,
+                   actual_bytes, table_path.string());
+    }
+
+    const size_t mapping_bytes = static_cast<size_t>(expected_bytes);
+    void* mapping = ::mmap(nullptr, mapping_bytes, PROT_READ, MAP_SHARED, fd, 0);
+    const std::string mmap_error = mapping == MAP_FAILED ? std::strerror(errno) : "";
+    CloseFd(fd);
+    if (mapping == MAP_FAILED) {
+        Log::error("Failed to mmap tables.bin for disk QALSH search: {} ({})", table_path.string(), mmap_error);
+    }
+
+    return std::make_shared<DiskQalshTableMapping>(
+        static_cast<const DiskQalsh::DiskQalshEntry*>(mapping), static_cast<size_t>(expected_entries), mapping_bytes);
+}
+
 }  // namespace
+
+DiskQalshTableMapping::DiskQalshTableMapping(const DiskQalsh::DiskQalshEntry* entries, size_t num_entries,
+                                             size_t byte_size)
+    : entries_(entries),
+      num_entries_(num_entries),
+      byte_size_(byte_size) {}
+
+DiskQalshTableMapping::~DiskQalshTableMapping() {
+    if (entries_ != nullptr && byte_size_ > 0) {
+        (void)::munmap(const_cast<DiskQalsh::DiskQalshEntry*>(entries_), byte_size_);
+    }
+}
+
+const DiskQalsh::DiskQalshEntry* DiskQalshTableMapping::entries() const {
+    return entries_;
+}
+
+size_t DiskQalshTableMapping::num_entries() const {
+    return num_entries_;
+}
 
 // ---------------------------------------------
 // LinearScanAnnSearcher Implementation
@@ -614,6 +683,7 @@ void DiskBasedQalshAnnSearcher::Init(const PointSetMetadata& metadata, float nor
     index_data->index_directory = DiskQalsh::IndexDirectory(dataset_directory, norm_order, target);
     index_data->metadata = DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_);
     index_data->qalsh_config = index_data->metadata.ToConfig();
+    index_data->table_mapping = MapQalshTables(*index_data);
 
     CloseFiles();
     index_data_ = index_data;
@@ -642,13 +712,11 @@ void DiskBasedQalshAnnSearcher::OpenFiles() {
 
     CloseFiles();
     ResetTableCache();
-    tables_fd_ = OpenReadOnlyFd(DiskQalsh::TablesPath(index_data_->index_directory), "tables.bin");
     dot_vectors_fd_ = OpenReadOnlyFd(DiskQalsh::DotVectorsPath(index_data_->index_directory), "dot_vectors.bin");
     target_fd_ = OpenReadOnlyFd(index_data_->target_metadata.file_path, "target point set");
 }
 
 void DiskBasedQalshAnnSearcher::CloseFiles() {
-    CloseFd(tables_fd_);
     CloseFd(dot_vectors_fd_);
     CloseFd(target_fd_);
 }
@@ -691,75 +759,78 @@ std::uint64_t DiskBasedQalshAnnSearcher::TableLinearIndex(unsigned int table_id,
            static_cast<std::uint64_t>(entry_index);
 }
 
-const DiskBasedQalshAnnSearcher::TableBlockCacheEntry& DiskBasedQalshAnnSearcher::ReadTableBlock(
-    std::uint64_t block_id) const {
-    auto read_cached_block = [&](size_t cache_slot) -> const TableBlockCacheEntry& {
-        TableBlockCacheEntry& cached_block = table_cache_[cache_slot];
-        cached_block.last_used = ++table_cache_clock_;
-        last_table_cache_slot_ = cache_slot;
-        return cached_block;
-    };
-
-    if (last_table_cache_slot_.has_value()) {
-        const size_t cache_slot = *last_table_cache_slot_;
-        if (cache_slot < table_cache_.size() && table_cache_[cache_slot].block_id == block_id) {
-            if (options_.profile) {
-                ++profile_.table_cache_hits;
-            }
-            return read_cached_block(cache_slot);
-        }
-    }
-
-    const auto cache_position = table_cache_positions_.find(block_id);
-    if (cache_position != table_cache_positions_.end()) {
-        if (options_.profile) {
-            ++profile_.table_cache_hits;
-        }
-        return read_cached_block(cache_position->second);
+DiskBasedQalshAnnSearcher::TableBlockView DiskBasedQalshAnnSearcher::ReadTableBlock(std::uint64_t block_id) const {
+    if (!index_data_ || !index_data_->table_mapping) {
+        Log::error("Disk QALSH table mapping is not initialized.");
     }
 
     if (options_.profile) {
-        ++profile_.table_cache_misses;
-        ++profile_.table_block_reads;
+        auto touch_cached_block = [&](size_t cache_slot) {
+            TableBlockCacheEntry& cached_block = table_cache_[cache_slot];
+            cached_block.last_used = ++table_cache_clock_;
+            last_table_cache_slot_ = cache_slot;
+        };
+
+        bool cache_hit = false;
+        if (last_table_cache_slot_.has_value()) {
+            const size_t cache_slot = *last_table_cache_slot_;
+            if (cache_slot < table_cache_.size() && table_cache_[cache_slot].block_id == block_id) {
+                cache_hit = true;
+                touch_cached_block(cache_slot);
+            }
+        }
+
+        if (!cache_hit) {
+            const auto cache_position = table_cache_positions_.find(block_id);
+            if (cache_position != table_cache_positions_.end()) {
+                cache_hit = true;
+                touch_cached_block(cache_position->second);
+            }
+        }
+
+        if (cache_hit) {
+            ++profile_.table_cache_hits;
+        } else {
+            ++profile_.table_cache_misses;
+            ++profile_.table_block_reads;
+
+            TableBlockCacheEntry* cache_slot = nullptr;
+            size_t cache_slot_index = 0;
+            if (table_cache_.size() < options_.table_cache_blocks) {
+                table_cache_.push_back(TableBlockCacheEntry{});
+                cache_slot_index = table_cache_.size() - 1;
+                cache_slot = &table_cache_[cache_slot_index];
+            } else {
+                auto evict_it = std::min_element(table_cache_.begin(), table_cache_.end(),
+                                                 [](const TableBlockCacheEntry& lhs, const TableBlockCacheEntry& rhs) {
+                                                     return lhs.last_used < rhs.last_used;
+                                                 });
+                cache_slot_index = static_cast<size_t>(std::distance(table_cache_.begin(), evict_it));
+                cache_slot = &table_cache_[cache_slot_index];
+                table_cache_positions_.erase(cache_slot->block_id);
+            }
+
+            cache_slot->block_id = block_id;
+            cache_slot->last_used = ++table_cache_clock_;
+            table_cache_positions_[block_id] = cache_slot_index;
+            last_table_cache_slot_ = cache_slot_index;
+        }
     }
 
-    const std::uint64_t total_entries = static_cast<std::uint64_t>(index_data_->metadata.num_hash_tables) *
-                                        static_cast<std::uint64_t>(index_data_->metadata.num_points);
+    const std::uint64_t total_entries = static_cast<std::uint64_t>(index_data_->table_mapping->num_entries());
     const std::uint64_t block_start_index = block_id * static_cast<std::uint64_t>(table_entries_per_block_);
+    if (block_start_index >= total_entries) {
+        Log::error("Disk QALSH table block {} is out of range.", block_id);
+    }
     const std::uint64_t remaining_entries = total_entries - block_start_index;
-    const size_t entries_to_read =
+    const size_t entries_in_block =
         static_cast<size_t>(std::min<std::uint64_t>(table_entries_per_block_, remaining_entries));
-    std::vector<DiskQalsh::DiskQalshEntry> loaded_entries(entries_to_read);
-    const std::uint64_t offset =
-        block_start_index * static_cast<std::uint64_t>(sizeof(DiskQalsh::DiskQalshEntry));
-    ReadExactAt(tables_fd_, loaded_entries.data(), loaded_entries.size() * sizeof(DiskQalsh::DiskQalshEntry), offset,
-                "tables.bin");
-
-    TableBlockCacheEntry* cache_slot = nullptr;
-    size_t cache_slot_index = 0;
-    if (table_cache_.size() < options_.table_cache_blocks) {
-        table_cache_.push_back(TableBlockCacheEntry{});
-        cache_slot_index = table_cache_.size() - 1;
-        cache_slot = &table_cache_[cache_slot_index];
-    } else {
-        auto evict_it = std::min_element(table_cache_.begin(), table_cache_.end(),
-                                         [](const TableBlockCacheEntry& lhs, const TableBlockCacheEntry& rhs) {
-                                             return lhs.last_used < rhs.last_used;
-                                         });
-        cache_slot_index = static_cast<size_t>(std::distance(table_cache_.begin(), evict_it));
-        cache_slot = &table_cache_[cache_slot_index];
-        table_cache_positions_.erase(cache_slot->block_id);
+    if (entries_in_block == 0) {
+        Log::error("Disk QALSH mapped table block is empty: block {}.", block_id);
     }
 
-    cache_slot->block_id = block_id;
-    cache_slot->entries = std::move(loaded_entries);
-    cache_slot->last_used = ++table_cache_clock_;
-    table_cache_positions_[block_id] = cache_slot_index;
-    last_table_cache_slot_ = cache_slot_index;
-    if (cache_slot->entries.empty()) {
-        Log::error("Disk QALSH loaded table block is shorter than expected: block {}.", block_id);
-    }
-    return *cache_slot;
+    return TableBlockView{.entries = index_data_->table_mapping->entries() + static_cast<size_t>(block_start_index),
+                          .size = entries_in_block};
 }
 
 void DiskBasedQalshAnnSearcher::CountTableEntryRead() const {
@@ -781,9 +852,9 @@ DiskQalsh::DiskQalshEntry DiskBasedQalshAnnSearcher::ReadTableEntry(unsigned int
     const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
     const size_t block_entry_index = static_cast<size_t>(linear_index %
                                                         static_cast<std::uint64_t>(table_entries_per_block_));
-    const TableBlockCacheEntry& block = ReadTableBlock(block_id);
-    if (block_entry_index >= block.entries.size()) {
-        Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id, block_entry_index);
+    const TableBlockView block = ReadTableBlock(block_id);
+    if (block_entry_index >= block.size) {
+        Log::error("Disk QALSH table mmap entry is out of range: block {}, entry {}.", block_id, block_entry_index);
     }
     const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
     ValidateTableEntry(entry);

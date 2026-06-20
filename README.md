@@ -192,12 +192,12 @@ linear scan when an index is missing or mismatched. If `-c/--approximation-ratio
 is omitted, disk QALSH uses the value stored in `meta.json`; if it is provided,
 it must match the index metadata.
 
-Disk QALSH caches contiguous blocks from `tables.bin` inside each searcher
-clone. This preserves the index file format while avoiding one `pread` per table
-entry during ANN search. Tune the table cache with
-`--disk-qalsh-table-block-size` (bytes per cached table block, default 65536)
-and `--disk-qalsh-table-cache-blocks` (cached blocks per searcher, default 64).
-The default table cache budget is 4 MiB per searcher clone.
+Disk QALSH memory-maps `tables.bin` read-only and shares the mapping across
+searcher clones. This preserves the index file format while avoiding one
+`pread` and user-space block copy per table block during ANN search. The table
+locality profile uses `--disk-qalsh-table-block-size` (bytes per logical table
+block, default 65536) and `--disk-qalsh-table-cache-blocks` (logical blocks
+tracked per searcher profile, default 64).
 These options do not change candidate point reads; candidate vectors are still
 read as individual point records from the target point file. Pass
 `--disk-qalsh-profile` to print aggregate query, table block, cache hit/miss,

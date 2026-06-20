@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -98,6 +99,24 @@ struct QalshSearchState {
     unsigned int visited_stamp{0};
 };
 
+class DiskQalshTableMapping {
+   public:
+    DiskQalshTableMapping(const DiskQalsh::DiskQalshEntry* entries, size_t num_entries, size_t byte_size);
+    ~DiskQalshTableMapping();
+    DiskQalshTableMapping(const DiskQalshTableMapping&) = delete;
+    DiskQalshTableMapping& operator=(const DiskQalshTableMapping&) = delete;
+    DiskQalshTableMapping(DiskQalshTableMapping&&) = delete;
+    DiskQalshTableMapping& operator=(DiskQalshTableMapping&&) = delete;
+
+    [[nodiscard]] const DiskQalsh::DiskQalshEntry* entries() const;
+    [[nodiscard]] size_t num_entries() const;
+
+   private:
+    const DiskQalsh::DiskQalshEntry* entries_{nullptr};
+    size_t num_entries_{0};
+    size_t byte_size_{0};
+};
+
 // ---------------------------------------------
 // QalshAnnSearcher Definition
 // ---------------------------------------------
@@ -130,6 +149,7 @@ struct DiskBasedQalshIndexData {
     DiskQalsh::IndexMetadata metadata;
     QalshConfig qalsh_config;
     std::vector<Point> dot_vectors;
+    std::shared_ptr<const DiskQalshTableMapping> table_mapping;
 };
 
 struct DiskQalshSearchOptions {
@@ -178,14 +198,16 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
    private:
     struct TableBlockCacheEntry {
         std::uint64_t block_id{0};
-        std::vector<DiskQalsh::DiskQalshEntry> entries;
         std::uint64_t last_used{0};
+    };
+    struct TableBlockView {
+        const DiskQalsh::DiskQalshEntry* entries{nullptr};
+        size_t size{0};
     };
 
     std::optional<float> expected_approximation_ratio_;
     DiskQalshSearchOptions options_;
     std::shared_ptr<const DiskBasedQalshIndexData> index_data_;
-    int tables_fd_{-1};
     int dot_vectors_fd_{-1};
     int target_fd_{-1};
     std::vector<InMemoryQalshTableCursor> search_cursors_;
@@ -206,7 +228,7 @@ class DiskBasedQalshAnnSearcher : public AnnSearcher {
     void ResetSearchState();
     unsigned int NextSearchEpoch();
     [[nodiscard]] std::uint64_t TableLinearIndex(unsigned int table_id, size_t entry_index) const;
-    [[nodiscard]] const TableBlockCacheEntry& ReadTableBlock(std::uint64_t block_id) const;
+    [[nodiscard]] TableBlockView ReadTableBlock(std::uint64_t block_id) const;
     void CountTableEntryRead() const;
     void ValidateTableEntry(const DiskQalsh::DiskQalshEntry& entry) const;
     [[nodiscard]] DiskQalsh::DiskQalshEntry ReadTableEntry(unsigned int table_id, size_t entry_index) const;
@@ -231,14 +253,14 @@ bool DiskBasedQalshAnnSearcher::IncrementalSearch(unsigned int table_id, InMemor
             const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
             size_t block_entry_index =
                 static_cast<size_t>(linear_index % static_cast<std::uint64_t>(table_entries_per_block_));
-            const TableBlockCacheEntry& block = ReadTableBlock(block_id);
+            const TableBlockView block = ReadTableBlock(block_id);
 
             while (scan_count < Global::kScanSize) {
                 if (options_.profile) {
                     ++profile_.table_entry_reads;
                 }
-                if (block_entry_index >= block.entries.size()) {
-                    Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                if (block_entry_index >= block.size) {
+                    Log::error("Disk QALSH table mmap entry is out of range: block {}, entry {}.", block_id,
                                block_entry_index);
                 }
                 const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
@@ -283,14 +305,14 @@ bool DiskBasedQalshAnnSearcher::IncrementalSearch(unsigned int table_id, InMemor
             const std::uint64_t block_id = linear_index / static_cast<std::uint64_t>(table_entries_per_block_);
             size_t block_entry_index =
                 static_cast<size_t>(linear_index % static_cast<std::uint64_t>(table_entries_per_block_));
-            const TableBlockCacheEntry& block = ReadTableBlock(block_id);
+            const TableBlockView block = ReadTableBlock(block_id);
 
             while (scan_count < Global::kScanSize) {
                 if (options_.profile) {
                     ++profile_.table_entry_reads;
                 }
-                if (block_entry_index >= block.entries.size()) {
-                    Log::error("Disk QALSH table cache entry is out of range: block {}, entry {}.", block_id,
+                if (block_entry_index >= block.size) {
+                    Log::error("Disk QALSH table mmap entry is out of range: block {}, entry {}.", block_id,
                                block_entry_index);
                 }
                 const DiskQalsh::DiskQalshEntry entry = block.entries[block_entry_index];
@@ -317,7 +339,7 @@ bool DiskBasedQalshAnnSearcher::IncrementalSearch(unsigned int table_id, InMemor
                 ++entry_index;
                 cursor.right = entry_index;
                 ++block_entry_index;
-                if (block_entry_index >= block.entries.size()) {
+                if (block_entry_index >= block.size) {
                     break;
                 }
             }

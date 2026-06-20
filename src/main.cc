@@ -135,12 +135,12 @@ int main(int argc, char** argv) {
     DiskQalshSearchOptions disk_qalsh_options;
     estimate
         ->add_option("--disk-qalsh-table-block-size", disk_qalsh_options.table_block_size,
-                     "Byte size of each cached tables.bin block for disk QALSH")
+                     "Byte size used for disk QALSH tables.bin locality accounting")
         ->default_val(Global::kDefaultDiskQalshTableBlockSize)
         ->check(CLI::PositiveNumber);
     estimate
         ->add_option("--disk-qalsh-table-cache-blocks", disk_qalsh_options.table_cache_blocks,
-                     "Maximum cached tables.bin blocks per disk QALSH searcher")
+                     "Maximum logical tables.bin blocks tracked per disk QALSH searcher profile")
         ->default_val(Global::kDefaultDiskQalshTableCacheBlocks)
         ->check(CLI::PositiveNumber);
     estimate->add_flag("--disk-qalsh-profile", disk_qalsh_options.profile,
