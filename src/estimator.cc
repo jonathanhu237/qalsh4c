@@ -9,6 +9,7 @@
 #include <format>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <numeric>
 #include <random>
 #include <string>
@@ -31,6 +32,12 @@
 namespace {
 
 constexpr size_t kMaxAutoExactScanBatchSize = 64;
+constexpr double kQalshSamplingTailTolerance = 1e-10;
+constexpr size_t kMaxQalshSamplingSeriesIterations = 100000;
+
+bool IsL1Norm(float norm_order) { return std::abs(norm_order - 1.0F) < Global::kEpsilon; }
+
+bool IsL2Norm(float norm_order) { return std::abs(norm_order - 2.0F) < Global::kEpsilon; }
 
 unsigned int MaxExactScanThreads() {
 #ifdef QALSH4C_USE_OPENMP
@@ -435,14 +442,208 @@ float EstimateDiskBasedWeightedSampling(const PointSetMetadata& from, const Poin
     return estimation / static_cast<float>(num_samples);
 }
 
-float BinaryKlDivergence(float x, float y) {
-    if (x < 0.0F || x > 1.0F || y <= 0.0F || y >= 1.0F) {
-        Log::error("Invalid KL divergence parameters: x={}, y={}", x, y);
+double LogBinomialCoefficient(unsigned int n, unsigned int k) {
+    if (k > n) {
+        Log::error("Invalid binomial coefficient parameters: n={}, k={}", n, k);
+    }
+    return std::lgamma(static_cast<double>(n) + 1.0) - std::lgamma(static_cast<double>(k) + 1.0) -
+           std::lgamma(static_cast<double>(n - k) + 1.0);
+}
+
+double ExpNonNegativeLog(double log_value, const std::string& label) {
+    if (log_value == -std::numeric_limits<double>::infinity()) {
+        return 0.0;
+    }
+    if (!std::isfinite(log_value)) {
+        Log::error("{} is not finite in automatic QALSH sampling: {}", label, log_value);
+    }
+    if (log_value > std::log(std::numeric_limits<double>::max())) {
+        Log::error("{} overflows in automatic QALSH sampling: log value {}", label, log_value);
+    }
+    return std::exp(log_value);
+}
+
+double LogBinomialUpperTail(unsigned int n, unsigned int min_successes, double success_probability) {
+    if (min_successes == 0) {
+        return 0.0;
+    }
+    if (min_successes > n || success_probability <= 0.0) {
+        return -std::numeric_limits<double>::infinity();
+    }
+    if (success_probability >= 1.0) {
+        return 0.0;
+    }
+    if (!std::isfinite(success_probability)) {
+        Log::error("Invalid binomial success probability in automatic QALSH sampling: {}", success_probability);
     }
 
-    const float left = x <= 0.0F ? 0.0F : x * std::log(x / y);
-    const float right = x >= 1.0F ? 0.0F : (1.0F - x) * std::log((1.0F - x) / (1.0F - y));
-    return left + right;
+    const double log_success = std::log(success_probability);
+    const double log_failure = std::log1p(-success_probability);
+    double max_log_term = -std::numeric_limits<double>::infinity();
+
+    for (unsigned int r = min_successes; r <= n; ++r) {
+        const double log_term = LogBinomialCoefficient(n, r) + static_cast<double>(r) * log_success +
+                                static_cast<double>(n - r) * log_failure;
+        max_log_term = std::max(max_log_term, log_term);
+    }
+
+    double scaled_sum = 0.0;
+    for (unsigned int r = min_successes; r <= n; ++r) {
+        const double log_term = LogBinomialCoefficient(n, r) + static_cast<double>(r) * log_success +
+                                static_cast<double>(n - r) * log_failure;
+        scaled_sum += std::exp(log_term - max_log_term);
+    }
+
+    const double log_tail = max_log_term + std::log(scaled_sum);
+    return std::min(0.0, log_tail);
+}
+
+double QalshMissProbability(float norm_order, double bucket_width, double log_c_power) {
+    if (IsL1Norm(norm_order)) {
+        const double log_ratio = std::log(2.0 / bucket_width) - log_c_power;
+        const double ratio =
+            log_ratio < std::log(std::numeric_limits<double>::min()) ? 0.0 : std::exp(log_ratio);
+        return 2.0 / std::numbers::pi_v<double> * std::atan(ratio);
+    }
+    if (IsL2Norm(norm_order)) {
+        constexpr double kInverseTwoSqrt2 = 0.3535533905932737622;
+        const double log_argument = std::log(bucket_width * kInverseTwoSqrt2) + log_c_power;
+        const double argument = log_argument > std::log(std::numeric_limits<double>::max())
+                                    ? std::numeric_limits<double>::infinity()
+                                    : std::exp(log_argument);
+        return std::erfc(argument);
+    }
+
+    Log::error("Unsupported norm order: {}", norm_order);
+}
+
+double LogL1QalshSeriesTailBound(unsigned int m, unsigned int h, double bucket_width, double approximation_ratio,
+                                 size_t last_included_index) {
+    const double log_c = std::log(approximation_ratio);
+    const double log_denominator = std::log(-std::expm1(-static_cast<double>(h - 1) * log_c));
+    return LogBinomialCoefficient(m, h) + static_cast<double>(h) * std::log(4.0 / (std::numbers::pi_v<double> * bucket_width)) -
+           static_cast<double>(last_included_index + 1) * static_cast<double>(h - 1) * log_c -
+           log_denominator;
+}
+
+double LogL2QalshSeriesTailBound(unsigned int m, unsigned int h, double bucket_width, double approximation_ratio,
+                                 size_t last_included_index) {
+    const double log_c = std::log(approximation_ratio);
+    const double next_index = static_cast<double>(last_included_index + 1);
+    const double log_c_power_squared = 2.0 * next_index * log_c;
+    const double log_max = std::log(std::numeric_limits<double>::max());
+
+    constexpr double kTwoSqrt2 = 2.8284271247461900976;
+    const double log_a_factor = std::log(kTwoSqrt2 / (std::sqrt(std::numbers::pi_v<double>) * bucket_width));
+    const double a = bucket_width * bucket_width / 8.0;
+    const double c_power_squared =
+        log_c_power_squared > log_max ? std::numeric_limits<double>::infinity() : std::exp(log_c_power_squared);
+
+    double log_u = -std::numeric_limits<double>::infinity();
+    double log_r = -std::numeric_limits<double>::infinity();
+    if (std::isfinite(c_power_squared)) {
+        log_u = LogBinomialCoefficient(m, h) + static_cast<double>(h) * log_a_factor -
+                next_index * static_cast<double>(h - 1) * log_c - a * static_cast<double>(h) * c_power_squared;
+
+        const double c_squared_minus_one = (approximation_ratio * approximation_ratio) - 1.0;
+        log_r = -static_cast<double>(h - 1) * log_c -
+                a * static_cast<double>(h) * c_power_squared * c_squared_minus_one;
+    }
+
+    const double denominator = -std::expm1(log_r);
+    if (denominator <= 0.0 || !std::isfinite(denominator)) {
+        Log::error("Invalid L2 QALSH series tail denominator in automatic sampling: {}", denominator);
+    }
+    return log_u - std::log(denominator);
+}
+
+double LogQalshSeriesTailBound(float norm_order, unsigned int m, unsigned int h, double bucket_width,
+                               double approximation_ratio, size_t last_included_index) {
+    if (IsL1Norm(norm_order)) {
+        return LogL1QalshSeriesTailBound(m, h, bucket_width, approximation_ratio, last_included_index);
+    }
+    if (IsL2Norm(norm_order)) {
+        return LogL2QalshSeriesTailBound(m, h, bucket_width, approximation_ratio, last_included_index);
+    }
+    Log::error("Unsupported norm order: {}", norm_order);
+}
+
+double RevisedQalshKappaExp(const QalshConfig& qalsh_config, float norm_order) {
+    const unsigned int m = qalsh_config.num_hash_tables;
+    const unsigned int l = qalsh_config.collision_threshold;
+    const double c = static_cast<double>(qalsh_config.approximation_ratio);
+    const double bucket_width = static_cast<double>(qalsh_config.bucket_width);
+    if (m == 0) {
+        Log::error("QALSH index has zero hash tables.");
+    }
+    if (l == 0 || l >= m) {
+        Log::error("Automatic QALSH sampling requires collision threshold l to satisfy 1 <= l < m, got l={}, m={}",
+                   l, m);
+    }
+    if (!std::isfinite(c) || c <= 1.0) {
+        Log::error("Automatic QALSH sampling requires approximation ratio c > 1, got {}", c);
+    }
+    if (!std::isfinite(bucket_width) || bucket_width <= 0.0) {
+        Log::error("Automatic QALSH sampling requires positive bucket width, got {}", bucket_width);
+    }
+
+    const unsigned int h = m - l + 1;
+    if (h < 2 || h > m) {
+        Log::error("Automatic QALSH sampling requires h = m - l + 1 in [2, m], got h={}, m={}, l={}", h, m, l);
+    }
+
+    const double log_c = std::log(c);
+    const double log_tolerance = std::log(kQalshSamplingTailTolerance);
+    double partial_sum = 0.0;
+    double tail_bound = 0.0;
+    bool converged = false;
+
+    for (size_t j = 0; j < kMaxQalshSamplingSeriesIterations; ++j) {
+        const double log_c_power = static_cast<double>(j) * log_c;
+        const double miss_probability = QalshMissProbability(norm_order, bucket_width, log_c_power);
+        const double log_delta = LogBinomialUpperTail(m, h, miss_probability);
+        const double term = ExpNonNegativeLog(log_c_power + log_delta, "QALSH sampling series term");
+        partial_sum += term;
+        if (!std::isfinite(partial_sum)) {
+            Log::error("QALSH sampling series partial sum is not finite.");
+        }
+
+        const double log_tail_bound = LogQalshSeriesTailBound(norm_order, m, h, bucket_width, c, j);
+        if (!std::isfinite(log_tail_bound) && log_tail_bound != -std::numeric_limits<double>::infinity()) {
+            Log::error("QALSH sampling series tail bound is not finite: {}", log_tail_bound);
+        }
+        if (log_tail_bound < log_tolerance) {
+            tail_bound = ExpNonNegativeLog(log_tail_bound, "QALSH sampling series tail bound");
+            converged = true;
+            break;
+        }
+    }
+
+    if (!converged) {
+        Log::error("Automatic QALSH sampling series did not converge below {} after {} terms.",
+                   kQalshSamplingTailTolerance, kMaxQalshSamplingSeriesIterations);
+    }
+
+    const double series_bound = partial_sum + tail_bound;
+    const double kappa_exp = c * c * (1.0 + (c - 1.0) * series_bound);
+    if (!std::isfinite(kappa_exp) || kappa_exp < 1.0) {
+        Log::error("Invalid automatic QALSH sampling kappa_exp: {}", kappa_exp);
+    }
+    return kappa_exp;
+}
+
+unsigned int AutomaticQalshSampleCount(const QalshConfig& qalsh_config, float norm_order, double epsilon,
+                                       double delta) {
+    const double kappa_exp = RevisedQalshKappaExp(qalsh_config, norm_order);
+    const double min_samples = (kappa_exp - 1.0) / (delta * epsilon * epsilon);
+    if (!std::isfinite(min_samples) || min_samples < 0.0) {
+        Log::error("Invalid automatic QALSH sampling sample count lower bound: {}", min_samples);
+    }
+    if (min_samples > static_cast<double>(std::numeric_limits<unsigned int>::max())) {
+        Log::error("Automatic QALSH sampling selected too many samples: {}", min_samples);
+    }
+
+    return std::max(1U, static_cast<unsigned int>(std::ceil(min_samples)));
 }
 
 }  // namespace
@@ -626,38 +827,15 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
             QalshConfig qalsh_config = qalsh_weights_generator->BuildConfig(from, to, norm_order, use_cache_);
 
             const unsigned int m = qalsh_config.num_hash_tables;
-            const unsigned int l = qalsh_config.collision_threshold;
-            const float c = qalsh_config.approximation_ratio;
             if (m == 0) {
                 Log::error("QALSH index has zero hash tables.");
             }
 
-            float p1 = 0.0F;
-            if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
-                p1 = Calc::L1Probability(qalsh_config.bucket_width / 2.0F);
-            } else if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
-                p1 = Calc::L2Probability(qalsh_config.bucket_width / 2.0F);
-            } else {
-                Log::error("Unsupported norm order: {}", norm_order);
-                return 0.0F;
-            }
+            const unsigned int selected_samples =
+                AutomaticQalshSampleCount(qalsh_config, norm_order, epsilon, delta);
+            updated_num_samples = static_cast<float>(selected_samples);
 
-            const float theta = (static_cast<float>(l) - 1.0F) / static_cast<float>(m);
-            if (theta < 0.0F || theta >= p1) {
-                Log::error("Invalid QALSH threshold ratio for automatic sampling: theta={}, p1={}", theta, p1);
-            }
-
-            const float kl_divergence = BinaryKlDivergence(theta, p1);
-            const float delta0 = std::exp(-static_cast<float>(m) * kl_divergence);
-            if (c * delta0 >= 1.0F) {
-                Log::error("Automatic QALSH sampling requires c * delta0 < 1, got c={}, delta0={}", c, delta0);
-            }
-
-            const float kappa_exp = (c * c) * (1.0F - delta0) / (1.0F - (c * delta0));
-            const float min_samples = (kappa_exp - 1.0F) / (delta * epsilon * epsilon);
-            updated_num_samples = static_cast<float>(static_cast<unsigned int>(std::ceil(min_samples)));
-
-            Log::info("SamplingEstimator automatically selected {} samples.", updated_num_samples);
+            Log::info("SamplingEstimator automatically selected {} samples.", selected_samples);
         } else if (uniform_weights_generator != nullptr) {
             Log::error("You must specify num_samples for UniformWeightsGenerator.");
             return 0.0F;

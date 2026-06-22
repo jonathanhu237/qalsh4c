@@ -47,6 +47,48 @@ endif()
 if(hit_output MATCHES "Generating weights using QALSH")
     message(FATAL_ERROR "QALSH sampling cache hit unexpectedly regenerated QALSH weights:\n${hit_output}")
 endif()
+if(NOT hit_output MATCHES "Using default sample count: 4")
+    message(FATAL_ERROR "Explicit QALSH sampling count did not report the default sample count:\n${hit_output}")
+endif()
+if(hit_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Explicit QALSH sampling count unexpectedly used automatic selection:\n${hit_output}")
+endif()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache -e 10 --delta 0.5 qalsh -c 2
+    RESULT_VARIABLE auto_result
+    OUTPUT_VARIABLE auto_stdout
+    ERROR_VARIABLE auto_stderr
+)
+if(NOT auto_result EQUAL 0)
+    message(FATAL_ERROR "Automatic QALSH sampling count run failed with exit code ${auto_result}\n${auto_stdout}\n${auto_stderr}")
+endif()
+string(CONCAT auto_output "${auto_stdout}" "${auto_stderr}")
+if(NOT auto_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Automatic QALSH sampling count run did not report selected samples:\n${auto_output}")
+endif()
+if(auto_output MATCHES "Generating weights using QALSH")
+    message(FATAL_ERROR "Automatic QALSH sampling count cache hit unexpectedly regenerated QALSH weights:\n${auto_output}")
+endif()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+            sampling --use-cache --num-samples-ab 4 qalsh -c 2
+    RESULT_VARIABLE directional_result
+    OUTPUT_VARIABLE directional_stdout
+    ERROR_VARIABLE directional_stderr
+)
+if(NOT directional_result EQUAL 0)
+    message(FATAL_ERROR "Directional QALSH sampling count run failed with exit code ${directional_result}\n${directional_stdout}\n${directional_stderr}")
+endif()
+string(CONCAT directional_output "${directional_stdout}" "${directional_stderr}")
+if(NOT directional_output MATCHES "Using specified A->B sample count: 4")
+    message(FATAL_ERROR "Directional QALSH sampling count did not report the A->B override:\n${directional_output}")
+endif()
+if(directional_output MATCHES "SamplingEstimator automatically selected [0-9]+ samples")
+    message(FATAL_ERROR "Directional QALSH sampling count unexpectedly used automatic selection:\n${directional_output}")
+endif()
 
 file(WRITE "${cache_path}" "bad")
 execute_process(

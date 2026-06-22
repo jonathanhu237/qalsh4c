@@ -147,9 +147,15 @@ needed target-side hash tables inside the current process from `A.bin` and
 ./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 100 qalsh -c 2
 ```
 
-For QALSH sampling, omit `--num-samples` to let the implementation choose the sample count automatically. The automatic count uses the QALSH4C bound
-`ceil((c^2 * (1 - delta0) / (1 - c * delta0) - 1) / (delta * epsilon^2))`, where
-`delta0 = exp(-m * KL((l - 1) / m, p1))`; tune the estimator with `--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
+For QALSH sampling, omit `--num-samples` to let the implementation choose the sample count automatically. The automatic count uses the revised QALSH4C bound
+`ceil((kappa_exp - 1) / (delta * epsilon^2))`, where
+`kappa_exp = c^2 * (1 + (c - 1) * S_bound)`,
+`S_bound = sum_{j=0}^J c^j * Delta_j + B_J`, and `B_J < 1e-10`.
+The implementation computes `Delta_j` as the stable miss-probability tail
+`Pr[Binomial(m, q_j) >= m - l + 1]`; for L1,
+`q_j = 2/pi * atan(2 / (w * c^j))`, and for L2,
+`q_j = erfc(w * c^j / (2 * sqrt(2)))`. Tune the estimator with
+`--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
 
 `sampling qalsh --use-cache` stores and reads raw float32 weight files such as `l2_qalsh_weights_A.bin`. Cache filenames are unchanged from earlier releases, but stale double-encoded caches are rejected by file-size validation and should be deleted.
 
