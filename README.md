@@ -131,12 +131,13 @@ Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` f
 
 ## Estimate
 
-We provide four methods for estimating the Chamfer distance:
+We provide five methods for estimating the Chamfer distance:
 
 - Linear Scan ANN
 - QALSH ANN
 - Uniform Sampling
 - QALSH Sampling
+- Quadtree Sampling
 
 Non-disk QALSH uses an in-memory index. QALSH ANN and QALSH sampling build the
 needed target-side hash tables inside the current process from `A.bin` and
@@ -158,6 +159,15 @@ The implementation computes `Delta_j` as the stable miss-probability tail
 `--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
 
 `sampling qalsh --use-cache` stores and reads raw float32 weight files such as `l2_qalsh_weights_A.bin`. Cache filenames are unchanged from earlier releases, but stale double-encoded caches are rejected by file-size validation and should be deleted.
+
+`sampling quadtree` is an in-memory benchmark implementation of the deterministic quadtree/DFS importance weights from the Bakshi4C supplementary notebook. It supports L1 and L2 crude-distance weights, uses `--max-levels 3` by default, and preserves the notebook's stack-based DFS sibling order. Quadtree sampling works with `--direction ab`, `ba`, or `both`, but it does not support `--disk-based`:
+
+```bash
+./build/dev/qalsh4c estimate -p 1 -d ./data/federalist --direction ab sampling -n 20 quadtree
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 20 quadtree --max-levels 3
+```
+
+Pass `--use-cache` to reuse generated quadtree weights. Quadtree cache filenames include the norm order, method, max-levels value, and source point set, for example `l1_quadtree_l3_weights_A.bin`, and cache contents are raw float32 weights.
 
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
 

@@ -1,0 +1,113 @@
+set(source_data_dir "${QALSH4C_SOURCE_DIR}/data/federalist")
+set(dataset_dir "${QALSH4C_BINARY_DIR}/quadtree_sampling")
+
+file(REMOVE_RECURSE "${dataset_dir}")
+file(MAKE_DIRECTORY "${dataset_dir}")
+foreach(file_name A.bin B.bin metadata.json)
+    file(COPY "${source_data_dir}/${file_name}" DESTINATION "${dataset_dir}")
+endforeach()
+
+function(check_contains output expected context)
+    string(FIND "${output}" "${expected}" found_index)
+    if(found_index EQUAL -1)
+        message(FATAL_ERROR "Expected '${expected}' in ${context} output:\n${output}")
+    endif()
+endfunction()
+
+function(run_quadtree_estimate norm)
+    execute_process(
+        COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate
+            -p "${norm}"
+            -d "${dataset_dir}"
+            --direction ab
+            sampling
+            -n 5
+            quadtree
+            --max-levels 3
+        RESULT_VARIABLE estimate_result
+        OUTPUT_VARIABLE estimate_stdout
+        ERROR_VARIABLE estimate_stderr
+    )
+    if(NOT estimate_result EQUAL 0)
+        message(FATAL_ERROR "quadtree L${norm} estimate failed with exit code ${estimate_result}\n${estimate_stdout}\n${estimate_stderr}")
+    endif()
+
+    check_contains("${estimate_stdout}" "Direction: A -> B" "quadtree L${norm}")
+    check_contains("${estimate_stdout}" "Estimated Distance:" "quadtree L${norm}")
+    check_contains("${estimate_stdout}" "Ground Truth:" "quadtree L${norm}")
+    check_contains("${estimate_stdout}" "Relative Error:" "quadtree L${norm}")
+endfunction()
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" estimate sampling quadtree --help
+    RESULT_VARIABLE help_result
+    OUTPUT_VARIABLE help_stdout
+    ERROR_VARIABLE help_stderr
+)
+if(NOT help_result EQUAL 0)
+    message(FATAL_ERROR "Running quadtree sampling help failed with exit code ${help_result}")
+endif()
+string(CONCAT help_output "${help_stdout}" "${help_stderr}")
+check_contains("${help_output}" "--max-levels" "quadtree help")
+
+run_quadtree_estimate(1)
+run_quadtree_estimate(2)
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate
+        -p 1
+        -d "${dataset_dir}"
+        --direction both
+        sampling
+        -n 3
+        quadtree
+        --max-levels 3
+    RESULT_VARIABLE both_result
+    OUTPUT_VARIABLE both_stdout
+    ERROR_VARIABLE both_stderr
+)
+if(NOT both_result EQUAL 0)
+    message(FATAL_ERROR "bidirectional quadtree estimate failed with exit code ${both_result}\n${both_stdout}\n${both_stderr}")
+endif()
+check_contains("${both_stdout}" "Direction: A <-> B" "bidirectional quadtree")
+
+execute_process(
+    COMMAND "${QALSH4C_BIN}" estimate
+        --disk-based
+        -p 1
+        -d "${dataset_dir}"
+        --direction ab
+        sampling
+        -n 5
+        quadtree
+    RESULT_VARIABLE disk_result
+    OUTPUT_VARIABLE disk_stdout
+    ERROR_VARIABLE disk_stderr
+)
+if(disk_result EQUAL 0)
+    message(FATAL_ERROR "disk-based quadtree sampling unexpectedly succeeded:\n${disk_stdout}\n${disk_stderr}")
+endif()
+string(CONCAT disk_output "${disk_stdout}" "${disk_stderr}")
+check_contains("${disk_output}" "Disk-based mode is currently implemented only for uniform and QALSH sampling estimators" "disk quadtree rejection")
+
+set(bad_cache_path "${dataset_dir}/l1_quadtree_l3_weights_A.bin")
+file(WRITE "${bad_cache_path}" "bad-cache")
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate
+        -p 1
+        -d "${dataset_dir}"
+        --direction ab
+        sampling
+        --use-cache
+        -n 5
+        quadtree
+        --max-levels 3
+    RESULT_VARIABLE bad_cache_result
+    OUTPUT_VARIABLE bad_cache_stdout
+    ERROR_VARIABLE bad_cache_stderr
+)
+if(bad_cache_result EQUAL 0)
+    message(FATAL_ERROR "quadtree sampling unexpectedly accepted a malformed cache:\n${bad_cache_stdout}\n${bad_cache_stderr}")
+endif()
+string(CONCAT bad_cache_output "${bad_cache_stdout}" "${bad_cache_stderr}")
+check_contains("${bad_cache_output}" "Quadtree weights cache file has unexpected size" "bad quadtree cache")

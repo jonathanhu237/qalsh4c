@@ -118,6 +118,25 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME disk_linear_scan_test COMMAND disk_linear_scan_test)
 
+    add_executable(
+        quadtree_weights_generator_test
+        tests/quadtree_weights_generator_test.cc
+        src/ann_searcher.cc
+        src/config.cc
+        src/disk_qalsh_index.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+        src/weights_generator.cc
+    )
+    target_include_directories(quadtree_weights_generator_test PRIVATE src)
+    target_link_libraries(quadtree_weights_generator_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(quadtree_weights_generator_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(quadtree_weights_generator_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME quadtree_weights_generator_test COMMAND quadtree_weights_generator_test)
+
     add_executable(log_error_test tests/log_error_test.cc)
     target_include_directories(log_error_test PRIVATE src)
     add_test(NAME log_error_test COMMAND log_error_test)
@@ -253,6 +272,15 @@ if(BUILD_TESTING)
             -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_qalsh_weights_cache.cmake
+    )
+
+    add_test(
+        NAME qalsh4c_quadtree_sampling
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_quadtree_sampling.cmake
     )
 
     add_test(

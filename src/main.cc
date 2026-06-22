@@ -1,6 +1,7 @@
 #include <CLI/CLI.hpp>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -273,6 +274,20 @@ int main(int argc, char** argv) {
             return;
         }
         weights_generator = std::make_unique<QalshWeightsGenerator>(qalsh_sampling_approximation_ratio);
+    });
+
+    // ------------------------------
+    // quadtree sampling estimate
+    // ------------------------------
+    CLI::App* quadtree_sampling =
+        sampling->add_subcommand("quadtree", "Generate samples using quadtree-derived importance weights.");
+    unsigned int quadtree_max_levels{QuadtreeWeightsGenerator::kDefaultMaxLevels};
+    quadtree_sampling
+        ->add_option("--max-levels", quadtree_max_levels, "Maximum quadtree levels")
+        ->default_val(QuadtreeWeightsGenerator::kDefaultMaxLevels)
+        ->check(CLI::Range(1, std::numeric_limits<int>::max()));
+    quadtree_sampling->callback([&]() {
+        weights_generator = std::make_unique<QuadtreeWeightsGenerator>(quadtree_max_levels);
     });
 
     // ------------------------------
