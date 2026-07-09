@@ -36,6 +36,14 @@ constexpr unsigned int kBitsPerWord = 64;
 constexpr Weight kMinimumWeightFloor = 1e-12F;
 constexpr Weight kWeightFloorScale = 1e-12F;
 
+bool SplitUntilSingleton(unsigned int max_levels) {
+    return max_levels == 0;
+}
+
+bool BoundsUnchanged(const Point& child_lower, const Point& child_upper, const Point& lower, const Point& upper) {
+    return child_lower == lower && child_upper == upper;
+}
+
 struct CellKeyHash {
     std::size_t operator()(const CellKey& key) const {
         std::size_t seed = key.size();
@@ -207,7 +215,7 @@ std::pair<Point, Point> ChildBounds(const CellKey& key, const Point& lower, cons
 void AppendQuadtreeDfsOrder(const std::vector<Point>& points, const std::vector<unsigned int>& cluster,
                             const Point& lower, const Point& upper, unsigned int max_levels,
                             std::vector<unsigned int>& dfs_order) {
-    if (max_levels == 1 || cluster.size() <= 1) {
+    if ((!SplitUntilSingleton(max_levels) && max_levels == 1) || cluster.size() <= 1) {
         dfs_order.insert(dfs_order.end(), cluster.begin(), cluster.end());
         return;
     }
@@ -252,10 +260,19 @@ void AppendQuadtreeDfsOrder(const std::vector<Point>& points, const std::vector<
         }
     }
 
+    if (subclusters.size() == 1) {
+        auto [child_lower, child_upper] = ChildBounds(cell_order.front(), lower, midpoint, upper);
+        if (BoundsUnchanged(child_lower, child_upper, lower, upper)) {
+            dfs_order.insert(dfs_order.end(), cluster.begin(), cluster.end());
+            return;
+        }
+    }
+
+    const unsigned int child_max_levels = SplitUntilSingleton(max_levels) ? 0 : max_levels - 1;
     for (std::size_t cell_index = subclusters.size(); cell_index > 0; --cell_index) {
         const std::size_t current_index = cell_index - 1;
         auto [child_lower, child_upper] = ChildBounds(cell_order[current_index], lower, midpoint, upper);
-        AppendQuadtreeDfsOrder(points, subclusters[current_index], child_lower, child_upper, max_levels - 1,
+        AppendQuadtreeDfsOrder(points, subclusters[current_index], child_lower, child_upper, child_max_levels,
                                dfs_order);
     }
 }
@@ -403,11 +420,7 @@ std::vector<Weight> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // --------------------------------------------------
 // QuadtreeWeightsGenerator Implementation
 // --------------------------------------------------
-QuadtreeWeightsGenerator::QuadtreeWeightsGenerator(unsigned int max_levels) : max_levels_(max_levels) {
-    if (max_levels_ < 1) {
-        Log::error("Quadtree max-levels must be at least 1.");
-    }
-}
+QuadtreeWeightsGenerator::QuadtreeWeightsGenerator(unsigned int max_levels) : max_levels_(max_levels) {}
 
 bool QuadtreeWeightsGenerator::RequiresIndex() const {
     return false;

@@ -14,7 +14,8 @@ function(check_contains output expected context)
     endif()
 endfunction()
 
-function(run_quadtree_estimate norm)
+function(run_quadtree_estimate norm max_levels)
+    set(estimate_context "quadtree L${norm} max-levels ${max_levels}")
     execute_process(
         COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate
             -p "${norm}"
@@ -23,19 +24,23 @@ function(run_quadtree_estimate norm)
             sampling
             -n 5
             quadtree
-            --max-levels 3
+            --max-levels "${max_levels}"
         RESULT_VARIABLE estimate_result
         OUTPUT_VARIABLE estimate_stdout
         ERROR_VARIABLE estimate_stderr
     )
     if(NOT estimate_result EQUAL 0)
-        message(FATAL_ERROR "quadtree L${norm} estimate failed with exit code ${estimate_result}\n${estimate_stdout}\n${estimate_stderr}")
+        message(FATAL_ERROR
+            "${estimate_context} estimate failed with exit code ${estimate_result}\n"
+            "${estimate_stdout}\n"
+            "${estimate_stderr}"
+        )
     endif()
 
-    check_contains("${estimate_stdout}" "Direction: A -> B" "quadtree L${norm}")
-    check_contains("${estimate_stdout}" "Estimated Distance:" "quadtree L${norm}")
-    check_contains("${estimate_stdout}" "Ground Truth:" "quadtree L${norm}")
-    check_contains("${estimate_stdout}" "Relative Error:" "quadtree L${norm}")
+    check_contains("${estimate_stdout}" "Direction: A -> B" "${estimate_context}")
+    check_contains("${estimate_stdout}" "Estimated Distance:" "${estimate_context}")
+    check_contains("${estimate_stdout}" "Ground Truth:" "${estimate_context}")
+    check_contains("${estimate_stdout}" "Relative Error:" "${estimate_context}")
 endfunction()
 
 execute_process(
@@ -49,9 +54,10 @@ if(NOT help_result EQUAL 0)
 endif()
 string(CONCAT help_output "${help_stdout}" "${help_stderr}")
 check_contains("${help_output}" "--max-levels" "quadtree help")
+check_contains("${help_output}" "0 splits until singleton" "quadtree help")
 
-run_quadtree_estimate(1)
-run_quadtree_estimate(2)
+run_quadtree_estimate(1 0)
+run_quadtree_estimate(2 3)
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate

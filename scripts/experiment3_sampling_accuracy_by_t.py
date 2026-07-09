@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiment 3: compare Bakshi4C, uniform sampling, and QALSH sampling over T."""
+"""Experiment 3: compare sampling method accuracy over T."""
 
 from __future__ import annotations
 
@@ -26,20 +26,30 @@ from experiment_utils import (
     parse_int_list,
     read_csv_rows,
     run_or_print,
+    sampling_weight_cache_paths,
     summary_from_rows,
     timestamp_for_path,
     validate_cases,
-    warm_qalsh_weights,
     write_rows,
 )
 
 
 EXPERIMENT = "experiment3_sampling_accuracy_by_t"
 
+SAMPLING_ALGORITHMS = (
+    ("uniform", "uniform_sampling"),
+    ("quadtree", "quadtree_sampling"),
+    ("qalsh", "qalsh_sampling"),
+)
+SUMMARY_ALGORITHM_BY_QALSH4C_ALGORITHM = dict(SAMPLING_ALGORITHMS)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Compare Bakshi4C, uniform sampling, and QALSH sampling accuracy for sample counts T."
+        description=(
+            "Compare uniform, quadtree, and QALSH sampling accuracy for sample counts T. "
+            "Bakshi4C can also be included unless --skip-bakshi is set."
+        )
     )
     add_common_arguments(parser)
     add_bakshi_arguments(parser)
@@ -48,6 +58,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-start", type=int, default=10, help="First T when --sample-counts is omitted.")
     parser.add_argument("--sample-stop", type=int, default=100, help="Last T when --sample-counts is omitted.")
     parser.add_argument("--sample-step", type=int, default=10, help="Step when --sample-counts is omitted.")
+    parser.add_argument(
+        "--quadtree-max-levels",
+        type=int,
+        default=3,
+        help="Maximum quadtree levels; 0 splits until singleton.",
+    )
     parser.add_argument("--delta", default="0.1", help="Failure probability used by qalsh4c when needed.")
     parser.add_argument("--epsilon", default="1.0", help="Epsilon used by qalsh4c when needed.")
     args = parser.parse_args()
@@ -59,7 +75,59 @@ def parse_args() -> argparse.Namespace:
         args.sample_counts = int_range(args.sample_start, args.sample_stop, args.sample_step, "--sample")
     else:
         args.sample_counts = parse_int_list(args.sample_counts, "--sample-counts")
+    if args.quadtree_max_levels < 0:
+        raise SystemExit("--quadtree-max-levels must be non-negative")
     return args
+
+
+def weight_cache_paths_for_algorithm(args: argparse.Namespace, case, algorithm: str):
+    return sampling_weight_cache_paths(
+        case,
+        args.direction,
+        algorithm,
+        quadtree_max_levels=args.quadtree_max_levels,
+    )
+
+
+def warm_sampling_weights(args: argparse.Namespace, case, algorithm: str) -> bool:
+    cache_paths = weight_cache_paths_for_algorithm(args, case, algorithm)
+    if not cache_paths:
+        return True
+
+    if args.refresh_weights:
+        for cache_path in cache_paths:
+            try:
+                cache_path.unlink()
+                print(f"[weights] removed {cache_path}", flush=True)
+            except FileNotFoundError:
+                pass
+
+    missing = [cache_path for cache_path in cache_paths if not cache_path.is_file()]
+    if args.no_warmup or not missing:
+        return True
+
+    command = build_sampling_command(
+        args,
+        case,
+        algorithm,
+        num_samples=1,
+        epsilon="1.0",
+        use_cache=True,
+        use_fixed_seed=args.fixed_weight_seed,
+    )
+    result = run_or_print(args, command, f"warm {case.dataset} p={case.norm_order} {algorithm}")
+    if result.return_code != 0:
+        print(result.output)
+        return False
+
+    if args.dry_run:
+        return True
+    still_missing = [cache_path for cache_path in cache_paths if not cache_path.is_file()]
+    if still_missing:
+        for cache_path in still_missing:
+            print(f"[weights] cache was not created: {cache_path}", flush=True)
+        return False
+    return True
 
 
 def run_qalsh4c_sampling_method(
@@ -76,7 +144,7 @@ def run_qalsh4c_sampling_method(
             algorithm,
             num_samples=sample_count,
             epsilon=args.epsilon,
-            use_cache=algorithm == "qalsh",
+            use_cache=algorithm in {"qalsh", "quadtree"},
         )
         label = f"{case.dataset} p={case.norm_order} {algorithm} T={sample_count} run={run_number}"
         result = run_or_print(args, command, label)
@@ -86,7 +154,7 @@ def run_qalsh4c_sampling_method(
                 args=args,
                 experiment=EXPERIMENT,
                 case=case,
-                algorithm="qalsh_sampling" if algorithm == "qalsh" else "uniform_sampling",
+                algorithm=SUMMARY_ALGORITHM_BY_QALSH4C_ALGORITHM[algorithm],
                 run_number=run_number,
                 command=command,
                 result=result,
@@ -95,6 +163,7 @@ def run_qalsh4c_sampling_method(
                 epsilon=args.epsilon if algorithm == "qalsh" else "",
                 delta=str(args.delta) if algorithm == "qalsh" else "",
                 sample_count_requested=str(sample_count),
+                weight_cache_paths_override=weight_cache_paths_for_algorithm(args, case, algorithm),
             )
         )
     return rows
@@ -113,8 +182,12 @@ def main() -> int:
 
     with run_file, summary_file:
         for case in cases:
-            if not warm_qalsh_weights(args, case):
-                has_failure = True
+            warmup_failed = False
+            for qalsh4c_algorithm, _summary_algorithm in SAMPLING_ALGORITHMS:
+                if not warm_sampling_weights(args, case, qalsh4c_algorithm):
+                    has_failure = True
+                    warmup_failed = True
+            if warmup_failed:
                 continue
 
             if not args.skip_bakshi:
@@ -171,10 +244,7 @@ def main() -> int:
                         )
 
             for sample_count in args.sample_counts:
-                for qalsh4c_algorithm, summary_algorithm in (
-                    ("uniform", "uniform_sampling"),
-                    ("qalsh", "qalsh_sampling"),
-                ):
+                for qalsh4c_algorithm, summary_algorithm in SAMPLING_ALGORITHMS:
                     rows = run_qalsh4c_sampling_method(args, case, qalsh4c_algorithm, sample_count)
                     if any(row["return_code"] != "0" for row in rows):
                         has_failure = True

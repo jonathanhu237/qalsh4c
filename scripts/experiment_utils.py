@@ -26,7 +26,8 @@ except ImportError:  # pragma: no cover - resource is available on Linux/macOS.
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BYTES_PER_COORDINATE = 8
+# Keep this in sync with Coordinate in src/point_set.h.
+BYTES_PER_COORDINATE = 4
 
 DATASET_LABELS = {
     "federalist": "Federalist",
@@ -447,6 +448,8 @@ def build_sampling_command(
     command.append(algorithm)
     if algorithm == "qalsh":
         command.extend(["-c", str(args.approximation_ratio)])
+    if algorithm == "quadtree" and hasattr(args, "quadtree_max_levels"):
+        command.extend(["--max-levels", str(args.quadtree_max_levels)])
     return command
 
 
@@ -468,14 +471,42 @@ def cache_norm_token(norm_order: str) -> str:
     return f"{float(norm_order):g}"
 
 
-def weight_cache_paths(case: ExperimentCase, direction: str) -> list[Path]:
+def point_set_sources_for_direction(direction: str) -> list[str]:
     sources: list[str] = []
     if direction in ("ab", "both"):
         sources.append("A")
     if direction in ("ba", "both"):
         sources.append("B")
+    return sources
+
+
+def weight_cache_paths(case: ExperimentCase, direction: str) -> list[Path]:
+    sources = point_set_sources_for_direction(direction)
     norm_token = cache_norm_token(case.norm_order)
     return [case.dataset_dir / f"l{norm_token}_qalsh_weights_{source}.bin" for source in sources]
+
+
+def quadtree_weight_cache_paths(case: ExperimentCase, direction: str, max_levels: int) -> list[Path]:
+    sources = point_set_sources_for_direction(direction)
+    norm_token = cache_norm_token(case.norm_order)
+    return [
+        case.dataset_dir / f"l{norm_token}_quadtree_l{max_levels}_weights_{source}.bin" for source in sources
+    ]
+
+
+def sampling_weight_cache_paths(
+    case: ExperimentCase,
+    direction: str,
+    algorithm: str,
+    quadtree_max_levels: int | None = None,
+) -> list[Path]:
+    if algorithm == "qalsh":
+        return weight_cache_paths(case, direction)
+    if algorithm == "quadtree":
+        if quadtree_max_levels is None:
+            raise ValueError("quadtree_max_levels is required for quadtree cache paths")
+        return quadtree_weight_cache_paths(case, direction, quadtree_max_levels)
+    return []
 
 
 def warm_qalsh_weights(args: argparse.Namespace, case: ExperimentCase) -> bool:
@@ -556,8 +587,12 @@ def common_run_row(
     sample_count_requested: str = "",
     time_source: str = "qalsh4c_time_consumed",
     source_run_csv: str = "",
+    weight_cache_paths_override: Iterable[Path] | None = None,
 ) -> dict[str, str]:
     parsed = parse_qalsh_output(result.output)
+    cache_paths = weight_cache_paths_override
+    if cache_paths is None:
+        cache_paths = weight_cache_paths(case, args.direction)
     return {
         "timestamp": timestamp_for_row(),
         "experiment": experiment,
@@ -585,7 +620,7 @@ def common_run_row(
         "time_source": time_source,
         "return_code": str(result.return_code),
         "command": shlex.join(command),
-        "weight_cache_paths": "|".join(str(path) for path in weight_cache_paths(case, args.direction)),
+        "weight_cache_paths": "|".join(str(path) for path in cache_paths),
         "source_run_csv": source_run_csv,
     }
 

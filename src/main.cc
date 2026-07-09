@@ -283,9 +283,10 @@ int main(int argc, char** argv) {
         sampling->add_subcommand("quadtree", "Generate samples using quadtree-derived importance weights.");
     unsigned int quadtree_max_levels{QuadtreeWeightsGenerator::kDefaultMaxLevels};
     quadtree_sampling
-        ->add_option("--max-levels", quadtree_max_levels, "Maximum quadtree levels")
+        ->add_option("--max-levels", quadtree_max_levels,
+                     "Maximum quadtree levels; 0 splits until singleton")
         ->default_val(QuadtreeWeightsGenerator::kDefaultMaxLevels)
-        ->check(CLI::Range(1, std::numeric_limits<int>::max()));
+        ->check(CLI::Range(0, std::numeric_limits<int>::max()));
     quadtree_sampling->callback([&]() {
         weights_generator = std::make_unique<QuadtreeWeightsGenerator>(quadtree_max_levels);
     });

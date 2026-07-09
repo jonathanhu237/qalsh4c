@@ -139,11 +139,32 @@ int main() {
         return 6;
     }
 
+    QuadtreeWeightsGenerator singleton_generator(0);
+    const std::vector<Weight> singleton_l1_weights =
+        singleton_generator.Generate(metadata_a, metadata_b, 1.0F, false);
+    if (singleton_l1_weights.size() != points_a.size() || !AllPositiveFinite(singleton_l1_weights)) {
+        std::cerr << "split-until-singleton quadtree weights should be positive and finite\n";
+        return 7;
+    }
+
+    const std::vector<Weight> singleton_degenerate_weights =
+        singleton_generator.Generate(metadata_g, metadata_h, 1.0F, false);
+    if (!Equals(singleton_degenerate_weights, std::vector<Weight>{1.0F, 1.0F})) {
+        std::cerr << "split-until-singleton should stop when identical points cannot be split\n";
+        return 8;
+    }
+
+    (void)singleton_generator.Generate(metadata_a, metadata_b, 1.0F, true);
+    if (!std::filesystem::exists(temp_dir / "l1_quadtree_l0_weights_A.bin")) {
+        std::cerr << "missing split-until-singleton quadtree cache file\n";
+        return 9;
+    }
+
     const std::vector<Weight> cached_weights = generator.Generate(metadata_a, metadata_b, 1.0F, true);
     const std::filesystem::path cache_path = temp_dir / "l1_quadtree_l2_weights_A.bin";
     if (cached_weights.size() != points_a.size() || !std::filesystem::exists(cache_path)) {
         std::cerr << "missing quadtree cache file\n";
-        return 7;
+        return 10;
     }
 
     const std::vector<Weight> sentinel_weights{7.0F, 11.0F, 13.0F};
@@ -151,20 +172,20 @@ int main() {
     const std::vector<Weight> cache_hit_weights = generator.Generate(metadata_a, metadata_b, 1.0F, true);
     if (!Equals(cache_hit_weights, sentinel_weights)) {
         std::cerr << "quadtree cache hit did not read cached weights\n";
-        return 8;
+        return 11;
     }
 
     (void)generator.Generate(metadata_a, metadata_b, 2.0F, true);
     if (!std::filesystem::exists(temp_dir / "l2_quadtree_l2_weights_A.bin")) {
         std::cerr << "missing norm-specific quadtree cache file\n";
-        return 9;
+        return 12;
     }
 
     QuadtreeWeightsGenerator deeper_generator(3);
     (void)deeper_generator.Generate(metadata_a, metadata_b, 1.0F, true);
     if (!std::filesystem::exists(temp_dir / "l1_quadtree_l3_weights_A.bin")) {
         std::cerr << "missing max-level-specific quadtree cache file\n";
-        return 10;
+        return 13;
     }
 
     std::filesystem::remove_all(temp_dir);
