@@ -542,11 +542,14 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
                     if (++state.collision_count >= collision_threshold) {
                         state.visited_stamp = epoch;
                         const Point& candidate_point = index_data.base_points[point_id];
-                        float distance = Calc::LpDistanceBounded(candidate_point, query_point, index_data.norm_order,
-                                                                  best_candidate.distance);
-                        if (distance < best_candidate.distance) {
+                        const float distance =
+                            Calc::LpDistanceBoundedRaw(candidate_point.data(), query_point.data(),
+                                                       index_data.num_dimensions, index_data.norm_order,
+                                                       best_candidate.distance);
+                        const AnnResult candidate{.distance = distance, .point_id = point_id};
+                        if (IsBetterAnnResult(candidate, best_candidate)) {
                             has_candidate = true;
-                            best_candidate = AnnResult{.distance = distance, .point_id = point_id};
+                            best_candidate = candidate;
                         }
 
                         // Termination condition 1

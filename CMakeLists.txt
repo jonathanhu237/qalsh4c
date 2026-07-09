@@ -275,6 +275,15 @@ if(BUILD_TESTING)
     )
 
     add_test(
+        NAME qalsh4c_qalsh_sampling_consistency
+        COMMAND ${CMAKE_COMMAND}
+            -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
+            -DQALSH4C_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DQALSH4C_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qalsh4c_qalsh_sampling_consistency.cmake
+    )
+
+    add_test(
         NAME qalsh4c_quadtree_sampling
         COMMAND ${CMAKE_COMMAND}
             -DQALSH4C_BIN=$<TARGET_FILE:qalsh4c>
