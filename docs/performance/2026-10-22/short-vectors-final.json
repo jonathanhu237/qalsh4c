@@ -1,0 +1,67 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-before/qalsh4c",
+      "sha256": "e598a0bcb55881aca47b53ae951e6d98d65937859af9d09e5c62ead20579fa84"
+    },
+    "after": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-after/qalsh4c",
+      "sha256": "4ae3dfc9939d302b1cbaeb1c2405185cd6ff2a12b75ef4e2767cac4e0c4929bb"
+    }
+  },
+  "inputs": {
+    "gmm2": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-data/gmm2",
+      "metadata": {
+        "chamfer_distances": {
+          "l1": {
+            "ab": null,
+            "ba": null
+          },
+          "l2": {
+            "ab": null,
+            "ba": null
+          }
+        },
+        "num_dimensions": 2,
+        "num_points": {
+          "a": 4000,
+          "b": 20000
+        }
+      },
+      "sha256": {
+        "A.bin": "25b9f0521989be92dc470f9fe801cccfb8bee8d82910e52e7809a0b62f3ad28d",
+        "B.bin": "4854fed1195280324b7a0d85a1c675c55a47da9146ae52a2243e913a409d92ab",
+        "metadata.json": "8aedc1f63a4f35a26c6c2ac094618ac3331c677062d3235051abb2b4f637b241"
+      }
+    },
+    "gmm32": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-data/gmm32",
+      "metadata": {
+        "chamfer_distances": {
+          "l1": {
+            "ab": null,
+            "ba": null
+          },
+          "l2": {
+            "ab": null,
+            "ba": null
+          }
+        },
+        "num_dimensions": 32,
+        "num_points": {
+          "a": 4000,
+          "b": 20000
+        }
+      },
+      "sha256": {
+        "A.bin": "af5c8bcb310c804b2cfb67b547a3483c5aa040dfe61e2bb07eb9357e286321c6",
+        "B.bin": "d760e47fa466e31e2d1bc1772721b8a73eead6106cee737f44a131d8cb0180c3",
+        "metadata.json": "049aece385af118b02d1c55cd983113239e092ea330ba5e58b4c121fcaeb87e2"
+      }
+    }
+  },
+  "cache_policy": "warm OS cache; cold regenerates weight cache",
+  "warmups": 1,
+  "repeats": 5
+}

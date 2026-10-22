@@ -2,10 +2,13 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <source_location>
 #include <stdexcept>
 #include <vector>
 
-void Check(bool b) { if (!b) throw std::runtime_error("distance regression failed"); }
+void Check(bool b, std::source_location location = std::source_location::current()) {
+    if (!b) throw std::runtime_error("distance regression failed at line " + std::to_string(location.line()));
+}
 void CheckProjectionGrouping() {
     std::mt19937 generator(7);
     std::uniform_real_distribution<float> random(-1,1);
@@ -32,7 +35,28 @@ void CheckProjectionGrouping() {
             single.projection_vectors.assign(config.projection_vectors.begin()+table*dimension,
                                                config.projection_vectors.begin()+(table+1)*dimension);
             const auto separate=qalsh::InMemoryIndex::Build(single,accessor);
-            Check(read(*grouped,table)==read(*separate,0));
+            const auto grouped_values=read(*grouped,table), separate_values=read(*separate,0);
+            // OpenMP SIMD may choose different reduction trees for one and
+            // four simultaneous dot products, especially with -march=native.
+            // Check both against exact float products accumulated in extended
+            // precision, using the standard gamma_(2*n) forward error bound.
+            const long double u=std::numeric_limits<float>::epsilon()/2.0L;
+            const long double gamma=(2*dimension*u)/(1-2*dimension*u);
+            const long double reference_u=std::numeric_limits<long double>::epsilon()/2.0L;
+            const long double reference_gamma=(dimension*reference_u)/(1-dimension*reference_u);
+            for(unsigned point=0;point<points.size();++point){
+                long double reference=0, magnitude=0;
+                for(unsigned coordinate=0;coordinate<dimension;++coordinate){
+                    const long double product=static_cast<long double>(points[point][coordinate])*
+                                              single.projection_vectors[coordinate];
+                    reference+=product;
+                    magnitude+=std::abs(product);
+                }
+                const long double allowed_error=(gamma+reference_gamma)*magnitude/(1-reference_gamma);
+                for(const float value : {grouped_values[point],separate_values[point]}) {
+                    Check(std::isfinite(value) && std::abs(value-reference)<=allowed_error);
+                }
+            }
         }
     }
 }

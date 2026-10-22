@@ -20,6 +20,10 @@
 #include "log.h"
 #include "utils.h"
 
+#ifdef QALSH4C_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace {
 
 constexpr float kMetadataFloatTolerance = 1e-5F;
@@ -103,9 +107,17 @@ void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target tar
     points.Init(target_metadata);
     Point buffer(target_metadata.num_dimensions);
     const qalsh::PointAccessor accessor = [&](qalsh::PointId point_id) -> qalsh::PointView {
-        points.ReadPointInto(point_id, buffer);
+        // Builders call the accessor once per point, in ascending order on
+        // this thread, so preserve the input stream's sequential buffering.
+        if (!points.ReadNextPointInto(buffer)) {
+            Log::error("Failed to read target point {} from {}.", point_id, target_metadata.file_path.string());
+        }
         return buffer;
     };
+    unsigned int build_threads = 1;
+#ifdef QALSH4C_USE_OPENMP
+    build_threads = static_cast<unsigned int>(std::max(1, omp_get_max_threads()));
+#endif
     const qalsh::IndexConfig config{
         .metric = ToMetric(request.norm_order),
         .num_points = expected.num_points,
@@ -119,7 +131,8 @@ void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target tar
                                          .radius_growth = expected.approximation_ratio,
                                          .scan_quantum = Global::kScanSize * 2},
         .seed = expected.seed,
-        .projection_vectors = {}};
+        .projection_vectors = {},
+        .build_threads = build_threads};
     qalsh::PersistentIndex::Build(
         DiskQalsh::IndexPath(request.dataset_directory, request.norm_order, target).string(), config, accessor,
         qalsh::PersistentBuildOptions{.layout = request.layout,

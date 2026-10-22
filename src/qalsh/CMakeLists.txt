@@ -46,6 +46,11 @@ if(BUILD_TESTING)
     target_link_libraries(qalsh_build_test PRIVATE qalsh4c_qalsh)
     add_test(NAME qalsh_build_test COMMAND qalsh_build_test ${CMAKE_CURRENT_BINARY_DIR})
 
+    add_executable(qalsh_query_speed_test tests/query_speed_test.cc)
+    target_link_libraries(qalsh_query_speed_test PRIVATE qalsh4c_qalsh)
+    add_test(NAME qalsh_query_speed_test
+        COMMAND qalsh_query_speed_test ${CMAKE_CURRENT_BINARY_DIR})
+
     add_executable(qalsh_window_clamp_test tests/window_clamp_test.cc)
     target_link_libraries(qalsh_window_clamp_test PRIVATE qalsh4c_qalsh)
     target_include_directories(qalsh_window_clamp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

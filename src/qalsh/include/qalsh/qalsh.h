@@ -81,7 +81,7 @@ struct IndexConfig {
     std::uint32_t seed{42};
     /** Row-major vectors, with exactly num_hash_tables*num_dimensions values. */
     std::vector<Coordinate> projection_vectors;
-    /** Internal sorting workers (1..1024), not persisted. Accessor calls stay serial. */
+    /** Internal projection/sorting workers (1..1024), not persisted. Accessor calls stay serial. */
     std::uint32_t build_threads{1};
 };
 

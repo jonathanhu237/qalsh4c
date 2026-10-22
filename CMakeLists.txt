@@ -83,6 +83,11 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(distance_bounds_test tests/distance_bounds_test.cc src/utils.cc src/global.cc)
+    target_include_directories(distance_bounds_test PRIVATE src)
+    target_link_libraries(distance_bounds_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    add_test(NAME distance_bounds_test COMMAND distance_bounds_test)
+
     add_executable(log_smoke_test tests/log_smoke_test.cc)
     target_include_directories(log_smoke_test PRIVATE src)
     add_test(NAME log_smoke_test COMMAND log_smoke_test)

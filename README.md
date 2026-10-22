@@ -54,6 +54,10 @@ CPU and may not be portable to other machines:
 cmake --workflow --preset release
 ```
 
+The [runtime optimization report](docs/performance/2026-10-22-runtime.md) includes
+paired before/after measurements, raw results, correctness checks, and commands
+for reproducing the experiments on Centaurus.
+
 ## Sample Datasets
 
 The repository includes one committed canonical sample dataset:

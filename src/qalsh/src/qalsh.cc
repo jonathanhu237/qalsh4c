@@ -7,11 +7,14 @@
 #include <thread>
 #include <cerrno>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <fcntl.h>
 #include <filesystem>
 #include <limits>
+#include <mutex>
 #include <numbers>
 #include <random>
 #include <stdexcept>
@@ -493,8 +496,7 @@ void ValidateConfig(const IndexConfig& config) {
     }
 }
 
-// Only internal, non-throwing table sorts run concurrently. Point accessors
-// may reuse one scratch buffer and are always called serially before this phase.
+// Sorting only touches independent, fully populated projection tables.
 template <typename Tables, typename Entries>
 void SortTables(Tables& tables, std::uint32_t requested_threads, Entries entries) {
     const auto sort_one = [&](std::size_t id) {
@@ -599,9 +601,9 @@ void ValidateDistanceOperands(PointView lhs, PointView rhs) {
     }
 }
 
-// Independent tables hide the SIMD accumulation latency without changing a
-// table's reduction order. This is projection arithmetic, not candidate
-// batching: accepted points are still distance-evaluated immediately.
+// Independent tables hide SIMD accumulation latency. The compiler chooses
+// each instantiation's reduction tree. This is projection arithmetic, not
+// candidate batching: accepted points are still evaluated immediately.
 template <unsigned Count>
 void DotGroup(PointView point, const Coordinate* vectors, std::size_t dimensions, float* output) {
     static_assert(Count == 1 || Count == 4);
@@ -632,6 +634,122 @@ void ProjectPoint(PointView point, const Coordinate* vectors, std::size_t dimens
     }
     for (; table < output.size(); ++table) {
         DotGroup<1>(point, vectors + table * dimensions, dimensions, output.data() + table);
+    }
+}
+
+template <typename Tables, typename Entries>
+void BuildProjectionTables(Tables& tables, const IndexConfig& config, const PointAccessor& accessor,
+                            std::span<const Coordinate> vectors, Entries entries) {
+    constexpr std::size_t kPointBatchBytes = 4U * 1024U * 1024U;
+    constexpr std::uint64_t kMinProjectionProductsPerWorker = 256U * 1024U;
+    const std::size_t batch_capacity = std::min<std::size_t>(
+        config.num_points, std::max<std::size_t>(1, kPointBatchBytes /
+                                                      (sizeof(Coordinate) * config.num_dimensions)));
+    const std::uint64_t products_per_point =
+        static_cast<std::uint64_t>(config.num_dimensions) * config.qalsh.num_hash_tables;
+    const std::uint64_t min_points_per_worker =
+        std::max<std::uint64_t>(1, (kMinProjectionProductsPerWorker + products_per_point - 1) /
+                                      products_per_point);
+    const std::size_t worker_count = static_cast<std::size_t>(std::min<std::uint64_t>(
+        {config.build_threads, batch_capacity, config.num_points / min_points_per_worker}));
+
+    for (auto& table : tables) {
+        entries(table).reserve(config.num_points);
+    }
+    if (worker_count <= 1) {
+        std::vector<Projection> projected(config.qalsh.num_hash_tables);
+        for (PointId point_id = 0; point_id < config.num_points; ++point_id) {
+            const PointView point = accessor(point_id);
+            ValidatePoint(point, config.num_dimensions, point_id);
+            ProjectPoint(point, vectors.data(), config.num_dimensions, projected);
+            for (std::uint32_t table_id = 0; table_id < config.qalsh.num_hash_tables; ++table_id) {
+                RequireFinite(projected[table_id], "projection value");
+                entries(tables[table_id]).push_back({.value = projected[table_id], .point_id = point_id});
+            }
+        }
+        return;
+    }
+
+    for (auto& table : tables) {
+        entries(table).resize(config.num_points);
+    }
+    std::vector<Coordinate> points(batch_capacity * config.num_dimensions);
+    std::vector<std::vector<Projection>> projected(
+        worker_count, std::vector<Projection>(config.qalsh.num_hash_tables));
+    std::mutex work_mutex;
+    std::condition_variable_any work_ready;
+    std::condition_variable work_finished;
+    std::size_t generation = 0;
+    std::size_t pending_workers = 0;
+    PointId batch_begin = 0;
+    std::size_t batch_count = 0;
+    std::atomic<bool> failed{false};
+    std::exception_ptr failure;
+
+    const auto project_batch = [&](std::size_t worker_id) {
+        try {
+            const std::size_t begin = batch_count * worker_id / worker_count;
+            const std::size_t end = batch_count * (worker_id + 1) / worker_count;
+            for (std::size_t local_id = begin; local_id < end; ++local_id) {
+                if (failed.load(std::memory_order_relaxed)) break;
+                const PointId point_id = batch_begin + static_cast<PointId>(local_id);
+                const PointView point(points.data() + local_id * config.num_dimensions, config.num_dimensions);
+                ProjectPoint(point, vectors.data(), config.num_dimensions, projected[worker_id]);
+                for (std::uint32_t table_id = 0; table_id < config.qalsh.num_hash_tables; ++table_id) {
+                    RequireFinite(projected[worker_id][table_id], "projection value");
+                    entries(tables[table_id])[point_id] = {
+                        .value = projected[worker_id][table_id], .point_id = point_id};
+                }
+            }
+        } catch (...) {
+            failed.store(true, std::memory_order_relaxed);
+            std::lock_guard lock(work_mutex);
+            if (!failure) failure = std::current_exception();
+        }
+    };
+
+    // Declared after every shared resource so jthread cleanup joins workers
+    // before their state is destroyed, including partial thread-launch failure.
+    std::vector<std::jthread> workers;
+    workers.reserve(worker_count - 1);
+    for (std::size_t worker_id = 1; worker_id < worker_count; ++worker_id) {
+        workers.emplace_back([&, worker_id](std::stop_token stop) {
+            std::size_t observed_generation = 0;
+            for (;;) {
+                std::unique_lock lock(work_mutex);
+                if (!work_ready.wait(lock, stop, [&] { return generation != observed_generation; })) return;
+                observed_generation = generation;
+                lock.unlock();
+                project_batch(worker_id);
+                lock.lock();
+                if (--pending_workers == 0) work_finished.notify_one();
+            }
+        });
+    }
+
+    for (PointId begin = 0; begin < config.num_points;) {
+        const std::size_t count = std::min<std::size_t>(batch_capacity, config.num_points - begin);
+        for (std::size_t local_id = 0; local_id < count; ++local_id) {
+            const PointId point_id = begin + static_cast<PointId>(local_id);
+            const PointView point = accessor(point_id);
+            ValidatePoint(point, config.num_dimensions, point_id);
+            std::copy(point.begin(), point.end(), points.data() + local_id * config.num_dimensions);
+        }
+        {
+            std::lock_guard lock(work_mutex);
+            batch_begin = begin;
+            batch_count = count;
+            pending_workers = workers.size();
+            ++generation;
+        }
+        work_ready.notify_all();
+        project_batch(0);
+        {
+            std::unique_lock lock(work_mutex);
+            work_finished.wait(lock, [&] { return pending_workers == 0; });
+            if (failure) std::rethrow_exception(failure);
+        }
+        begin += static_cast<PointId>(count);
     }
 }
 
@@ -978,22 +1096,8 @@ std::shared_ptr<InMemoryIndex> InMemoryIndex::Build(IndexConfig config, const Po
     index->metadata_ = MetadataFromConfig(config, 0);
     index->projection_vectors_ = MakeProjectionVectors(config);
     index->tables_.resize(config.qalsh.num_hash_tables);
-    for (Table& table : index->tables_) {
-        table.entries.reserve(config.num_points);
-    }
-
-    std::vector<Projection> projected(config.qalsh.num_hash_tables);
-    for (PointId point_id = 0; point_id < config.num_points; ++point_id) {
-        const PointView point = accessor(point_id);
-        ValidatePoint(point, config.num_dimensions, point_id);
-        ProjectPoint(point, index->projection_vectors_.data(), config.num_dimensions, projected);
-        for (std::uint32_t table_id = 0; table_id < config.qalsh.num_hash_tables; ++table_id) {
-            const float projected_value = projected[table_id];
-            RequireFinite(projected_value, "projection value");
-            index->tables_[table_id].entries.push_back(
-                Entry{.value = projected_value, .point_id = point_id});
-        }
-    }
+    BuildProjectionTables(index->tables_, config, accessor, index->projection_vectors_,
+                            [](auto& table) -> auto& { return table.entries; });
     SortTables(index->tables_, config.build_threads, [](auto& table) -> auto& { return table.entries; });
     return index;
 }
@@ -1155,20 +1259,7 @@ void BPlusTreeIndex::Build(const std::string& path, IndexConfig config,
 
     const std::vector<Coordinate> projection_vectors = MakeProjectionVectors(config);
     std::vector<std::vector<DiskEntry>> entries(config.qalsh.num_hash_tables);
-    for (auto& table : entries) {
-        table.reserve(config.num_points);
-    }
-    std::vector<Projection> projected(config.qalsh.num_hash_tables);
-    for (PointId point_id = 0; point_id < config.num_points; ++point_id) {
-        const PointView point = accessor(point_id);
-        ValidatePoint(point, config.num_dimensions, point_id);
-        ProjectPoint(point, projection_vectors.data(), config.num_dimensions, projected);
-        for (std::uint32_t table_id = 0; table_id < config.qalsh.num_hash_tables; ++table_id) {
-            const float projected_value = projected[table_id];
-            RequireFinite(projected_value, "projection value");
-            entries[table_id].push_back(DiskEntry{.value = projected_value, .point_id = point_id});
-        }
-    }
+    BuildProjectionTables(entries, config, accessor, projection_vectors, [](auto& table) -> auto& { return table; });
     SortTables(entries, config.build_threads, [](auto& table) -> auto& { return table; });
 
     const std::size_t leaf_capacity =
@@ -1368,20 +1459,7 @@ void SortedArrayIndex::Build(const std::string& path, IndexConfig config,
 
     const std::vector<Coordinate> projection_vectors = MakeProjectionVectors(config);
     std::vector<std::vector<DiskEntry>> entries(config.qalsh.num_hash_tables);
-    for (auto& table : entries) {
-        table.reserve(config.num_points);
-    }
-    std::vector<Projection> projected(config.qalsh.num_hash_tables);
-    for (PointId point_id = 0; point_id < config.num_points; ++point_id) {
-        const PointView point = accessor(point_id);
-        ValidatePoint(point, config.num_dimensions, point_id);
-        ProjectPoint(point, projection_vectors.data(), config.num_dimensions, projected);
-        for (std::uint32_t table_id = 0; table_id < config.qalsh.num_hash_tables; ++table_id) {
-            const float projected_value = projected[table_id];
-            RequireFinite(projected_value, "projection value");
-            entries[table_id].push_back(DiskEntry{.value = projected_value, .point_id = point_id});
-        }
-    }
+    BuildProjectionTables(entries, config, accessor, projection_vectors, [](auto& table) -> auto& { return table; });
     SortTables(entries, config.build_threads, [](auto& table) -> auto& { return table; });
 
     const std::uint64_t total_entries = CheckedMultiplyOrThrow(
@@ -2056,13 +2134,18 @@ void BPlusTreeIndex::reset_cursor(Cursor& base_cursor, std::uint32_t table_id,
         Require(header.kind == kInternalPage && header.count >= 2,
                 "QALSH tree contains an invalid internal node");
         std::uint32_t child_index = 0;
+        std::uint32_t separator_end = header.count - 1U;
         // Separators are the first key of each child.  Select the first child
         // whose key range can contain the lower bound; using a strict
         // comparison keeps equal projection values in the leftmost child so
         // the outward cursor order matches the array backend.
-        while (child_index + 1U < header.count &&
-               query_value > ReadSeparator(page_view, header, child_index)) {
-            ++child_index;
+        while (child_index < separator_end) {
+            const auto middle = child_index + (separator_end - child_index) / 2U;
+            if (ReadSeparator(page_view, header, middle) < query_value) {
+                child_index = middle + 1U;
+            } else {
+                separator_end = middle;
+            }
         }
         current_page = ReadChild(page_view, header, child_index);
         Require(current_page > 0 && current_page < page_count_,

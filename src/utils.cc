@@ -15,6 +15,78 @@
 #include "global.h"
 #include "log.h"
 
+namespace {
+
+constexpr size_t kDistanceBlockSize = 16;
+
+template <bool Squared>
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("fp-contract=off")))
+#endif
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((always_inline))
+#endif
+inline float AccumulateScalar(const Coordinate* lhs, const Coordinate* rhs, size_t dimensions, float bound) {
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
+    float sum = 0.0F;
+#if defined(__clang__)
+#pragma clang loop unroll(disable)
+#elif defined(__GNUC__)
+#pragma GCC unroll 1
+#endif
+    for (size_t i = 0; i < dimensions; ++i) {
+        const float difference = lhs[i] - rhs[i];
+        if constexpr (Squared) {
+            sum += difference * difference;
+        } else {
+            sum += std::abs(difference);
+        }
+        if (sum > bound) {
+            return std::numeric_limits<float>::infinity();
+        }
+    }
+    return sum;
+}
+
+// Distances only accumulate nonnegative terms. Checking a small block at a
+// time removes a branch per coordinate without changing the addition order.
+// Keep the scalar fallback for NaNs: an earlier term might already have
+// crossed the bound before a later NaN entered the same block.
+template <bool Squared>
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("fp-contract=off")))
+#endif
+float AccumulateBounded(const Coordinate* lhs, const Coordinate* rhs, size_t dimensions, float bound) {
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
+    float sum = 0.0F;
+    for (size_t begin = 0; begin < dimensions; begin += kDistanceBlockSize) {
+        const size_t end = std::min(begin + kDistanceBlockSize, dimensions);
+        // Preserve separately rounded float products and ordered additions,
+        // including when the compiler vectorizes products or unrolls tails.
+        for (size_t i = begin; i < end; ++i) {
+            const float difference = lhs[i] - rhs[i];
+            if constexpr (Squared) {
+                sum += difference * difference;
+            } else {
+                sum += std::abs(difference);
+            }
+        }
+        if (sum > bound) {
+            return std::numeric_limits<float>::infinity();
+        }
+        if (std::isnan(sum)) {
+            return AccumulateScalar<Squared>(lhs, rhs, dimensions, bound);
+        }
+    }
+    return sum;
+}
+
+}  // namespace
+
 Distance Calc::LpDistance(const Point &pt1, const Point &pt2, float norm_order) {
     Eigen::Map<const Eigen::VectorXf> v1(pt1.data(), static_cast<Eigen::Index>(pt1.size()));
     Eigen::Map<const Eigen::VectorXf> v2(pt2.data(), static_cast<Eigen::Index>(pt2.size()));
@@ -30,13 +102,35 @@ Distance Calc::LpDistance(const Point &pt1, const Point &pt2, float norm_order) 
     return 0.0F;
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("fp-contract=off")))
+#endif
 Distance Calc::LpDistanceBounded(const Point &pt1, const Point &pt2, float norm_order, Distance upper_bound) {
     if (std::isinf(upper_bound)) {
         return LpDistance(pt1, pt2, norm_order);
     }
+    // Keep the short-vector path in this entry point: forwarding each tiny
+    // distance through another out-of-line function costs more than its math.
+    if (pt1.size() <= kDistanceBlockSize) {
+        if (upper_bound < 0.0F) {
+            return std::numeric_limits<float>::infinity();
+        }
+        if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+            return AccumulateScalar<false>(pt1.data(), pt2.data(), pt1.size(), upper_bound);
+        }
+        if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
+            return std::sqrt(AccumulateScalar<true>(pt1.data(), pt2.data(), pt1.size(),
+                                                   upper_bound * upper_bound));
+        }
+    }
     return LpDistanceBoundedRaw(pt1.data(), pt2.data(), pt1.size(), norm_order, upper_bound);
 }
 
+// The original bounded loop rounds the square before adding it on the
+// supported GCC build. Keep that behavior when loops are inlined/unrolled.
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("fp-contract=off")))
+#endif
 Distance Calc::LpDistanceBoundedRaw(const Coordinate* pt1, const Coordinate* pt2, size_t num_dimensions,
                                     float norm_order, Distance upper_bound) {
     if (upper_bound < 0.0F) {
@@ -44,27 +138,20 @@ Distance Calc::LpDistanceBoundedRaw(const Coordinate* pt1, const Coordinate* pt2
     }
 
     if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
-        Distance sum = 0.0F;
-        for (size_t i = 0; i < num_dimensions; ++i) {
-            sum += std::abs(pt1[i] - pt2[i]);
-            if (sum > upper_bound) {
-                return std::numeric_limits<float>::infinity();
-            }
+        // Short vectors benefit from the original early bound checks and
+        // avoid the extra call/loop overhead of block accumulation.
+        if (num_dimensions <= kDistanceBlockSize) {
+            return AccumulateScalar<false>(pt1, pt2, num_dimensions, upper_bound);
         }
-        return sum;
+        return AccumulateBounded<false>(pt1, pt2, num_dimensions, upper_bound);
     }
 
     // NOLINTNEXTLINE(readability-magic-numbers)
     if (std::abs(norm_order - 2.0F) < Global::kEpsilon) {
         const float upper_bound_sq = upper_bound * upper_bound;
-        float sum_sq = 0.0;
-        for (size_t i = 0; i < num_dimensions; ++i) {
-            const float diff = pt1[i] - pt2[i];
-            sum_sq += diff * diff;
-            if (sum_sq > upper_bound_sq) {
-                return std::numeric_limits<float>::infinity();
-            }
-        }
+        const float sum_sq = num_dimensions <= kDistanceBlockSize
+                                 ? AccumulateScalar<true>(pt1, pt2, num_dimensions, upper_bound_sq)
+                                 : AccumulateBounded<true>(pt1, pt2, num_dimensions, upper_bound_sq);
         return std::sqrt(sum_sq);
     }
 
