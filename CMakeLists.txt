@@ -52,6 +52,8 @@ endif()
 
 find_package(OpenMP COMPONENTS CXX)
 
+add_subdirectory(src/qalsh)
+
 add_executable(qalsh4c 
     src/ann_searcher.cc
     src/command.cc
@@ -72,6 +74,7 @@ target_link_libraries(qalsh4c PRIVATE
     CLI11::CLI11
     Eigen3::Eigen
     nlohmann_json::nlohmann_json
+    qalsh4c_qalsh
 )
 
 if(OpenMP_CXX_FOUND)
@@ -95,7 +98,7 @@ if(BUILD_TESTING)
         src/utils.cc
     )
     target_include_directories(ann_searcher_clone_test PRIVATE src)
-    target_link_libraries(ann_searcher_clone_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    target_link_libraries(ann_searcher_clone_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json qalsh4c_qalsh)
     add_test(NAME ann_searcher_clone_test COMMAND ann_searcher_clone_test)
 
     add_executable(
@@ -111,7 +114,7 @@ if(BUILD_TESTING)
         src/weights_generator.cc
     )
     target_include_directories(disk_linear_scan_test PRIVATE src)
-    target_link_libraries(disk_linear_scan_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    target_link_libraries(disk_linear_scan_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json qalsh4c_qalsh)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(disk_linear_scan_test PRIVATE OpenMP::OpenMP_CXX)
         target_compile_definitions(disk_linear_scan_test PRIVATE QALSH4C_USE_OPENMP)
@@ -130,7 +133,7 @@ if(BUILD_TESTING)
         src/weights_generator.cc
     )
     target_include_directories(quadtree_weights_generator_test PRIVATE src)
-    target_link_libraries(quadtree_weights_generator_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    target_link_libraries(quadtree_weights_generator_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json qalsh4c_qalsh)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(quadtree_weights_generator_test PRIVATE OpenMP::OpenMP_CXX)
         target_compile_definitions(quadtree_weights_generator_test PRIVATE QALSH4C_USE_OPENMP)

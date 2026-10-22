@@ -74,6 +74,7 @@ int main(int argc, char** argv) {
     unsigned int qalsh_index_seed{Global::kDefaultSeed};
     float qalsh_index_approximation_ratio{Global::kDefaultApproximationRatio};
     bool qalsh_index_overwrite{false};
+    std::string qalsh_index_layout{"b-plus-tree"};
     qalsh_index->add_option("-p,--norm-order", qalsh_index_norm_order, "Norm order")
         ->required()
         ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
@@ -88,6 +89,11 @@ int main(int argc, char** argv) {
         ->add_option("-c,--approximation-ratio", qalsh_index_approximation_ratio,
                      "Approximation ratio to store in the disk QALSH index")
         ->default_val(Global::kDefaultApproximationRatio);
+    qalsh_index
+        ->add_option("--layout,--index-layout", qalsh_index_layout,
+                     "Persistent index layout: b-plus-tree or sorted-array")
+        ->default_val("b-plus-tree")
+        ->check(CLI::IsMember({"b-plus-tree", "sorted-array"}));
     qalsh_index->add_flag("--overwrite", qalsh_index_overwrite, "Overwrite an existing selected target index");
     qalsh_index->callback([&]() {
         command = std::make_unique<QalshIndexCommand>(
@@ -96,7 +102,8 @@ int main(int argc, char** argv) {
                                     .target_selection = DiskQalsh::ParseTargetSelection(qalsh_index_target),
                                     .seed = qalsh_index_seed,
                                     .approximation_ratio = qalsh_index_approximation_ratio,
-                                    .overwrite = qalsh_index_overwrite});
+                                    .overwrite = qalsh_index_overwrite,
+                                    .layout = DiskQalsh::ParseIndexLayout(qalsh_index_layout)});
     });
 
     // ------------------------------
@@ -136,16 +143,16 @@ int main(int argc, char** argv) {
     DiskQalshSearchOptions disk_qalsh_options;
     estimate
         ->add_option("--disk-qalsh-table-block-size", disk_qalsh_options.table_block_size,
-                     "Byte size used for disk QALSH tables.bin locality accounting")
+                     "Legacy flat-table block size (ignored by the library persistent backend)")
         ->default_val(Global::kDefaultDiskQalshTableBlockSize)
         ->check(CLI::PositiveNumber);
     estimate
         ->add_option("--disk-qalsh-table-cache-blocks", disk_qalsh_options.table_cache_blocks,
-                     "Maximum logical tables.bin blocks tracked per disk QALSH searcher profile")
+                     "Legacy flat-table cache capacity (ignored by the library persistent backend)")
         ->default_val(Global::kDefaultDiskQalshTableCacheBlocks)
         ->check(CLI::PositiveNumber);
     estimate->add_flag("--disk-qalsh-profile", disk_qalsh_options.profile,
-                       "Print disk QALSH table-cache profile counters")
+                       "Print disk QALSH profile; legacy flat-table cache counters are reported as unsupported")
         ->default_val(false)
         ->default_str(disk_qalsh_options.profile ? "True" : "False");
 

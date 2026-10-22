@@ -17,8 +17,9 @@ if(NOT generate_result EQUAL 0)
     message(FATAL_ERROR "initial dataset generate failed\n${generate_stdout}\n${generate_stderr}")
 endif()
 
-file(MAKE_DIRECTORY "${dataset_dir}/index/l2/B")
-file(WRITE "${dataset_dir}/index/l2/B/config.json" "{}")
+file(MAKE_DIRECTORY "${dataset_dir}/index/qalsh/l2/b")
+file(WRITE "${dataset_dir}/index/qalsh/l2/b/meta.json" "{}")
+file(WRITE "${dataset_dir}/index/qalsh/l2/b/index.qalsh" "")
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" dataset generate gmm

@@ -15,6 +15,12 @@ Pinned header-only copies of CLI11, Eigen, and nlohmann-json are vendored under
 dependencies. OpenMP is optional and enabled automatically when CMake can find a
 compatible local runtime.
 
+QALSH is maintained as an internal module in [`src/qalsh`](src/qalsh/README.md).
+No separate qalsh-lib checkout or installed QALSH package is required. Edit and
+commit QALSH search/index changes together with the QALSH4C consumers in this
+repository. The module's regression tests run with the normal CTest suite when
+`BUILD_TESTING=ON`; it has no separate installation or release process.
+
 CUDA ground-truth acceleration is optional. `QALSH4C_ENABLE_CUDA` accepts
 `AUTO`, `ON`, or `OFF` and defaults to `AUTO`; `AUTO` builds CUDA support when a
 CUDA compiler is available and otherwise builds a CPU-only binary. Use `ON` to
@@ -192,12 +198,17 @@ the query batch size with `--disk-query-batch-size`:
 Disk-based QALSH requires an explicit target-side index. The default target is
 `b`, matching the default `--direction ab`; use `--target a` for `ba`, or
 `--target both` before bidirectional estimates. Indexes are written under
-`<dataset>/index/qalsh/<l1|l2>/<a|b>/` as `meta.json`, `dot_vectors.bin`, and
-`tables.bin`. Existing matching indexes are reused; pass `--overwrite` to
-rebuild a selected target index.
+`<dataset>/index/qalsh/<l1|l2>/<a|b>/` as a sidecar `meta.json` plus the
+internal module’s immutable `index.qalsh` persistent file. The default layout is a
+B+ tree; pass `--layout sorted-array` to choose the persistent sorted-array
+layout. The file stores the actual projection vectors and layout metadata, so
+query processes do not regenerate projections. Existing matching indexes are
+reused; pass `--overwrite` to rebuild a selected target index. Historical flat
+`dot_vectors.bin`/`tables.bin` indexes must be rebuilt.
 
 ```bash
 ./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist
+./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist --layout sorted-array --overwrite
 ./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist --target both --seed 42 --overwrite
 ./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab ann qalsh
 ./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab sampling --use-cache -n 100 qalsh
@@ -208,16 +219,14 @@ linear scan when an index is missing or mismatched. If `-c/--approximation-ratio
 is omitted, disk QALSH uses the value stored in `meta.json`; if it is provided,
 it must match the index metadata.
 
-Disk QALSH memory-maps `tables.bin` read-only and shares the mapping across
-searcher clones. This preserves the index file format while avoiding one
-`pread` and user-space block copy per table block during ANN search. The table
-locality profile uses `--disk-qalsh-table-block-size` (bytes per logical table
-block, default 65536) and `--disk-qalsh-table-cache-blocks` (logical blocks
-tracked per searcher profile, default 64).
-These options do not change candidate point reads; candidate vectors are still
-read as individual point records from the target point file. Pass
-`--disk-qalsh-profile` to print aggregate query, table block, cache hit/miss,
-candidate read, and search-time counters for disk QALSH ANN or disk QALSH
-sampling weight generation.
+Disk QALSH opens the recorded index layout read-only and uses the shared
+search engine for both B+ tree pages and sorted-array regions. The internal QALSH module owns
+the persistent format and shares immutable metadata across searcher clones;
+candidate vectors remain caller-owned and are read by point ID. The legacy `--disk-qalsh-table-block-size` and
+`--disk-qalsh-table-cache-blocks` options remain accepted for workflow
+compatibility, but traversal behavior is controlled by the index's stored
+layout and page/region size. Pass `--disk-qalsh-profile` to print query,
+logical projection-hit, candidate-read, and search-time counters; software
+traversal counters are reported separately from physical I/O.
 
 The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.

@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#include <qalsh/qalsh.h>
+
 #include "config.h"
 #include "point_set.h"
 
@@ -22,13 +24,6 @@ enum class TargetSelection {
     kBoth,
 };
 
-struct DiskQalshEntry {
-    float projection{0.0F};
-    std::uint32_t point_id{0};
-};
-
-static_assert(sizeof(DiskQalshEntry) == 8);
-
 struct IndexMetadata {
     float approximation_ratio{0.0F};
     unsigned int seed{0};
@@ -37,6 +32,7 @@ struct IndexMetadata {
     unsigned int num_hash_tables{0};
     unsigned int collision_threshold{0};
     float bucket_width{0.0F};
+    qalsh::IndexLayout layout{qalsh::IndexLayout::b_plus_tree};
 
     [[nodiscard]] QalshConfig ToConfig() const;
 };
@@ -48,15 +44,22 @@ struct BuildRequest {
     unsigned int seed{0};
     float approximation_ratio{0.0F};
     bool overwrite{false};
+    qalsh::IndexLayout layout{qalsh::IndexLayout::b_plus_tree};
 };
 
 [[nodiscard]] std::string NormDirectoryName(float norm_order);
 [[nodiscard]] std::string TargetDirectoryName(Target target);
 [[nodiscard]] TargetSelection ParseTargetSelection(std::string_view value);
+[[nodiscard]] qalsh::IndexLayout ParseIndexLayout(std::string_view value);
+[[nodiscard]] const char* IndexLayoutName(qalsh::IndexLayout layout) noexcept;
 [[nodiscard]] Target ParseTargetFromPointSetPath(const std::filesystem::path& file_path);
 [[nodiscard]] std::filesystem::path IndexDirectory(const std::filesystem::path& dataset_directory, float norm_order,
                                                    Target target);
+[[nodiscard]] std::filesystem::path IndexPath(const std::filesystem::path& dataset_directory, float norm_order,
+                                              Target target);
 [[nodiscard]] std::filesystem::path MetadataPath(const std::filesystem::path& index_directory);
+// Kept as a named compatibility helper for migration tooling. The library
+// format stores vectors in the index file rather than in a flat sidecar.
 [[nodiscard]] std::filesystem::path DotVectorsPath(const std::filesystem::path& index_directory);
 [[nodiscard]] std::filesystem::path TablesPath(const std::filesystem::path& index_directory);
 [[nodiscard]] PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_directory,
@@ -65,9 +68,14 @@ struct BuildRequest {
 [[nodiscard]] IndexMetadata ReadMetadata(const std::filesystem::path& index_directory);
 void WriteMetadata(const std::filesystem::path& index_directory, const IndexMetadata& metadata);
 [[nodiscard]] IndexMetadata ExpectedMetadata(const PointSetMetadata& target_metadata, float norm_order,
-                                             float approximation_ratio, unsigned int seed);
+                                             float approximation_ratio, unsigned int seed,
+                                             qalsh::IndexLayout layout = qalsh::IndexLayout::b_plus_tree);
 [[nodiscard]] IndexMetadata ValidateIndex(const PointSetMetadata& target_metadata, float norm_order,
-                                          std::optional<float> expected_approximation_ratio = std::nullopt);
+                                          std::optional<float> expected_approximation_ratio = std::nullopt,
+                                          bool validate_structure = true);
+void ValidateLibraryMetadata(const qalsh::IndexMetadata& library_metadata,
+                             const IndexMetadata& metadata, float norm_order,
+                             const std::filesystem::path& index_directory);
 
 void BuildIndexes(const BuildRequest& request);
 
