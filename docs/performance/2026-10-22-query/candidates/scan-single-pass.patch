@@ -1,0 +1,60 @@
+--- a/src/qalsh/src/qalsh.cc
++++ b/src/qalsh/src/qalsh.cc
+@@ -1187,38 +1187,38 @@
+     // reset_cursor partitions at lower_bound; the left position only decreases
+     // and the right position only increases. The scans cannot meet or overlap.
+ 
++    // Each side is contiguous: a clamped prefix blocks that side, while a
++    // full range consumes its limit or reaches the table end in one pass.
+     auto scan_left = [&]() {
+-        std::size_t scanned = 0;
+-        while (scanned < left_limit && cursor->left != MemoryCursor::kNoIndex &&
+-               !cursor->left_blocked) {
++        if (left_limit != 0 && cursor->left != MemoryCursor::kNoIndex &&
++            !cursor->left_blocked) {
+             const std::size_t index = cursor->left;
+-            const auto available = std::min(left_limit - scanned, index + 1);
++            const auto available = std::min(left_limit, index + 1);
+             detail::HitRange range{entry_bytes.data() + index * sizeof(Entry),
+                                    available, true, cursor->table_id, cursor->query_value};
+             window_detail::ClampToWindow(range, bound);
+-            cursor->left_blocked = range.count < available;
+-            if (range.count != 0) visitor(range);
+-            entries_visited += range.count;
+-            scanned += range.count;
+-            cursor->left = range.count == index + 1 ? MemoryCursor::kNoIndex : index - range.count;
++            const std::size_t consumed = range.count;
++            cursor->left_blocked = consumed < available;
++            if (consumed != 0) visitor(range);
++            entries_visited += consumed;
++            cursor->left = consumed == index + 1 ? MemoryCursor::kNoIndex : index - consumed;
+         }
+     };
+ 
+     auto scan_right = [&]() {
+-        std::size_t scanned = 0;
+-        while (scanned < right_limit && cursor->right != MemoryCursor::kNoIndex &&
+-               !cursor->right_blocked) {
++        if (right_limit != 0 && cursor->right != MemoryCursor::kNoIndex &&
++            !cursor->right_blocked) {
+             const std::size_t index = cursor->right;
+-            const auto available = std::min(right_limit - scanned, entries.size() - index);
++            const auto available = std::min(right_limit, entries.size() - index);
+             detail::HitRange range{entry_bytes.data() + index * sizeof(Entry),
+                                    available, false, cursor->table_id, cursor->query_value};
+             window_detail::ClampToWindow(range, bound);
+-            cursor->right_blocked = range.count < available;
+-            if (range.count != 0) visitor(range);
+-            entries_visited += range.count;
+-            scanned += range.count;
+-            cursor->right = index + range.count == entries.size()
+-                                ? MemoryCursor::kNoIndex : index + range.count;
++            const std::size_t consumed = range.count;
++            cursor->right_blocked = consumed < available;
++            if (consumed != 0) visitor(range);
++            entries_visited += consumed;
++            cursor->right = index + consumed == entries.size()
++                                ? MemoryCursor::kNoIndex : index + consumed;
+         }
+     };
+ 

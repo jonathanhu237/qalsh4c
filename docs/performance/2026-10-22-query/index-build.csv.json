@@ -1,0 +1,162 @@
+{
+  "status": "complete",
+  "started_utc": "2026-10-22T15:04:59.006503+00:00",
+  "host": {
+    "system": "Linux",
+    "node": "centaurus",
+    "release": "7.0.0-31-generic",
+    "version": "#31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026",
+    "machine": "x86_64",
+    "processor": ""
+  },
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "source": {
+    "path": "/home/jonathanhu237/code/qalsh4c/scripts/benchmark_index_build.cc",
+    "sha256": "0fbd1f8f25c537728b87cf0d9207a398d5be8bf9eaa49447f34387d2ee72b760"
+  },
+  "warmups": 1,
+  "repeats": 3,
+  "variants": {
+    "before": {
+      "library": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-after/src/qalsh/libqalsh4c_qalsh.a",
+        "sha256": "d45d63a0dcc7f53630eb6e34520ec4240e34cbe5b0ab470dbc52010ec69f8aef"
+      },
+      "header": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-round2/baseline-include/qalsh/qalsh.h",
+        "sha256": "7ec673744d11e534fae21f5b10b85245b35d44cfe012d5c589fb6afd4ffc5d73"
+      },
+      "compile_command": [
+        "c++",
+        "-std=c++20",
+        "-pthread",
+        "-O3",
+        "-DNDEBUG",
+        "-march=native",
+        "-g",
+        "-I",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-round2/baseline-include",
+        "/home/jonathanhu237/code/qalsh4c/scripts/benchmark_index_build.cc",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-after/src/qalsh/libqalsh4c_qalsh.a",
+        "-o",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-round2/index-probe/index-build-before"
+      ],
+      "binary": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-round2/index-probe/index-build-before",
+        "sha256": "71dda5275c6f03eb86fa404300ad5ad7ca3fa4b585c3168be08e52d08efbe5d3"
+      }
+    },
+    "after": {
+      "library": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-round2/soa-memory/src/qalsh/libqalsh4c_qalsh.a",
+        "sha256": "914a05a487677624c3d86debea37c89b82ae408144e3fcaf79efc1c92e2ac4c3"
+      },
+      "header": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-round2/baseline-source/src/qalsh/include/qalsh/qalsh.h",
+        "sha256": "de4320b4c163e2fd2a8f62518c19479e36b5b038f63437a042676bbf8c821197"
+      },
+      "compile_command": [
+        "c++",
+        "-std=c++20",
+        "-pthread",
+        "-O3",
+        "-DNDEBUG",
+        "-march=native",
+        "-g",
+        "-I",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-round2/baseline-source/src/qalsh/include",
+        "/home/jonathanhu237/code/qalsh4c/scripts/benchmark_index_build.cc",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-round2/soa-memory/src/qalsh/libqalsh4c_qalsh.a",
+        "-o",
+        "/home/jonathanhu237/code/qalsh4c/build/perf-round2/index-probe/index-build-after"
+      ],
+      "binary": {
+        "path": "/home/jonathanhu237/code/qalsh4c/build/perf-round2/index-probe/index-build-after",
+        "sha256": "f260ffd4ac88ca48cb23d054bab5ec6107f20366c72252ab893d2f21f5d134af"
+      }
+    }
+  },
+  "inputs": {
+    "gmm128": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-data/gmm128",
+      "metadata": {
+        "chamfer_distances": {
+          "l1": {
+            "ab": null,
+            "ba": null
+          },
+          "l2": {
+            "ab": null,
+            "ba": null
+          }
+        },
+        "num_dimensions": 128,
+        "num_points": {
+          "a": 4000,
+          "b": 20000
+        }
+      },
+      "sha256": {
+        "B.bin": "ac4ee4169b3ef103bfb1c9124c426a8bf3dca984eb4a3179c352ada1d7c6afdc",
+        "metadata.json": "c577c7c6a27534f2910c7e6abb1e668f4dfa897cd9358bba8f8e1899a2bb6482"
+      }
+    },
+    "mnist784": {
+      "path": "/home/jonathanhu237/code/qalsh4c/build/perf-data/mnist784",
+      "metadata": {
+        "num_dimensions": 784,
+        "num_points": {
+          "a": 3000,
+          "b": 66900
+        },
+        "chamfer_distances": {
+          "l1": {
+            "ab": null,
+            "ba": null
+          },
+          "l2": {
+            "ab": null,
+            "ba": null
+          }
+        }
+      },
+      "sha256": {
+        "B.bin": "308ba44a95d97bd5941286f41f9f530860f020b1fe2b6617e2cf2f9ca1750c97",
+        "metadata.json": "e12e407d5a17d298e501b4e65d6a75292ffd10c0404c63716b6dc3e777325505"
+      }
+    }
+  },
+  "measurement": "one Build per process; input preloaded; smaps_rollup Rss; getrusage ru_maxrss; no trim",
+  "parameters": "DeriveQalshParameters(metric, B count, approximation_ratio=2); default budget/error",
+  "environment": {
+    "OMP_PROC_BIND": "false",
+    "OMP_DYNAMIC": "false"
+  },
+  "compiler_version": "c++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "finished_utc": "2026-10-22T15:05:21.968581+00:00"
+}

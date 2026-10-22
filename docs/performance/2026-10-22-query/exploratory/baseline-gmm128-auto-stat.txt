@@ -1,0 +1,15 @@
+# started on Thu Oct 22 13:29:24 2026
+
+
+ Performance counter stats for 'env OMP_PROC_BIND=false build/perf-after/qalsh4c -T 1 --use-fixed-seed estimate -p 2 -d build/perf-data/gmm128 --direction ab sampling qalsh -c 2':
+
+       12408639089      cycles
+       46127219458      instructions
+       12042823433      branches
+          51681121      branch-misses
+         598113457      cache-misses
+
+       2.576193021 seconds time elapsed
+
+       2.562744000 seconds user
+       0.012993000 seconds sys

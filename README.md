@@ -57,6 +57,8 @@ cmake --workflow --preset release
 The [runtime optimization report](docs/performance/2026-10-22-runtime.md) includes
 paired before/after measurements, raw results, correctness checks, and commands
 for reproducing the experiments on Centaurus.
+The [follow-up query experiments](docs/performance/2026-10-22-query.md) document
+additional candidates, their measured regressions, and why none were retained.
 
 ## Sample Datasets
 

@@ -51,6 +51,10 @@ if(BUILD_TESTING)
     add_test(NAME qalsh_query_speed_test
         COMMAND qalsh_query_speed_test ${CMAKE_CURRENT_BINARY_DIR})
 
+    add_executable(qalsh_collision_counter_test tests/collision_counter_test.cc)
+    target_link_libraries(qalsh_collision_counter_test PRIVATE qalsh4c_qalsh)
+    add_test(NAME qalsh_collision_counter_test COMMAND qalsh_collision_counter_test)
+
     add_executable(qalsh_window_clamp_test tests/window_clamp_test.cc)
     target_link_libraries(qalsh_window_clamp_test PRIVATE qalsh4c_qalsh)
     target_include_directories(qalsh_window_clamp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -1,0 +1,136 @@
+--- a/src/qalsh/include/qalsh/qalsh.h
++++ b/src/qalsh/include/qalsh/qalsh.h
+@@ -26,6 +26,7 @@
+ struct HitRange;
+ struct RangeExecution;
+ template <typename Strategy> void DeliverRange(RangeExecution&, const HitRange&);
++template <bool Reverse, bool Separate> void DeliverBuiltinRange(RangeExecution&, const HitRange&);
+ }
+ 
+ /** The first-version distance kernels supported by the projection index. */
+@@ -513,6 +514,8 @@
+    private:
+     template <typename Strategy>
+     friend void detail::DeliverRange(detail::RangeExecution&, const detail::HitRange&);
++    template <bool Reverse, bool Separate>
++    friend void detail::DeliverBuiltinRange(detail::RangeExecution&, const detail::HitRange&);
+ 
+     template <bool CustomRule>
+     HitDecision accept_hit(const ProjectionHit& hit) {
+@@ -668,34 +671,64 @@
+     }
+ }
+ 
++template <bool Reverse, bool Separate, typename Visitor>
++#if defined(__GNUC__) || defined(__clang__)
++[[gnu::always_inline]]
++#endif
++inline void ForEachHitIdTraversal(const HitRange& range, Visitor&& visitor) {
++    static_assert(sizeof(Projection) == 4 && sizeof(PointId) == 4);
++    const auto* first = range.first;
++    const auto* point_ids = range.point_ids;
++    const auto count = range.count;
++    for (std::size_t i = 0; i < count; ++i) {
++        PointId id;
++        if constexpr (Separate) {
++            id = *(Reverse ? point_ids - i : point_ids + i);
++        } else {
++            const auto* bytes = Reverse ? first - i * 8U : first + i * 8U;
++            std::memcpy(&id, bytes + sizeof(Projection), sizeof(id));
++        }
++        visitor(id, i);
++    }
++}
++
+ template <typename Visitor>
+ #if defined(__GNUC__) || defined(__clang__)
+ [[gnu::always_inline]]
+ #endif
+ inline void ForEachHitId(const HitRange& range, Visitor&& visitor) {
+-    static_assert(sizeof(Projection) == 4 && sizeof(PointId) == 4);
+-    const auto* first = range.first;
+-    const auto* point_ids = range.point_ids;
+-    const auto count = range.count;
+-    const auto deliver = [&]<bool Reverse, bool Separate>() {
+-        for (std::size_t i = 0; i < count; ++i) {
+-            PointId id;
+-            if constexpr (Separate) {
+-                id = *(Reverse ? point_ids - i : point_ids + i);
+-            } else {
+-                const auto* bytes = Reverse ? first - i * 8U : first + i * 8U;
+-                std::memcpy(&id, bytes + sizeof(Projection), sizeof(id));
+-            }
+-            visitor(id, i);
+-        }
+-    };
+-    if (point_ids != nullptr) {
+-        if (range.reverse) deliver.template operator()<true, true>();
+-        else deliver.template operator()<false, true>();
++    if (range.point_ids != nullptr) {
++        if (range.reverse) ForEachHitIdTraversal<true, true>(range, visitor);
++        else ForEachHitIdTraversal<false, true>(range, visitor);
+     } else {
+-        if (range.reverse) deliver.template operator()<true, false>();
+-        else deliver.template operator()<false, false>();
+-    }
++        if (range.reverse) ForEachHitIdTraversal<true, false>(range, visitor);
++        else ForEachHitIdTraversal<false, false>(range, visitor);
++    }
++}
++
++// Keep each built-in traversal outside the general callback dispatcher. This
++// prevents its four layouts from expanding one function around the hot loop.
++template <bool Reverse, bool Separate>
++#if defined(__GNUC__) || defined(__clang__)
++[[gnu::noinline]]
++#endif
++void DeliverBuiltinRange(RangeExecution& execution, const HitRange& range) {
++    auto& strategy = *static_cast<DefaultQalshStrategy*>(execution.strategy);
++    auto state = execution.state.projection_hits;
++    // Within a range, only an evaluation callback can request a stop.
++    bool accepting = !strategy.finish_requested_;
++    ForEachHitIdTraversal<Reverse, Separate>(range, [&](PointId point_id, std::size_t position) {
++        if (!accepting) return;
++        const HitDecision decision = strategy.accept_builtin_id(point_id);
++        if (decision.has_candidate()) {
++            execution.state.projection_hits = state + position + 1;
++            execution.evaluate(execution, decision.candidate);
++            accepting = !strategy.finish_requested_;
++        }
++    });
++    // A callback may stop acceptance, but cursor and hit accounting still
++    // consume the complete range supplied by the index.
++    execution.state.projection_hits = state + range.count;
+ }
+ 
+ template <typename Strategy>
+@@ -728,22 +761,13 @@
+         if (strategy.candidate_rule_) {
+             run([&](const ProjectionHit& hit, const auto&) { return strategy.template accept_hit<true>(hit); });
+         } else {
+-            // A built-in strategy can only change finish_requested_ while an
+-            // evaluation callback is running.  Hoist that member read out of
+-            // the per-hit callback while retaining full range consumption so
+-            // projection hit accounting and cursor boundaries stay intact.
+-            auto state = execution.state.projection_hits;
+-            bool accepting = !strategy.finish_requested_;
+-            ForEachHitId(range, [&](PointId point_id, std::size_t position) {
+-                if (!accepting) return;
+-                const HitDecision decision = strategy.accept_builtin_id(point_id);
+-                if (decision.has_candidate()) {
+-                    execution.state.projection_hits = state + position + 1;
+-                    execution.evaluate(execution, decision.candidate);
+-                    accepting = !strategy.finish_requested_;
+-                }
+-            });
+-            execution.state.projection_hits = state + range.count;
++            if (range.point_ids != nullptr) {
++                if (range.reverse) DeliverBuiltinRange<true, true>(execution, range);
++                else DeliverBuiltinRange<false, true>(execution, range);
++            } else {
++                if (range.reverse) DeliverBuiltinRange<true, false>(execution, range);
++                else DeliverBuiltinRange<false, false>(execution, range);
++            }
+         }
+     } else {
+         run([&](const ProjectionHit& hit, const QuerySnapshot& state) { return strategy.on_projection_hit(hit, state); });

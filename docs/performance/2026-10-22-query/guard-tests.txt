@@ -1,0 +1,2 @@
+PASS: foreground CPU-bound child is excluded from external CPU accounting.
+PASS: sustained sibling CPU work rejects the experiment with status 75.

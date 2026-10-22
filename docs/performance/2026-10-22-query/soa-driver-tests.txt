@@ -1,0 +1,77 @@
+Test project /home/jonathanhu237/code/qalsh4c/build/perf-round2/current
+      Start 18: qalsh4c_disk_qalsh
+      Start 34: qalsh_window_clamp_test
+      Start 35: qalsh_window_clamp_scalar_test
+      Start 15: qalsh4c_qalsh_sampling_consistency
+      Start 13: qalsh4c_direction_estimate
+      Start 16: qalsh4c_quadtree_sampling
+      Start 11: qalsh4c_in_memory_qalsh
+      Start 14: qalsh4c_qalsh_weights_cache
+ 1/36 Test #11: qalsh4c_in_memory_qalsh ..............   Passed    0.21 sec
+      Start 19: qalsh4c_dataset_generate
+ 2/36 Test #14: qalsh4c_qalsh_weights_cache ..........   Passed    0.21 sec
+      Start  4: disk_linear_scan_test
+ 3/36 Test #16: qalsh4c_quadtree_sampling ............   Passed    0.44 sec
+      Start 28: qalsh_build_test
+ 4/36 Test  #4: disk_linear_scan_test ................   Passed    0.23 sec
+      Start 20: qalsh4c_dataset_ground_truth
+ 5/36 Test #13: qalsh4c_direction_estimate ...........   Passed    0.49 sec
+      Start 23: qalsh4c_dataset_device
+ 6/36 Test #19: qalsh4c_dataset_generate .............   Passed    0.28 sec
+      Start 29: qalsh_query_speed_test
+ 7/36 Test #20: qalsh4c_dataset_ground_truth .........   Passed    0.07 sec
+      Start 22: qalsh4c_dataset_invalid
+ 8/36 Test #22: qalsh4c_dataset_invalid ..............   Passed    0.02 sec
+      Start  7: dataset_core_test
+ 9/36 Test  #7: dataset_core_test ....................   Passed    0.04 sec
+      Start 32: qalsh_separate_range_test
+10/36 Test #15: qalsh4c_qalsh_sampling_consistency ...   Passed    0.58 sec
+      Start 30: qalsh_collision_counter_test
+11/36 Test #23: qalsh4c_dataset_device ...............   Passed    0.09 sec
+      Start 24: qalsh4c_dataset_convert_seed
+12/36 Test #32: qalsh_separate_range_test ............   Passed    0.02 sec
+      Start 21: qalsh4c_dataset_overwrite
+13/36 Test #29: qalsh_query_speed_test ...............   Passed    0.10 sec
+      Start 33: qalsh_separate_range_scalar_test
+14/36 Test #24: qalsh4c_dataset_convert_seed .........   Passed    0.03 sec
+      Start  1: distance_bounds_test
+15/36 Test #21: qalsh4c_dataset_overwrite ............   Passed    0.02 sec
+      Start 17: qalsh_ann_help
+16/36 Test #33: qalsh_separate_range_scalar_test .....   Passed    0.02 sec
+      Start 26: qalsh_dispatch_test
+17/36 Test #30: qalsh_collision_counter_test .........   Passed    0.04 sec
+      Start 10: qalsh4c_help
+18/36 Test #17: qalsh_ann_help .......................   Passed    0.01 sec
+      Start 12: qalsh4c_direction_help
+19/36 Test  #1: distance_bounds_test .................   Passed    0.02 sec
+      Start 36: qalsh_window_trace_test
+20/36 Test #26: qalsh_dispatch_test ..................   Passed    0.01 sec
+      Start 25: qalsh_public_test
+21/36 Test #10: qalsh4c_help .........................   Passed    0.01 sec
+      Start  8: dataset_loader_test
+22/36 Test #12: qalsh4c_direction_help ...............   Passed    0.01 sec
+      Start 27: qalsh_distance_test
+23/36 Test  #8: dataset_loader_test ..................   Passed    0.00 sec
+      Start  6: log_error_test
+24/36 Test #36: qalsh_window_trace_test ..............   Passed    0.01 sec
+      Start  5: quadtree_weights_generator_test
+25/36 Test #27: qalsh_distance_test ..................   Passed    0.00 sec
+26/36 Test  #6: log_error_test .......................   Passed    0.00 sec
+      Start  3: ann_searcher_clone_test
+      Start  9: dataset_bad_bmp_test
+27/36 Test #25: qalsh_public_test ....................   Passed    0.01 sec
+28/36 Test  #5: quadtree_weights_generator_test ......   Passed    0.00 sec
+      Start 31: qalsh_table_schedule_test
+      Start  2: log_smoke_test
+29/36 Test  #3: ann_searcher_clone_test ..............   Passed    0.00 sec
+30/36 Test  #9: dataset_bad_bmp_test .................   Passed    0.00 sec
+31/36 Test  #2: log_smoke_test .......................   Passed    0.00 sec
+32/36 Test #31: qalsh_table_schedule_test ............   Passed    0.00 sec
+33/36 Test #28: qalsh_build_test .....................   Passed    0.22 sec
+34/36 Test #34: qalsh_window_clamp_test ..............   Passed    0.87 sec
+35/36 Test #35: qalsh_window_clamp_scalar_test .......   Passed    0.90 sec
+36/36 Test #18: qalsh4c_disk_qalsh ...................   Passed    1.35 sec
+
+100% tests passed, 0 tests failed out of 36
+
+Total Test time (real) =   1.36 sec
