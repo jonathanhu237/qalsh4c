@@ -72,8 +72,10 @@ class PoolSamplingEstimator : public Estimator {
     // A pool size of 0 selects this many first-stage draws per second-stage sample, the ratio chosen on the
     // MNIST development workloads for both norms.
     static constexpr unsigned int kAutoPoolSizePerSample = 5;
-    // Pilot draws in proportion to U_a for the model and certified plans.
-    static constexpr unsigned int kDefaultPilotSize = 256;
+    // Pilot draws in proportion to U_a: the fixed size of a certified plan's pilot and the starting size of a model
+    // plan's, which doubles until both variance coefficients reach the relative standard error below.
+    static constexpr unsigned int kDefaultPilotSize = 128;
+    static constexpr float kDefaultPilotRelativeError = 0.25F;
 
     PoolSamplingEstimator(unsigned int pool_size, unsigned int num_samples, unsigned int subsample_size,
                           float approximation_ratio, float epsilon, float delta, unsigned int exact_batch_size,
@@ -82,7 +84,8 @@ class PoolSamplingEstimator : public Estimator {
                           std::optional<float> expected_approximation_ratio = std::nullopt,
                           DiskQalshSearchOptions disk_qalsh_options = {}, bool direct = false, bool full = false,
                           bool fuse = true, PoolPlanMode plan_mode = PoolPlanMode::kFixed, float target_error = 0.0F,
-                          unsigned int pilot_size = kDefaultPilotSize, bool uniform = false);
+                          unsigned int pilot_size = kDefaultPilotSize, bool uniform = false,
+                          float pilot_relative_error = kDefaultPilotRelativeError);
     [[nodiscard]] bool RequiresIndex() const override;
     void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
                                  float norm_order) override;
@@ -114,4 +117,5 @@ class PoolSamplingEstimator : public Estimator {
     float target_error_{0.0F};  // RMS relative error (model) or epsilon with delta_ (certified)
     unsigned int pilot_size_{kDefaultPilotSize};
     bool uniform_{false};  // Baseline: uniform draws without bounds or QALSH, scanned from scratch
+    float pilot_relative_error_{kDefaultPilotRelativeError};  // Model plans grow the pilot to this (0: fixed)
 };

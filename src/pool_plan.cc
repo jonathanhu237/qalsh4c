@@ -62,6 +62,23 @@ Coefficients EstimateCoefficients(const std::vector<PilotDraw>& draws) {
     return Coefficients{.lambda0 = Mean(statistics.h0) / mean_squared, .lambda1 = Mean(statistics.h1) / mean_squared};
 }
 
+Coefficients RelativeStandardErrors(const std::vector<PilotDraw>& draws) {
+    const PairStatistics statistics = ComputePairStatistics(draws);
+    const auto relative_error = [](const std::vector<double>& values) {
+        const double mean = Mean(values);
+        if (values.size() < 2 || !(mean > 0.0)) {
+            return 0.0;
+        }
+        double sum_of_squares = 0.0;
+        for (const double value : values) {
+            sum_of_squares += (value - mean) * (value - mean);
+        }
+        const auto count = static_cast<double>(values.size());
+        return std::sqrt(sum_of_squares / (count - 1.0) / count) / mean;
+    };
+    return Coefficients{.lambda0 = relative_error(statistics.h0), .lambda1 = relative_error(statistics.h1)};
+}
+
 std::optional<Coefficients> CertifyCoefficients(const std::vector<PilotDraw>& draws, double alpha) {
     const PairStatistics statistics = ComputePairStatistics(draws);
     if (statistics.h0.size() < 2) {

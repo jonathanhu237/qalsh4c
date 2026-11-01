@@ -182,6 +182,27 @@ int main() {
             CheckClose(estimate.lambda1, 0.0, 1e-12, "lambda1 estimate");
         }
 
+        // Relative standard errors of the pair means: the pair (x, z) = (1, 1), (0.5, 1) gives H0 = H1 = 1/8 and a pair
+        // of equal draws gives zero, so two pairs of each kind have pair mean 1/16.
+        {
+            const std::vector<PoolPlan::PilotDraw> draws{{.x = 1.0, .z = 1.0}, {.x = 0.5, .z = 1.0},
+                                                         {.x = 0.7, .z = 1.0}, {.x = 0.7, .z = 1.0},
+                                                         {.x = 1.0, .z = 1.0}, {.x = 0.5, .z = 1.0},
+                                                         {.x = 0.3, .z = 1.0}, {.x = 0.3, .z = 1.0}};
+            const std::vector<double> pairs{0.125, 0.0, 0.125, 0.0};
+            const double mean = 0.0625;
+            double sum_of_squares = 0.0;
+            for (const double value : pairs) {
+                sum_of_squares += (value - mean) * (value - mean);
+            }
+            const double expected = std::sqrt(sum_of_squares / 3.0 / 4.0) / mean;
+            const PoolPlan::Coefficients errors = PoolPlan::RelativeStandardErrors(draws);
+            CheckClose(errors.lambda0, expected, 1e-12, "relative standard error of H0");
+            CheckClose(errors.lambda1, expected, 1e-12, "relative standard error of H1");
+            const std::vector<PoolPlan::PilotDraw> equal(6, PoolPlan::PilotDraw{.x = 0.4, .z = 0.8});
+            Check(PoolPlan::RelativeStandardErrors(equal).lambda0 == 0.0, "equal draws have no relative error");
+        }
+
         // The radius of Maurer and Pontil with both tails: values {0, 1} at level 0.1.
         {
             const double log_term = std::log(40.0);

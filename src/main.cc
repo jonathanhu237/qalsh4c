@@ -48,6 +48,10 @@ int main(int argc, char** argv) {
     app.add_flag("--scalar-exact-scan", Global::kUseScalarExactScan,
                  "Ablation: find exact nearest neighbors with the scalar kernel instead of the batched L1/L2 kernels")
         ->default_str(Global::kUseScalarExactScan ? "True" : "False");
+    app.add_flag("--qalsh-round-boundary-stop", Global::kQalshStopAtRoundBoundary,
+                 "Check QALSH's stopping condition only when a radius round is complete, as the per-point "
+                 "overestimation bound max(1, cJ) assumes (default: also after every evaluated candidate)")
+        ->default_str(Global::kQalshStopAtRoundBoundary ? "True" : "False");
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
@@ -346,8 +350,17 @@ int main(int argc, char** argv) {
     pool->add_option("--target-error", pool_target_error, "Relative error target for --plan model or certified")
         ->default_val(0.0F);
     unsigned int pool_pilot_size{PoolSamplingEstimator::kDefaultPilotSize};
-    pool->add_option("--pilot-size", pool_pilot_size, "Pilot draws in proportion to the upper bounds for --plan")
+    pool->add_option("--pilot-size", pool_pilot_size,
+                     "Pilot draws in proportion to the upper bounds for --plan: the fixed size for certified plans and "
+                     "the starting size for model plans")
         ->default_val(PoolSamplingEstimator::kDefaultPilotSize);
+    float pool_pilot_relative_error{PoolSamplingEstimator::kDefaultPilotRelativeError};
+    pool->add_option("--pilot-relative-error", pool_pilot_relative_error,
+                     "Model plans double the pilot until both variance coefficients reach this relative standard "
+                     "error, up to 4096 draws (0: keep --pilot-size)")
+        ->default_val(PoolSamplingEstimator::kDefaultPilotRelativeError);
+    pool->add_option("--pilot-dump", Global::kPilotDumpPath,
+                     "Diagnostic: write every pilot draw of --plan (point id, U_a, D_a, v_a) to this CSV file");
     pool->add_option("--exact-batch-size", pool_exact_batch_size, "Batch size for exact linear scans (0: auto)")
         ->default_val(0);
     bool pool_direct{false};
@@ -374,7 +387,7 @@ int main(int argc, char** argv) {
             pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
             pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
             disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse, plan_mode, pool_target_error,
-            pool_pilot_size, pool_uniform);
+            pool_pilot_size, pool_uniform, pool_pilot_relative_error);
     });
 
     // ------------------------------

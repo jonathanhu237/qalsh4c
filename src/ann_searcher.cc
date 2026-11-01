@@ -343,6 +343,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     }
     qalsh::DefaultQalshStrategy strategy(index_data_->qalsh_config.collision_threshold);
     strategy.set_candidate_budget(std::nullopt);
+    strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
     return ToAnnResult(result);
 }
@@ -498,6 +499,7 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
     }
     qalsh::DefaultQalshStrategy strategy(index_data_->qalsh_config.collision_threshold);
     strategy.set_candidate_budget(std::nullopt);
+    strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
     if (options_.profile) {
         const auto search_end = std::chrono::steady_clock::now();

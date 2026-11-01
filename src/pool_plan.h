@@ -30,6 +30,11 @@ struct Coefficients {
 // draws.
 [[nodiscard]] Coefficients EstimateCoefficients(const std::vector<PilotDraw>& draws);
 
+// Estimated relative standard errors of the two pair means behind EstimateCoefficients (sample standard deviation over
+// the square root of the number of pairs, divided by the mean; zero when a pair mean is zero). Plans scale with these
+// coefficients, so a relative error r inflates the expected relative variance of the final estimate by about r^2.
+[[nodiscard]] Coefficients RelativeStandardErrors(const std::vector<PilotDraw>& draws);
+
 // Upper bounds on lambda0 and lambda1 that hold together with probability at least 1 - alpha: a lower confidence
 // bound on mu and upper confidence bounds on the pair means of H0 and H1, each at level alpha / 3. Returns nullopt
 // when the lower bound on mu is not positive, so the pilot is too small to certify anything.

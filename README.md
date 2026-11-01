@@ -198,9 +198,12 @@ stage. Logs report the pool size, the number of distinct QALSH queries, and the 
 ./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool -K 300 -n 100 -s 100
 ```
 
-`--plan model` and `--plan certified` choose `K` and `T` themselves, so they reject `-K` and `-n`. A pilot of
-`--pilot-size` draws in proportion to the upper bounds (256 by default) runs Modified QALSH and an exact scan at every
-distinct drawn point. Disjoint pairs of pilot draws give the two variance coefficients of the pooled estimate, whose
+`--plan model` and `--plan certified` choose `K` and `T` themselves, so they reject `-K` and `-n`. A pilot of draws in
+proportion to the upper bounds runs Modified QALSH and an exact scan at every distinct drawn point. A model plan starts
+with `--pilot-size` draws (128 by default) and doubles them, up to 4096, until both variance coefficients have a
+relative standard error of at most `--pilot-relative-error` (0.25 by default); since plans scale with the
+coefficients, this keeps the planning error to about 6% in relative variance. A certified plan keeps `--pilot-size`
+fixed. Disjoint pairs of pilot draws give the two variance coefficients of the pooled estimate, whose
 relative variance is `lambda0 / K + (1 - 1/K) lambda1 / T`, and the pilot's timings price one QALSH query and one
 exact scan. The plan starts from the square-root rule for `K`, tries a few sizes around it using the expected number
 of distinct pooled points, and pairs each with the smallest `T` that meets the target. `model` plugs in point

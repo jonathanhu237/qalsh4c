@@ -1068,6 +1068,8 @@ constexpr int kPoolSizeSearchSteps = 8;
 constexpr double kMaxPoolDrawsPerPoint = 64.0;
 // Share of the failure probability delta that the certified plan spends on the pilot.
 constexpr double kPilotFailureShare = 0.5;
+// The model plan's pilot stops growing at this many draws.
+constexpr size_t kMaxPilotSize = 4096;
 
 struct PoolPlanSettings {
     PoolPlanMode mode;
@@ -1075,6 +1077,7 @@ struct PoolPlanSettings {
     double target_error;
     double delta;
     unsigned int pilot_size;
+    double pilot_relative_error;  // Target relative standard error of the model plan's coefficients (0: fixed pilot)
 };
 
 struct PoolPlanChoice {
@@ -1149,38 +1152,71 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
         settings.requested != PoolDesign::kDirect && settings.requested != PoolDesign::kUniform;
 
     const DoubleWeightedSampler sampler(inputs.upper_bounds);
-    std::vector<unsigned int> draws(settings.pilot_size);
-    for (unsigned int& draw : draws) {
-        draw = sampler.Sample(gen);
+    // The model plan grows its pilot, doubling from pilot_size, until both variance coefficients are known to the
+    // relative standard error pilot_relative_error; plans scale with the coefficients, so this keeps the planning error
+    // to about that error squared in relative variance. The certified plan keeps its pilot fixed, because its
+    // confidence bounds assume a sample size chosen in advance.
+    const bool adaptive = settings.mode == PoolPlanMode::kModel && settings.pilot_relative_error > 0.0;
+    std::vector<unsigned int> draws;
+    std::vector<unsigned int> distinct;
+    std::vector<PoolPlan::PilotDraw> pilot;
+    PoolPlan::Coefficients relative_errors{};
+    double exact_ms = 0.0;
+    size_t exact_scans = 0;
+    size_t pilot_target = settings.pilot_size;
+    while (true) {
+        while (draws.size() < pilot_target) {
+            draws.push_back(sampler.Sample(gen));
+        }
+        distinct = draws;
+        std::ranges::sort(distinct);
+        distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+        if (uses_qalsh) {
+            QueryCrudeDistances(distinct, inputs, cache);
+        }
+        std::vector<unsigned int> new_exact;
+        std::vector<Distance> bounds;
+        for (const unsigned int point_id : distinct) {
+            if (!cache.exact.contains(point_id)) {
+                new_exact.push_back(point_id);
+                bounds.push_back(ExactStartBound(settings.requested, point_id, inputs, cache));
+            }
+        }
+        const auto exact_begin = Clock::now();
+        ScanExactDistances(new_exact, bounds, inputs, cache);
+        exact_ms += ElapsedMilliseconds(exact_begin, Clock::now());
+        exact_scans += new_exact.size();
+
+        pilot.resize(draws.size());
+        for (size_t index = 0; index < draws.size(); ++index) {
+            const unsigned int point_id = draws[index];
+            const double bound = inputs.upper_bounds[point_id];
+            const double crude = uses_qalsh ? static_cast<double>(cache.crude.at(point_id)) : bound;
+            pilot[index] = PoolPlan::PilotDraw{.x = static_cast<double>(cache.exact.at(point_id)) / bound,
+                                               .z = crude / bound};
+        }
+        relative_errors = PoolPlan::RelativeStandardErrors(pilot);
+        if (!adaptive || draws.size() >= kMaxPilotSize ||
+            std::max(relative_errors.lambda0, relative_errors.lambda1) <= settings.pilot_relative_error) {
+            break;
+        }
+        pilot_target = std::min(2 * pilot_target, kMaxPilotSize);
     }
-    std::vector<unsigned int> distinct = draws;
-    std::ranges::sort(distinct);
-    distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
 
     // A pilot-sized batch spends much of its wall time starting threads and waiting for the last query, so a QALSH
     // query is priced by its own thread time spread over every thread, as in a large batch.
     const auto num_threads = static_cast<double>(MaxExactScanThreads());
-    double qalsh_ms_per_query = 0.0;
-    if (uses_qalsh) {
-        QueryCrudeDistances(distinct, inputs, cache);
-        qalsh_ms_per_query = MeanQueryMs(distinct, cache) / num_threads;
-    }
-    std::vector<Distance> bounds(distinct.size());
-    for (size_t index = 0; index < distinct.size(); ++index) {
-        bounds[index] = ExactStartBound(settings.requested, distinct[index], inputs, cache);
-    }
-    const auto exact_begin = Clock::now();
-    ScanExactDistances(distinct, bounds, inputs, cache);
-    const double exact_ms_per_query =
-        ElapsedMilliseconds(exact_begin, Clock::now()) / static_cast<double>(distinct.size());
-
-    std::vector<PoolPlan::PilotDraw> pilot(draws.size());
-    for (size_t index = 0; index < draws.size(); ++index) {
-        const unsigned int point_id = draws[index];
-        const double bound = inputs.upper_bounds[point_id];
-        const double crude = uses_qalsh ? static_cast<double>(cache.crude.at(point_id)) : bound;
-        pilot[index] = PoolPlan::PilotDraw{.x = static_cast<double>(cache.exact.at(point_id)) / bound,
-                                           .z = crude / bound};
+    const double qalsh_ms_per_query = uses_qalsh ? MeanQueryMs(distinct, cache) / num_threads : 0.0;
+    const double exact_ms_per_query = exact_ms / static_cast<double>(std::max<size_t>(exact_scans, 1));
+    if (!Global::kPilotDumpPath.empty()) {
+        std::ofstream dump(Global::kPilotDumpPath);
+        dump.precision(9);
+        dump << "point_id,upper_bound,crude,exact\n";
+        for (const unsigned int point_id : draws) {
+            const double bound = inputs.upper_bounds[point_id];
+            dump << point_id << ',' << bound << ',' << (uses_qalsh ? cache.crude.at(point_id) : bound) << ','
+                 << cache.exact.at(point_id) << '\n';
+        }
     }
 
     // RMS targets bound the relative variance by epsilon^2; the certified plan applies Chebyshev with the part of
@@ -1251,12 +1287,13 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
 
     Log::info(
         "Pool plan: mode={} design={} target_error={:.4g} eta={:.4e} pilot_draws={} pilot_distinct={} lambda0={:.6f} "
-        "lambda1={:.6f} qalsh_ms={:.5f} full_qalsh_ms={:.5f} exact_ms={:.5f} pooled_K={} pooled_T={} "
-        "pooled_predicted_ms={:.2f} full_T={} full_predicted_ms={:.2f} pilot_ms={:.3f}",
+        "lambda1={:.6f} pilot_rse0={:.3f} pilot_rse1={:.3f} qalsh_ms={:.5f} full_qalsh_ms={:.5f} exact_ms={:.5f} "
+        "pooled_K={} pooled_T={} pooled_predicted_ms={:.2f} full_T={} full_predicted_ms={:.2f} pilot_ms={:.3f}",
         settings.mode == PoolPlanMode::kCertified ? "certified" : "model", PoolDesignName(choice.design),
         settings.target_error, eta, draws.size(), distinct.size(), coefficients->lambda0, coefficients->lambda1,
-        qalsh_ms_per_query, full_qalsh_ms_per_query, exact_ms_per_query, pooled_size, pooled_samples, pooled_ms,
-        full_samples, full_ms, ElapsedMilliseconds(begin, Clock::now()));
+        relative_errors.lambda0, relative_errors.lambda1, qalsh_ms_per_query, full_qalsh_ms_per_query,
+        exact_ms_per_query, pooled_size, pooled_samples, pooled_ms, full_samples, full_ms,
+        ElapsedMilliseconds(begin, Clock::now()));
     return choice;
 }
 
@@ -1662,7 +1699,7 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
                                              std::optional<float> expected_approximation_ratio,
                                              DiskQalshSearchOptions disk_qalsh_options, bool direct, bool full,
                                              bool fuse, PoolPlanMode plan_mode, float target_error,
-                                             unsigned int pilot_size, bool uniform)
+                                             unsigned int pilot_size, bool uniform, float pilot_relative_error)
     : pool_size_(pool_size),
       num_samples_(num_samples),
       subsample_size_(subsample_size),
@@ -1681,7 +1718,8 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
       plan_mode_(plan_mode),
       target_error_(target_error),
       pilot_size_(pilot_size),
-      uniform_(uniform) {
+      uniform_(uniform),
+      pilot_relative_error_(pilot_relative_error) {
     if (full_ && disk_based_) {
         Log::error("The --full ablation is available only in memory.");
     }
@@ -1709,6 +1747,9 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
         }
         if (pilot_size_ < 4) {
             Log::error("--plan needs a pilot of at least four draws, got {}", pilot_size_);
+        }
+        if (!(pilot_relative_error_ >= 0.0F)) {
+            Log::error("--pilot-relative-error must not be negative, got {}", pilot_relative_error_);
         }
     }
     if (plan_mode_ == PoolPlanMode::kCertified) {
@@ -1838,7 +1879,8 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
                                             .requested = design,
                                             .target_error = target_error_,
                                             .delta = delta_,
-                                            .pilot_size = pilot_size_},
+                                            .pilot_size = pilot_size_,
+                                            .pilot_relative_error = pilot_relative_error_},
                            inputs, cache, gen);
         design = choice.design;
         run_pool_size = choice.pool_size;
