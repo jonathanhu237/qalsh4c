@@ -1632,6 +1632,9 @@ std::shared_ptr<BPlusTreeIndex> BPlusTreeIndex::Open(const std::string& path) {
         }
         index->mapping_ = static_cast<const std::byte*>(mapping);
         index->load_header();
+        // Validation above walks the pages in order with readahead. Searches jump between short windows of many
+        // tables, so further readahead only evicts pages that are still needed once the index outgrows memory.
+        (void)::madvise(mapping, static_cast<std::size_t>(index->mapping_size_), MADV_RANDOM);
         return index;
     } catch (...) {
         if (fd >= 0) {
@@ -2392,6 +2395,9 @@ std::shared_ptr<SortedArrayIndex> SortedArrayIndex::Open(const std::string& path
         }
         index->mapping_ = static_cast<const std::byte*>(mapping);
         index->load_header();
+        // Validation above walks the pages in order with readahead. Searches jump between short windows of many
+        // tables, so further readahead only evicts pages that are still needed once the index outgrows memory.
+        (void)::madvise(mapping, static_cast<std::size_t>(index->mapping_size_), MADV_RANDOM);
         return index;
     } catch (...) {
         if (fd >= 0) {
