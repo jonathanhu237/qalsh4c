@@ -95,22 +95,12 @@ Coefficients RelativeStandardErrors(const std::vector<PilotDraw>& draws) {
 }
 
 std::optional<Coefficients> CertifyCoefficients(const std::vector<PilotDraw>& draws, double alpha) {
-    const PairStatistics statistics = ComputePairStatistics(draws);
-    if (statistics.h0.size() < 2) {
-        throw std::invalid_argument("Certifying the pool coefficients needs at least four pilot draws.");
-    }
-    std::vector<double> ratios(draws.size());
-    std::ranges::transform(draws, ratios.begin(), &PilotDraw::x);
-    const double level = alpha / 3.0;
-    const double mean_lower = statistics.mean_x - EmpiricalBernsteinRadius(ratios, 1.0, level);
-    if (!(mean_lower > 0.0)) {
+    const std::optional<StratumMoments> moments = CertifyStratumMoments(draws, alpha);
+    if (!moments) {
         return std::nullopt;
     }
-    // H0 and H1 lie in [0, 1/2] because x, z and r lie in (0, 1].
-    const double h0_upper = std::min(0.5, Mean(statistics.h0) + EmpiricalBernsteinRadius(statistics.h0, 0.5, level));
-    const double h1_upper = std::min(0.5, Mean(statistics.h1) + EmpiricalBernsteinRadius(statistics.h1, 0.5, level));
-    const double mean_squared = mean_lower * mean_lower;
-    return Coefficients{.lambda0 = h0_upper / mean_squared, .lambda1 = h1_upper / mean_squared};
+    const double mean_squared = moments->mean_ratio * moments->mean_ratio;
+    return Coefficients{.lambda0 = moments->h0 / mean_squared, .lambda1 = moments->h1 / mean_squared};
 }
 
 double EmpiricalBernsteinRadius(const std::vector<double>& values, double range, double failure_probability) {
@@ -144,5 +134,62 @@ unsigned int SquareRootPoolSize(Coefficients coefficients, double eta, double qa
 }
 
 unsigned int OneStageSamples(double lambda, double eta) { return CeilCount(lambda / eta); }
+
+StratumMoments EstimateStratumMoments(const std::vector<PilotDraw>& draws) {
+    const PairStatistics statistics = ComputePairStatistics(draws);
+    return StratumMoments{.mean_ratio = statistics.mean_x, .h0 = Mean(statistics.h0), .h1 = Mean(statistics.h1)};
+}
+
+std::optional<StratumMoments> CertifyStratumMoments(const std::vector<PilotDraw>& draws, double alpha) {
+    const PairStatistics statistics = ComputePairStatistics(draws);
+    if (statistics.h0.size() < 2) {
+        throw std::invalid_argument("Certification needs at least four pilot draws.");
+    }
+    std::vector<double> ratios(draws.size());
+    std::ranges::transform(draws, ratios.begin(), &PilotDraw::x);
+    const double level = alpha / 3.0;
+    const double mean_lower = statistics.mean_x - EmpiricalBernsteinRadius(ratios, 1.0, level);
+    if (!(mean_lower > 0.0)) {
+        return std::nullopt;
+    }
+    // H0 and H1 lie in [0, 1/2] because x, z and r lie in (0, 1].
+    return StratumMoments{
+        .mean_ratio = mean_lower,
+        .h0 = std::min(0.5, Mean(statistics.h0) + EmpiricalBernsteinRadius(statistics.h0, 0.5, level)),
+        .h1 = std::min(0.5, Mean(statistics.h1) + EmpiricalBernsteinRadius(statistics.h1, 0.5, level)),
+    };
+}
+
+Coefficients PooledCoefficients(const std::vector<std::vector<PilotDraw>>& strata, const std::vector<double>& shares) {
+    double mean_x = 0.0;
+    double mean_x2 = 0.0;
+    double mean_z = 0.0;
+    double mean_x2_over_z = 0.0;
+    for (size_t stratum = 0; stratum < strata.size(); ++stratum) {
+        const double weight = shares[stratum] / static_cast<double>(strata[stratum].size());
+        for (const PilotDraw& draw : strata[stratum]) {
+            mean_x += weight * draw.x;
+            mean_x2 += weight * draw.x * draw.x;
+            mean_z += weight * draw.z;
+            // z = 0 forces x = 0, which contributes nothing.
+            mean_x2_over_z += draw.z > 0.0 ? weight * draw.x * draw.x / draw.z : 0.0;
+        }
+    }
+    if (!(mean_x > 0.0)) {
+        return Coefficients{.lambda0 = 0.0, .lambda1 = 0.0};
+    }
+    const double mean_squared = mean_x * mean_x;
+    return Coefficients{.lambda0 = std::max(0.0, mean_x2 / mean_squared - 1.0),
+                        .lambda1 = std::max(0.0, mean_z * mean_x2_over_z / mean_squared - 1.0)};
+}
+
+std::vector<unsigned int> StratifiedSamples(const std::vector<double>& sigmas, double eta, double total) {
+    const double sigma_sum = std::accumulate(sigmas.begin(), sigmas.end(), 0.0);
+    std::vector<unsigned int> samples(sigmas.size());
+    for (size_t stratum = 0; stratum < sigmas.size(); ++stratum) {
+        samples[stratum] = CeilCount(sigmas[stratum] * sigma_sum / (eta * total * total));
+    }
+    return samples;
+}
 
 }  // namespace PoolPlan

@@ -359,8 +359,16 @@ int main(int argc, char** argv) {
                      "Model plans double the pilot until both variance coefficients reach this relative standard "
                      "error, up to 4096 draws (0: keep --pilot-size)")
         ->default_val(PoolSamplingEstimator::kDefaultPilotRelativeError);
+    unsigned int pool_num_strata{0};
+    pool->add_option("--strata", pool_num_strata,
+                     "Split the source points into this many equal-count strata by their upper bounds; the plan's "
+                     "pilot then decides per stratum whether to run QALSH on all of its points, the strata's draws "
+                     "follow the Neyman allocation, and a model plan switches to the unstratified pool when that is "
+                     "predicted to be cheaper (0: off; --pilot-size is split across the strata)")
+        ->default_val(0);
     pool->add_option("--pilot-dump", Global::kPilotDumpPath,
-                     "Diagnostic: write every pilot draw of --plan (point id, U_a, D_a, v_a) to this CSV file");
+                     "Diagnostic: write every pilot draw of --plan (point id, U_a, D_a, v_a and the QALSH target id) "
+                     "to this CSV file");
     pool->add_option("--exact-batch-size", pool_exact_batch_size, "Batch size for exact linear scans (0: auto)")
         ->default_val(0);
     bool pool_direct{false};
@@ -387,7 +395,7 @@ int main(int argc, char** argv) {
             pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
             pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
             disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse, plan_mode, pool_target_error,
-            pool_pilot_size, pool_uniform, pool_pilot_relative_error);
+            pool_pilot_size, pool_uniform, pool_pilot_relative_error, pool_num_strata);
     });
 
     // ------------------------------

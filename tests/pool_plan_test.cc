@@ -308,6 +308,61 @@ int main() {
 
         Check(PoolPlan::OneStageSamples(0.3, 0.01) == 30, "one-stage samples");
         Check(PoolPlan::OneStageSamples(0.0, 0.01) == 1, "one-stage samples need at least one draw");
+
+        // Stratum moments are the unnormalized pair means behind the coefficient estimates.
+        {
+            const std::vector<PoolPlan::PilotDraw> draws{{.x = 0.5, .z = 1.0}, {.x = 0.25, .z = 0.5},
+                                                         {.x = 1.0, .z = 1.0}, {.x = 0.6, .z = 0.8}};
+            const PoolPlan::StratumMoments moments = PoolPlan::EstimateStratumMoments(draws);
+            const PoolPlan::Coefficients coefficients = PoolPlan::EstimateCoefficients(draws);
+            const double mean_squared = moments.mean_ratio * moments.mean_ratio;
+            CheckClose(moments.mean_ratio, 0.5875, 1e-12, "stratum mean");
+            CheckClose(moments.h0 / mean_squared, coefficients.lambda0, 1e-12, "stratum H0");
+            CheckClose(moments.h1 / mean_squared, coefficients.lambda1, 1e-12, "stratum H1");
+        }
+
+        // Pooled coefficients from stratified pilots keep the differences between strata: two strata with constant
+        // but different ratios have no variance inside either stratum, yet drawing over both does.
+        {
+            const std::vector<std::vector<PoolPlan::PilotDraw>> strata{
+                std::vector<PoolPlan::PilotDraw>(8, PoolPlan::PilotDraw{.x = 0.2, .z = 0.5}),
+                std::vector<PoolPlan::PilotDraw>(8, PoolPlan::PilotDraw{.x = 0.8, .z = 1.0})};
+            const PoolPlan::Coefficients pooled = PoolPlan::PooledCoefficients(strata, {0.25, 0.75});
+            const double mean = 0.25 * 0.2 + 0.75 * 0.8;
+            CheckClose(pooled.lambda0, (0.25 * 0.04 + 0.75 * 0.64) / (mean * mean) - 1.0, 1e-12,
+                       "pooled lambda0 across strata");
+            CheckClose(pooled.lambda1,
+                       (0.25 * 0.5 + 0.75 * 1.0) * (0.25 * 0.04 / 0.5 + 0.75 * 0.64) / (mean * mean) - 1.0, 1e-12,
+                       "pooled lambda1 across strata");
+            Check(pooled.lambda0 > 0.0, "constant strata with different means still vary");
+            Check(PoolPlan::EstimateStratumMoments(strata[0]).h0 == 0.0, "a constant stratum has no variance");
+        }
+
+        // Neyman allocation meets the target and stays within one draw of sigma_h * sum_g sigma_g / (eta S^2).
+        {
+            std::uniform_real_distribution<double> sigma(0.0, 5.0);
+            constexpr double kEta = 1e-4;
+            constexpr double kTotal = 100.0;
+            for (int trial = 0; trial < 200; ++trial) {
+                std::vector<double> sigmas(1 + trial % 6);
+                for (double& value : sigmas) {
+                    value = sigma(gen);
+                }
+                const std::vector<unsigned int> samples = PoolPlan::StratifiedSamples(sigmas, kEta, kTotal);
+                double sigma_sum = 0.0;
+                double variance = 0.0;
+                for (size_t stratum = 0; stratum < sigmas.size(); ++stratum) {
+                    sigma_sum += sigmas[stratum];
+                    variance += sigmas[stratum] * sigmas[stratum] / samples[stratum];
+                }
+                Check(variance <= kEta * kTotal * kTotal * (1.0 + 1e-12), "stratified draws meet eta");
+                for (size_t stratum = 0; stratum < sigmas.size(); ++stratum) {
+                    const double ideal = sigmas[stratum] * sigma_sum / (kEta * kTotal * kTotal);
+                    Check(samples[stratum] >= 1 && samples[stratum] < std::max(1.0, ideal) + 1.0,
+                          "Neyman allocation rounds up by less than one draw");
+                }
+            }
+        }
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

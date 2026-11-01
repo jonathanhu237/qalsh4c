@@ -218,6 +218,21 @@ coefficients, costs and choice:
 ./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool --plan model --target-error 0.01
 ```
 
+`--strata N` stratifies a plan. The source points are split into `N` equal-count strata by their upper bounds, at
+most 8. The pilot draws `--pilot-size / N` points in proportion to the bounds within each stratum, so `--strata 4`
+pairs with `--pilot-size 128` or more. Each stratum either draws in proportion to its upper bounds without QALSH, or
+runs Modified QALSH on every one of its points and draws in proportion to the fused distances.
+
+The strata are estimated independently. The estimate stays unbiased, and its variance is exactly the sum of the
+strata's one-stage variances. The pilot estimates every stratum's variance both ways and the plan tries every set of
+queried strata. Each set's draws follow the Neyman allocation, and the plan keeps the set with the lowest predicted
+QALSH and exact cost. A model plan also prices the unstratified pool from the same pilot and switches to it when that
+is cheaper. A certified plan stays stratified, with empirical Bernstein bounds for every stratum.
+
+```bash
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool --plan model --target-error 0.01 --strata 4 --pilot-size 128
+```
+
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
 
 ```bash

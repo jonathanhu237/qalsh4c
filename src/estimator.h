@@ -85,7 +85,7 @@ class PoolSamplingEstimator : public Estimator {
                           DiskQalshSearchOptions disk_qalsh_options = {}, bool direct = false, bool full = false,
                           bool fuse = true, PoolPlanMode plan_mode = PoolPlanMode::kFixed, float target_error = 0.0F,
                           unsigned int pilot_size = kDefaultPilotSize, bool uniform = false,
-                          float pilot_relative_error = kDefaultPilotRelativeError);
+                          float pilot_relative_error = kDefaultPilotRelativeError, unsigned int num_strata = 0);
     [[nodiscard]] bool RequiresIndex() const override;
     void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
                                  float norm_order) override;
@@ -118,4 +118,5 @@ class PoolSamplingEstimator : public Estimator {
     unsigned int pilot_size_{kDefaultPilotSize};
     bool uniform_{false};  // Baseline: uniform draws without bounds or QALSH, scanned from scratch
     float pilot_relative_error_{kDefaultPilotRelativeError};  // Model plans grow the pilot to this (0: fixed)
+    unsigned int num_strata_{0};  // Equal-count strata by U_a whose QALSH use a plan decides (0: unstratified)
 };

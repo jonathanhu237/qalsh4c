@@ -59,4 +59,34 @@ struct Coefficients {
 // Draws a one-stage design with per-draw relative variance lambda needs to reach relative variance eta.
 [[nodiscard]] unsigned int OneStageSamples(double lambda, double eta);
 
+// Pilot moments of one stratum whose draws come in proportion to U_a within the stratum: the mean of x and the
+// pair means of H0 and H1. With U_h the stratum's total bound, drawing in proportion to U_a has per-draw variance
+// U_h^2 E[H0], querying every point of the stratum and drawing in proportion to D_a has U_h^2 E[H1], and the
+// stratum total is U_h E[x].
+struct StratumMoments {
+    double mean_ratio;
+    double h0;
+    double h1;
+};
+
+// Point estimates from disjoint pairs of consecutive draws, as for EstimateCoefficients. Needs at least two draws.
+[[nodiscard]] StratumMoments EstimateStratumMoments(const std::vector<PilotDraw>& draws);
+
+// A lower confidence bound on the mean of x and upper confidence bounds on the pair means of H0 and H1, each at
+// level alpha / 3, so the three hold together with probability at least 1 - alpha. Returns nullopt when the lower
+// bound on the mean is not positive. Needs at least four draws.
+[[nodiscard]] std::optional<StratumMoments> CertifyStratumMoments(const std::vector<PilotDraw>& draws, double alpha);
+
+// Plug-in coefficients of drawing in proportion to U_a over all strata, from pilots drawn within each stratum:
+// stratum h has share pi_h = U_h / U of the bound total, and E[f] = sum_h pi_h E_h[f] for x, x^2, z and x^2 / z.
+// Differences between the stratum means count toward lambda0 and lambda1, not only the variation within strata.
+[[nodiscard]] Coefficients PooledCoefficients(const std::vector<std::vector<PilotDraw>>& strata,
+                                              const std::vector<double>& shares);
+
+// Draws per stratum for independent stratum estimates with per-draw standard deviations sigma_h: Neyman allocation
+// T_h = sigma_h * sum_g sigma_g / (eta * total^2), rounded up and at least one, so that
+// sum_h sigma_h^2 / T_h <= eta * total^2 with the fewest draws up to rounding.
+[[nodiscard]] std::vector<unsigned int> StratifiedSamples(const std::vector<double>& sigmas, double eta,
+                                                          double total);
+
 }  // namespace PoolPlan

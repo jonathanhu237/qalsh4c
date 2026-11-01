@@ -145,6 +145,27 @@ int main() {
             status = 8;
         }
 
+        // Stratified plans: with exact bounds every stratum estimate is exact, and with loose bounds a plan for a 2%
+        // RMS error lands near the truth. The certified plan needs a longer pilot, split across four strata.
+        for (const PoolPlanMode mode : {PoolPlanMode::kModel, PoolPlanMode::kCertified}) {
+            PoolSamplingEstimator stratified(0, 0, 1000, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                             Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false, false, true,
+                                             mode, 0.05F, 512, false, PoolSamplingEstimator::kDefaultPilotRelativeError,
+                                             4);
+            if (!RelativelyClose(stratified.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                                 1e-4)) {
+                status = 10;
+            }
+        }
+        PoolSamplingEstimator stratified_loose(0, 0, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                               Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false, false, true,
+                                               PoolPlanMode::kModel, 0.02F, 256, false,
+                                               PoolSamplingEstimator::kDefaultPilotRelativeError, 4);
+        if (!RelativelyClose(stratified_loose.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                             0.1)) {
+            status = 11;
+        }
+
         // The uniform baseline scans from scratch, so many uniform draws land near the truth whatever the bounds.
         PoolSamplingEstimator uniform(0, 20000, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
                                       Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false, false, true,

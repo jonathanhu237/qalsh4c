@@ -850,6 +850,7 @@ double ElapsedMilliseconds(std::chrono::steady_clock::time_point begin, std::chr
 struct DistanceCache {
     std::unordered_map<unsigned int, Distance> crude;  // Modified QALSH distance, clipped with U_a when fusing
     std::unordered_map<unsigned int, double> crude_query_ms;  // Time one thread spent on each of those queries
+    std::unordered_map<unsigned int, unsigned int> crude_target;  // Target point each of those queries returned
     std::unordered_map<unsigned int, Distance> exact;
 };
 
@@ -870,7 +871,11 @@ void QueryCrudeDistances(const std::vector<unsigned int>& point_ids, const PoolS
     std::vector<unsigned int> new_ids;
     std::ranges::copy_if(point_ids, std::back_inserter(new_ids),
                          [&cache](unsigned int point_id) { return !cache.crude.contains(point_id); });
+    if (new_ids.empty()) {
+        return;  // Spares cloning the searcher for every thread.
+    }
     std::vector<Distance> distances(new_ids.size(), 0.0F);
+    std::vector<unsigned int> found(new_ids.size(), 0);
     std::vector<double> query_ms(new_ids.size(), 0.0);
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
@@ -883,7 +888,9 @@ void QueryCrudeDistances(const std::vector<unsigned int>& point_ids, const PoolS
         for (long long index = 0; index < static_cast<long long>(new_ids.size()); ++index) {
             const unsigned int point_id = new_ids[static_cast<size_t>(index)];
             const auto begin = std::chrono::steady_clock::now();
-            const Distance qalsh_distance = local_searcher->Search(inputs.sources[point_id]).distance;
+            const AnnResult result = local_searcher->Search(inputs.sources[point_id]);
+            const Distance qalsh_distance = result.distance;
+            found[static_cast<size_t>(index)] = result.point_id;
             query_ms[static_cast<size_t>(index)] = ElapsedMilliseconds(begin, std::chrono::steady_clock::now());
             // Both bounds are distances to real target points, so their minimum is still an upper bound.
             distances[static_cast<size_t>(index)] =
@@ -894,6 +901,7 @@ void QueryCrudeDistances(const std::vector<unsigned int>& point_ids, const PoolS
     for (size_t index = 0; index < new_ids.size(); ++index) {
         cache.crude.emplace(new_ids[index], distances[index]);
         cache.crude_query_ms.emplace(new_ids[index], query_ms[index]);
+        cache.crude_target.emplace(new_ids[index], found[index]);
     }
 }
 
@@ -1078,6 +1086,7 @@ struct PoolPlanSettings {
     double delta;
     unsigned int pilot_size;
     double pilot_relative_error;  // Target relative standard error of the model plan's coefficients (0: fixed pilot)
+    unsigned int num_strata;      // Equal-count strata by U_a for the stratified design (0: unstratified)
 };
 
 struct PoolPlanChoice {
@@ -1139,6 +1148,57 @@ size_t UncachedPositivePoints(const PoolStageInputs& inputs, const DistanceCache
     return count;
 }
 
+// Exact scans for the distinct points without a cached exact distance, each starting from its design's bound. Adds
+// their time to exact_ms and returns how many there were.
+size_t TimedExactScans(const std::vector<unsigned int>& distinct, PoolDesign design, const PoolStageInputs& inputs,
+                       DistanceCache& cache, double& exact_ms) {
+    using Clock = std::chrono::steady_clock;
+    std::vector<unsigned int> new_exact;
+    std::vector<Distance> bounds;
+    for (const unsigned int point_id : distinct) {
+        if (!cache.exact.contains(point_id)) {
+            new_exact.push_back(point_id);
+            bounds.push_back(ExactStartBound(design, point_id, inputs, cache));
+        }
+    }
+    const auto begin = Clock::now();
+    ScanExactDistances(new_exact, bounds, inputs, cache);
+    exact_ms += ElapsedMilliseconds(begin, Clock::now());
+    return new_exact.size();
+}
+
+struct PooledBudget {
+    unsigned int pool_size{0};
+    unsigned int num_samples{0};
+    double predicted_ms{std::numeric_limits<double>::infinity()};  // Infinite when no pool size meets the target
+};
+
+// The cheapest pooled budget among pool sizes around the square-root rule, each with the smallest sample count that
+// meets eta, priced by the expected number of new QALSH queries and by the exact scans.
+PooledBudget PlanPooledBudget(PoolPlan::Coefficients coefficients, double eta, double qalsh_ms_per_query,
+                              double exact_ms_per_query, const PoolStageInputs& inputs, const DistanceCache& cache) {
+    const unsigned int square_root_size =
+        PoolPlan::SquareRootPoolSize(coefficients, eta, qalsh_ms_per_query, exact_ms_per_query);
+    const double max_pool_size =
+        kMaxPoolDrawsPerPoint *
+        static_cast<double>(std::ranges::count_if(inputs.upper_bounds, [](double bound) { return bound > 0.0; }));
+    PooledBudget best;
+    for (int step = -kPoolSizeSearchSteps; step <= kPoolSizeSearchSteps; ++step) {
+        const double scaled = std::round(static_cast<double>(square_root_size) * std::exp2(step / 4.0));
+        const auto pool_size = static_cast<unsigned int>(std::clamp(scaled, 1.0, std::max(1.0, max_pool_size)));
+        const std::optional<unsigned int> num_samples = PoolPlan::SamplesForPool(coefficients, eta, pool_size);
+        if (!num_samples) {
+            continue;
+        }
+        const double cost = qalsh_ms_per_query * ExpectedNewDistinct(inputs, pool_size, cache) +
+                            exact_ms_per_query * static_cast<double>(*num_samples);
+        if (cost < best.predicted_ms) {
+            best = PooledBudget{.pool_size = pool_size, .num_samples = *num_samples, .predicted_ms = cost};
+        }
+    }
+    return best;
+}
+
 // Runs the pilot and picks the design, pool size and sample count. The pilot draws points in proportion to U_a;
 // every distinct one gets Modified QALSH (unless the design is direct) and an exact scan, which give the ratios
 // x = v / U and z = D / U. Disjoint pairs of draws estimate or certify the variance coefficients, and the pilot's
@@ -1173,18 +1233,7 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
         if (uses_qalsh) {
             QueryCrudeDistances(distinct, inputs, cache);
         }
-        std::vector<unsigned int> new_exact;
-        std::vector<Distance> bounds;
-        for (const unsigned int point_id : distinct) {
-            if (!cache.exact.contains(point_id)) {
-                new_exact.push_back(point_id);
-                bounds.push_back(ExactStartBound(settings.requested, point_id, inputs, cache));
-            }
-        }
-        const auto exact_begin = Clock::now();
-        ScanExactDistances(new_exact, bounds, inputs, cache);
-        exact_ms += ElapsedMilliseconds(exact_begin, Clock::now());
-        exact_scans += new_exact.size();
+        exact_scans += TimedExactScans(distinct, settings.requested, inputs, cache, exact_ms);
 
         pilot.resize(draws.size());
         for (size_t index = 0; index < draws.size(); ++index) {
@@ -1210,11 +1259,12 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
     if (!Global::kPilotDumpPath.empty()) {
         std::ofstream dump(Global::kPilotDumpPath);
         dump.precision(9);
-        dump << "point_id,upper_bound,crude,exact\n";
+        dump << "point_id,upper_bound,crude,exact,qalsh_target\n";
         for (const unsigned int point_id : draws) {
             const double bound = inputs.upper_bounds[point_id];
             dump << point_id << ',' << bound << ',' << (uses_qalsh ? cache.crude.at(point_id) : bound) << ','
-                 << cache.exact.at(point_id) << '\n';
+                 << cache.exact.at(point_id) << ','
+                 << (uses_qalsh ? static_cast<long long>(cache.crude_target.at(point_id)) : -1LL) << '\n';
         }
     }
 
@@ -1252,29 +1302,11 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
         QueryCrudeDistances(probe, inputs, cache);
         full_qalsh_ms_per_query = MeanQueryMs(probe, cache) / num_threads;
 
-        const unsigned int square_root_size =
-            PoolPlan::SquareRootPoolSize(*coefficients, eta, qalsh_ms_per_query, exact_ms_per_query);
-        const double max_pool_size =
-            kMaxPoolDrawsPerPoint * static_cast<double>(std::ranges::count_if(inputs.upper_bounds, [](double bound) {
-                return bound > 0.0;
-            }));
-        pooled_ms = std::numeric_limits<double>::infinity();
-        for (int step = -kPoolSizeSearchSteps; step <= kPoolSizeSearchSteps; ++step) {
-            const double scaled = std::round(static_cast<double>(square_root_size) * std::exp2(step / 4.0));
-            const auto pool_size = static_cast<unsigned int>(std::clamp(scaled, 1.0, std::max(1.0, max_pool_size)));
-            const std::optional<unsigned int> num_samples =
-                PoolPlan::SamplesForPool(*coefficients, eta, pool_size);
-            if (!num_samples) {
-                continue;
-            }
-            const double cost = qalsh_ms_per_query * ExpectedNewDistinct(inputs, pool_size, cache) +
-                                exact_ms_per_query * static_cast<double>(*num_samples);
-            if (cost < pooled_ms) {
-                pooled_ms = cost;
-                pooled_size = pool_size;
-                pooled_samples = *num_samples;
-            }
-        }
+        const PooledBudget budget =
+            PlanPooledBudget(*coefficients, eta, qalsh_ms_per_query, exact_ms_per_query, inputs, cache);
+        pooled_size = budget.pool_size;
+        pooled_samples = budget.num_samples;
+        pooled_ms = budget.predicted_ms;
         full_ms = full_qalsh_ms_per_query * static_cast<double>(UncachedPositivePoints(inputs, cache)) +
                   exact_ms_per_query * static_cast<double>(full_samples);
         if (pooled_ms <= full_ms) {
@@ -1294,6 +1326,240 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
         exact_ms_per_query, pooled_size, pooled_samples, pooled_ms, full_samples, full_ms,
         ElapsedMilliseconds(begin, Clock::now()));
     return choice;
+}
+
+// Stratified design (--strata): the source points with a positive bound are split into equal-count strata by U_a.
+// A stratum either draws in proportion to U_a without QALSH, or runs Modified QALSH on every one of its points and
+// draws in proportion to D_a. The stratum estimates are independent, so their variances add up.
+struct StratifiedPlan {
+    std::vector<std::vector<unsigned int>> members;  // Source point ids of each stratum, by increasing U_a
+    std::vector<char> queried;                       // Whether the stratum runs QALSH on all of its points
+    std::vector<unsigned int> num_samples;           // Exact draws T_h of each stratum
+    std::optional<PoolPlanChoice> pooled;            // Set when the unstratified pooled design is predicted cheaper
+};
+
+// More strata than this would make the exhaustive choice of queried strata slow and leave few pilot draws for each.
+constexpr unsigned int kMaxStrata = 8;
+
+std::vector<std::vector<unsigned int>> BuildStrata(const std::vector<double>& upper_bounds, unsigned int num_strata) {
+    std::vector<unsigned int> ids;
+    for (unsigned int point_id = 0; point_id < upper_bounds.size(); ++point_id) {
+        if (upper_bounds[point_id] > 0.0) {
+            ids.push_back(point_id);
+        }
+    }
+    std::ranges::stable_sort(ids, [&upper_bounds](unsigned int left, unsigned int right) {
+        return upper_bounds[left] < upper_bounds[right];
+    });
+    const size_t count = std::min<size_t>(num_strata, ids.size());
+    std::vector<std::vector<unsigned int>> strata(count);
+    for (size_t stratum = 0; stratum < count; ++stratum) {
+        strata[stratum].assign(ids.begin() + static_cast<std::ptrdiff_t>(ids.size() * stratum / count),
+                               ids.begin() + static_cast<std::ptrdiff_t>(ids.size() * (stratum + 1) / count));
+    }
+    return strata;
+}
+
+// The weight a stratum draws its points with: D_a once QALSH ran on the whole stratum, U_a otherwise.
+double StratumWeight(bool queried, unsigned int point_id, const PoolStageInputs& inputs, const DistanceCache& cache) {
+    return queried ? static_cast<double>(cache.crude.at(point_id)) : inputs.upper_bounds[point_id];
+}
+
+// Runs a pilot in every stratum, then picks the strata that run QALSH and the draws of each stratum. Each stratum
+// gets an equal share of the pilot, drawn in proportion to U_a within the stratum; every distinct pilot point gets
+// Modified QALSH and an exact scan. The pilot moments give each stratum's per-draw standard deviation with and
+// without QALSH, the strata's draws follow the Neyman allocation for the target, and the plan queries the subset of
+// strata that minimizes the predicted QALSH and exact cost. A model plan also prices the unstratified pooled design
+// from the same pilot and switches to it when that is predicted to be cheaper.
+StratifiedPlan PlanStratifiedDesign(const PoolPlanSettings& settings, const PoolStageInputs& inputs,
+                                    DistanceCache& cache, std::mt19937& gen) {
+    using Clock = std::chrono::steady_clock;
+    const auto begin = Clock::now();
+    StratifiedPlan plan{.members = BuildStrata(inputs.upper_bounds, settings.num_strata), .queried = {},
+                        .num_samples = {}, .pooled = std::nullopt};
+    const size_t num_strata = plan.members.size();
+    const auto draws_per_stratum = std::max<size_t>(4, settings.pilot_size / num_strata);
+
+    std::vector<double> bound_totals(num_strata, 0.0);
+    std::vector<std::vector<unsigned int>> pilot_ids(num_strata);
+    std::vector<unsigned int> distinct;
+    for (size_t stratum = 0; stratum < num_strata; ++stratum) {
+        const std::vector<unsigned int>& members = plan.members[stratum];
+        std::vector<double> weights(members.size());
+        std::ranges::transform(members, weights.begin(),
+                               [&inputs](unsigned int point_id) { return inputs.upper_bounds[point_id]; });
+        bound_totals[stratum] = std::accumulate(weights.begin(), weights.end(), 0.0);
+        const DoubleWeightedSampler sampler(weights);
+        for (size_t draw = 0; draw < draws_per_stratum; ++draw) {
+            pilot_ids[stratum].push_back(members[sampler.Sample(gen)]);
+        }
+        distinct.insert(distinct.end(), pilot_ids[stratum].begin(), pilot_ids[stratum].end());
+    }
+    std::ranges::sort(distinct);
+    distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+    QueryCrudeDistances(distinct, inputs, cache);
+    double exact_ms = 0.0;
+    const size_t exact_scans = TimedExactScans(distinct, PoolDesign::kPooled, inputs, cache, exact_ms);
+    const double exact_ms_per_query = exact_ms / static_cast<double>(std::max<size_t>(exact_scans, 1));
+    const auto num_threads = static_cast<double>(MaxExactScanThreads());
+
+    // The certified plan spends its share of delta on the pilot bounds, split evenly across strata, and applies
+    // Chebyshev with the rest.
+    double eta = settings.target_error * settings.target_error;
+    const double alpha = kPilotFailureShare * settings.delta;
+    if (settings.mode == PoolPlanMode::kCertified) {
+        eta *= settings.delta - alpha;
+    }
+    std::vector<double> sigma_bound(num_strata);
+    std::vector<double> sigma_crude(num_strata);
+    std::vector<double> qalsh_ms(num_strata);
+    double total = 0.0;
+    // The unstratified pooled design reads every stratum's pilot, weighted by the stratum's share of the bound total,
+    // and pays the QALSH cost of a query drawn in proportion to U_a.
+    std::vector<std::vector<PoolPlan::PilotDraw>> strata_pilots(num_strata);
+    std::vector<double> shares(num_strata);
+    double pool_query_ms = 0.0;
+    for (size_t stratum = 0; stratum < num_strata; ++stratum) {
+        std::vector<PoolPlan::PilotDraw> pilot;
+        for (const unsigned int point_id : pilot_ids[stratum]) {
+            const double bound = inputs.upper_bounds[point_id];
+            pilot.push_back(PoolPlan::PilotDraw{.x = static_cast<double>(cache.exact.at(point_id)) / bound,
+                                                .z = static_cast<double>(cache.crude.at(point_id)) / bound});
+        }
+        std::optional<PoolPlan::StratumMoments> moments;
+        if (settings.mode == PoolPlanMode::kCertified) {
+            moments = PoolPlan::CertifyStratumMoments(pilot, alpha / static_cast<double>(num_strata));
+            if (!moments) {
+                Log::error("A pilot of {} draws per stratum is too small to certify the stratum moments; increase "
+                           "--pilot-size.",
+                           draws_per_stratum);
+            }
+        } else {
+            moments = PoolPlan::EstimateStratumMoments(pilot);
+        }
+        sigma_bound[stratum] = bound_totals[stratum] * std::sqrt(moments->h0);
+        sigma_crude[stratum] = bound_totals[stratum] * std::sqrt(moments->h1);
+        total += bound_totals[stratum] * moments->mean_ratio;
+        // QALSH on the stratum's uncached points, priced by the stratum's own pilot queries.
+        std::vector<unsigned int> stratum_distinct = pilot_ids[stratum];
+        std::ranges::sort(stratum_distinct);
+        stratum_distinct.erase(std::unique(stratum_distinct.begin(), stratum_distinct.end()), stratum_distinct.end());
+        const auto uncached = std::ranges::count_if(
+            plan.members[stratum], [&cache](unsigned int point_id) { return !cache.crude.contains(point_id); });
+        const double query_ms = MeanQueryMs(stratum_distinct, cache) / num_threads;
+        qalsh_ms[stratum] = query_ms * static_cast<double>(uncached);
+
+        shares[stratum] = bound_totals[stratum] / inputs.total_upper_bound;
+        pool_query_ms += shares[stratum] * query_ms;
+        strata_pilots[stratum] = std::move(pilot);
+    }
+    std::optional<PooledBudget> pooled_budget;
+    PoolPlan::Coefficients coefficients{.lambda0 = 0.0, .lambda1 = 0.0};
+    if (settings.mode == PoolPlanMode::kModel) {
+        coefficients = PoolPlan::PooledCoefficients(strata_pilots, shares);
+        pooled_budget = PlanPooledBudget(coefficients, eta, pool_query_ms, exact_ms_per_query, inputs, cache);
+    }
+
+    double best_ms = std::numeric_limits<double>::infinity();
+    for (unsigned int mask = 0; mask < (1U << num_strata); ++mask) {
+        std::vector<double> sigmas(num_strata);
+        double predicted_ms = 0.0;
+        for (size_t stratum = 0; stratum < num_strata; ++stratum) {
+            const bool queried = ((mask >> stratum) & 1U) != 0;
+            sigmas[stratum] = queried ? sigma_crude[stratum] : sigma_bound[stratum];
+            predicted_ms += queried ? qalsh_ms[stratum] : 0.0;
+        }
+        const std::vector<unsigned int> samples = PoolPlan::StratifiedSamples(sigmas, eta, total);
+        predicted_ms += exact_ms_per_query * static_cast<double>(std::accumulate(samples.begin(), samples.end(), 0ULL));
+        if (predicted_ms < best_ms) {
+            best_ms = predicted_ms;
+            plan.num_samples = samples;
+            plan.queried.assign(num_strata, 0);
+            for (size_t stratum = 0; stratum < num_strata; ++stratum) {
+                plan.queried[stratum] = static_cast<char>((mask >> stratum) & 1U);
+            }
+        }
+    }
+
+    if (pooled_budget && pooled_budget->predicted_ms < best_ms) {
+        plan.pooled = PoolPlanChoice{.design = PoolDesign::kPooled,
+                                     .pool_size = pooled_budget->pool_size,
+                                     .num_samples = pooled_budget->num_samples};
+    }
+
+    std::string queried_strata;
+    std::string samples_text;
+    size_t qalsh_points = 0;
+    for (size_t stratum = 0; stratum < num_strata; ++stratum) {
+        queried_strata += plan.queried[stratum] != 0 ? 'Q' : '.';
+        samples_text += (stratum == 0 ? "" : "/") + std::to_string(plan.num_samples[stratum]);
+        qalsh_points += plan.queried[stratum] != 0 ? plan.members[stratum].size() : 0;
+    }
+    Log::info(
+        "Pool plan: mode={} design={} target_error={:.4g} eta={:.4e} pilot_draws={} pilot_distinct={} lambda0={:.6f} "
+        "lambda1={:.6f} qalsh_ms={:.5f} exact_ms={:.5f} pooled_K={} pooled_T={} pooled_predicted_ms={:.2f} strata={} "
+        "queried={} stratum_T={} qalsh_points={} stratified_predicted_ms={:.2f} pilot_ms={:.3f}",
+        settings.mode == PoolPlanMode::kCertified ? "certified" : "model", plan.pooled ? "pooled" : "stratified",
+        settings.target_error, eta, draws_per_stratum * num_strata, distinct.size(), coefficients.lambda0,
+        coefficients.lambda1, pool_query_ms, exact_ms_per_query, pooled_budget ? pooled_budget->pool_size : 0U,
+        pooled_budget ? pooled_budget->num_samples : 0U, pooled_budget ? pooled_budget->predicted_ms : 0.0, num_strata,
+        queried_strata, samples_text, qalsh_points, best_ms, ElapsedMilliseconds(begin, Clock::now()));
+    return plan;
+}
+
+// One estimate with a stratified plan: QALSH on every point of the queried strata, then each stratum's draws in
+// proportion to its weights, all scanned in one batch.
+double RunStratifiedDesign(const StratifiedPlan& plan, const PoolStageInputs& inputs, DistanceCache& cache,
+                           std::mt19937& gen, PoolRunStats& stats) {
+    using Clock = std::chrono::steady_clock;
+    const auto begin = Clock::now();
+    std::vector<unsigned int> queried_ids;
+    for (size_t stratum = 0; stratum < plan.members.size(); ++stratum) {
+        if (plan.queried[stratum] != 0) {
+            queried_ids.insert(queried_ids.end(), plan.members[stratum].begin(), plan.members[stratum].end());
+        }
+    }
+    QueryCrudeDistances(queried_ids, inputs, cache);
+    stats.pool_distinct = queried_ids.size();
+    const auto qalsh_end = Clock::now();
+    stats.qalsh_ms = ElapsedMilliseconds(begin, qalsh_end);
+
+    std::vector<std::vector<std::pair<unsigned int, unsigned int>>> selected(plan.members.size());
+    std::vector<double> weight_totals(plan.members.size());
+    std::vector<unsigned int> point_ids;
+    std::vector<Distance> bounds;
+    for (size_t stratum = 0; stratum < plan.members.size(); ++stratum) {
+        const bool queried = plan.queried[stratum] != 0;
+        const std::vector<unsigned int>& members = plan.members[stratum];
+        std::vector<double> weights(members.size());
+        std::ranges::transform(members, weights.begin(), [&](unsigned int point_id) {
+            return StratumWeight(queried, point_id, inputs, cache);
+        });
+        weight_totals[stratum] = std::accumulate(weights.begin(), weights.end(), 0.0);
+        selected[stratum] = DrawWithReplacement(DoubleWeightedSampler(weights), plan.num_samples[stratum], gen);
+        for (auto& [index, multiplicity] : selected[stratum]) {
+            (void)multiplicity;
+            index = members[index];
+            point_ids.push_back(index);
+            bounds.push_back(static_cast<Distance>(StratumWeight(queried, index, inputs, cache)));
+        }
+    }
+    // Strata are disjoint, so no point is listed twice.
+    ScanExactDistances(point_ids, bounds, inputs, cache);
+
+    double estimate = 0.0;
+    for (size_t stratum = 0; stratum < plan.members.size(); ++stratum) {
+        const bool queried = plan.queried[stratum] != 0;
+        double ratio_sum = 0.0;
+        for (const auto& [point_id, multiplicity] : selected[stratum]) {
+            ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(cache.exact.at(point_id)) /
+                         StratumWeight(queried, point_id, inputs, cache);
+        }
+        estimate += weight_totals[stratum] * ratio_sum / static_cast<double>(plan.num_samples[stratum]);
+    }
+    stats.exact_distinct = point_ids.size();
+    stats.exact_ms = ElapsedMilliseconds(qalsh_end, Clock::now());
+    return estimate;
 }
 
 }  // namespace
@@ -1698,7 +1964,8 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
                                              std::optional<float> expected_approximation_ratio,
                                              DiskQalshSearchOptions disk_qalsh_options, bool direct, bool full,
                                              bool fuse, PoolPlanMode plan_mode, float target_error,
-                                             unsigned int pilot_size, bool uniform, float pilot_relative_error)
+                                             unsigned int pilot_size, bool uniform, float pilot_relative_error,
+                                             unsigned int num_strata)
     : pool_size_(pool_size),
       num_samples_(num_samples),
       subsample_size_(subsample_size),
@@ -1718,7 +1985,8 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
       target_error_(target_error),
       pilot_size_(pilot_size),
       uniform_(uniform),
-      pilot_relative_error_(pilot_relative_error) {
+      pilot_relative_error_(pilot_relative_error),
+      num_strata_(num_strata) {
     if (full_ && disk_based_) {
         Log::error("The --full ablation is available only in memory.");
     }
@@ -1749,6 +2017,22 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
         }
         if (!(pilot_relative_error_ >= 0.0F)) {
             Log::error("--pilot-relative-error must not be negative, got {}", pilot_relative_error_);
+        }
+    }
+    if (num_strata_ != 0) {
+        if (plan_mode_ == PoolPlanMode::kFixed) {
+            Log::error("--strata needs --plan model or certified.");
+        }
+        if (direct_ || full_ || uniform_) {
+            Log::error("--strata decides per stratum whether to run QALSH; do not combine it with --direct, --full or "
+                       "--uniform.");
+        }
+        if (num_strata_ > kMaxStrata) {
+            Log::error("--strata must be at most {}, got {}", kMaxStrata, num_strata_);
+        }
+        if (pilot_size_ < 4 * num_strata_) {
+            Log::error("--strata needs a pilot of at least four draws per stratum, got {} for {} strata", pilot_size_,
+                       num_strata_);
         }
     }
     if (plan_mode_ == PoolPlanMode::kCertified) {
@@ -1869,22 +2153,37 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
     DistanceCache cache;
     PoolRunStats stats;
     double estimate = 0.0;
+    bool ran_stratified = false;
     if (planned) {
         // One random stream serves the pilot and the production draws, which keeps them independent even with a
         // fixed seed.
         std::mt19937 gen = Random::SeededGenerator();
-        const PoolPlanChoice choice =
-            PlanPoolDesign(PoolPlanSettings{.mode = plan_mode_,
-                                            .requested = design,
-                                            .target_error = target_error_,
-                                            .delta = delta_,
-                                            .pilot_size = pilot_size_,
-                                            .pilot_relative_error = pilot_relative_error_},
-                           inputs, cache, gen);
-        design = choice.design;
-        run_pool_size = choice.pool_size;
-        run_num_samples = choice.num_samples;
-        estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, &gen, stats);
+        const PoolPlanSettings settings{.mode = plan_mode_,
+                                        .requested = design,
+                                        .target_error = target_error_,
+                                        .delta = delta_,
+                                        .pilot_size = pilot_size_,
+                                        .pilot_relative_error = pilot_relative_error_,
+                                        .num_strata = num_strata_};
+        if (num_strata_ != 0) {
+            const StratifiedPlan plan = PlanStratifiedDesign(settings, inputs, cache, gen);
+            if (plan.pooled) {
+                design = plan.pooled->design;
+                run_pool_size = plan.pooled->pool_size;
+                run_num_samples = plan.pooled->num_samples;
+                estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, &gen, stats);
+            } else {
+                ran_stratified = true;
+                run_num_samples = std::accumulate(plan.num_samples.begin(), plan.num_samples.end(), 0U);
+                estimate = RunStratifiedDesign(plan, inputs, cache, gen, stats);
+            }
+        } else {
+            const PoolPlanChoice choice = PlanPoolDesign(settings, inputs, cache, gen);
+            design = choice.design;
+            run_pool_size = choice.pool_size;
+            run_num_samples = choice.num_samples;
+            estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, &gen, stats);
+        }
     } else {
         estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, nullptr, stats);
     }
@@ -1896,7 +2195,7 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
         stats.pool_distinct,
         run_num_samples, stats.exact_distinct, ElapsedMilliseconds(index_begin, index_end),
         ElapsedMilliseconds(index_end, upper_bound_end), stats.qalsh_ms, stats.exact_ms);
-    if (design == PoolDesign::kPooled || design == PoolDesign::kFull) {
+    if (!ran_stratified && (design == PoolDesign::kPooled || design == PoolDesign::kFull)) {
         Log::info("Total upper bound: {:.6f}; estimated crude total: {:.6f}", total_upper_bound, stats.crude_total);
     }
     return static_cast<float>(estimate);
