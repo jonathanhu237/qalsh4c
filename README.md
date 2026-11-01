@@ -188,13 +188,32 @@ proportion to these bounds, runs Modified QALSH only on the distinct pooled poin
 `-n/--num-samples` pool draws in proportion to `D/U` for exact scans. `-n 0` reuses the QALSH4C automatic sample
 count as a reference budget; it does not by itself carry the QALSH4C `(epsilon, delta)` guarantee over to the
 pooled estimator. `-K 0` (the default) draws five times as many pool points as exact samples, and `--direct`
-skips QALSH entirely and scans points drawn in proportion to the upper bounds, which serves as a baseline. The estimate stays
+skips QALSH entirely and scans points drawn in proportion to the upper bounds, which serves as a baseline;
+`--uniform` also skips the upper bounds and scans uniformly drawn source points from scratch. The estimate stays
 unbiased because each stage divides by its own sampling probability. With `--disk-based`, the estimator streams
 `A` once, probes the persistent QALSH index only for pooled points, and scans `B` sequentially for the exact
 stage. Logs report the pool size, the number of distinct QALSH queries, and the time spent in each stage:
 
 ```bash
 ./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool -K 300 -n 100 -s 100
+```
+
+`--plan model` and `--plan certified` choose `K` and `T` themselves, so they reject `-K` and `-n`. A pilot of
+`--pilot-size` draws in proportion to the upper bounds (256 by default) runs Modified QALSH and an exact scan at every
+distinct drawn point. Disjoint pairs of pilot draws give the two variance coefficients of the pooled estimate, whose
+relative variance is `lambda0 / K + (1 - 1/K) lambda1 / T`, and the pilot's timings price one QALSH query and one
+exact scan. The plan starts from the square-root rule for `K`, tries a few sizes around it using the expected number
+of distinct pooled points, and pairs each with the smallest `T` that meets the target. `model` plugs in point
+estimates and aims at an RMS relative error of `--target-error` without guaranteeing it. `certified` plugs in
+empirical Bernstein upper bounds instead, which bound `P(|estimate / truth - 1| > --target-error)` by `--delta`, half
+of it spent on the pilot. A pooled plan switches to querying every source point when that is predicted to finish
+sooner, while `--full`, `--direct` and `--uniform` keep their design and only size `T` (`--uniform` with
+`--plan model` only). Later stages reuse the pilot's QALSH and
+exact results but not its draws, so the estimate stays unbiased. Plans run in memory only, and the log reports the
+coefficients, costs and choice:
+
+```bash
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool --plan model --target-error 0.01
 ```
 
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:

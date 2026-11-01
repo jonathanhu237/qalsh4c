@@ -64,6 +64,7 @@ add_executable(qalsh4c
     ${QALSH4C_DATASET_CUDA_SOURCE}
     src/estimator.cc
     src/global.cc
+    src/pool_plan.cc
     src/main.cc
     src/point_set.cc
     src/utils.cc
@@ -127,6 +128,10 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME exact_scan_test COMMAND exact_scan_test)
 
+    add_executable(pool_plan_test tests/pool_plan_test.cc src/pool_plan.cc)
+    target_include_directories(pool_plan_test PRIVATE src)
+    add_test(NAME pool_plan_test COMMAND pool_plan_test)
+
     add_executable(
         disk_linear_scan_test
         tests/disk_linear_scan_test.cc
@@ -136,6 +141,7 @@ if(BUILD_TESTING)
         src/disk_qalsh_index.cc
         src/estimator.cc
         src/global.cc
+        src/pool_plan.cc
         src/point_set.cc
         src/utils.cc
         src/weights_generator.cc
@@ -157,6 +163,7 @@ if(BUILD_TESTING)
         src/disk_qalsh_index.cc
         src/estimator.cc
         src/global.cc
+        src/pool_plan.cc
         src/point_set.cc
         src/utils.cc
         src/weights_generator.cc

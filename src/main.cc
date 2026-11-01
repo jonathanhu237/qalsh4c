@@ -4,6 +4,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 
 #include "ann_searcher.h"
@@ -329,13 +330,32 @@ int main(int argc, char** argv) {
         ->default_val(Global::kDefaultApproximationRatio);
     pool->add_option("-e,--epsilon", pool_epsilon, "Epsilon for the automatic second-stage sample count")
         ->default_val(Global::kQalsh4cEpsilon);
-    pool->add_option("--delta", pool_delta, "Failure probability for the automatic second-stage sample count")
+    pool->add_option("--delta", pool_delta,
+                     "Failure probability for the automatic second-stage sample count and for --plan certified")
         ->default_val(Global::kQalsh4cDelta);
+    std::string pool_plan{"fixed"};
+    pool->add_option("--plan", pool_plan,
+                     "How to choose K and T: fixed (as given), model (a pilot estimates the variance coefficients and "
+                     "costs, and K and T target an RMS relative error of --target-error), or certified (a pilot "
+                     "certifies the coefficients, so the relative error exceeds --target-error with probability at "
+                     "most --delta). A pooled plan switches to querying every source point when that is predicted "
+                     "to be cheaper.")
+        ->check(CLI::IsMember({"fixed", "model", "certified"}))
+        ->default_val("fixed");
+    float pool_target_error{0.0F};
+    pool->add_option("--target-error", pool_target_error, "Relative error target for --plan model or certified")
+        ->default_val(0.0F);
+    unsigned int pool_pilot_size{PoolSamplingEstimator::kDefaultPilotSize};
+    pool->add_option("--pilot-size", pool_pilot_size, "Pilot draws in proportion to the upper bounds for --plan")
+        ->default_val(PoolSamplingEstimator::kDefaultPilotSize);
     pool->add_option("--exact-batch-size", pool_exact_batch_size, "Batch size for exact linear scans (0: auto)")
         ->default_val(0);
     bool pool_direct{false};
     pool->add_flag("--direct", pool_direct,
                    "Baseline: skip QALSH and draw the exact scans in proportion to the subsample upper bounds");
+    bool pool_uniform{false};
+    pool->add_flag("--uniform", pool_uniform,
+                   "Baseline: skip the upper bounds and QALSH and scan uniformly drawn source points");
     bool pool_full{false};
     pool->add_flag("--full", pool_full, "Ablation: run QALSH for every source point instead of a sampled pool");
     bool pool_no_fuse{false};
@@ -347,10 +367,14 @@ int main(int argc, char** argv) {
         const std::optional<float> expected_approximation_ratio =
             pool_approximation_ratio_option->count() > 0 ? std::optional<float>(pool_approximation_ratio)
                                                          : std::nullopt;
+        const PoolPlanMode plan_mode = pool_plan == "model"       ? PoolPlanMode::kModel
+                                       : pool_plan == "certified" ? PoolPlanMode::kCertified
+                                                                  : PoolPlanMode::kFixed;
         estimator = std::make_unique<PoolSamplingEstimator>(
             pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
             pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
-            disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse);
+            disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse, plan_mode, pool_target_error,
+            pool_pilot_size, pool_uniform);
     });
 
     // ------------------------------

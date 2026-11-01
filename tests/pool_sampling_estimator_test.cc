@@ -112,6 +112,49 @@ int main() {
             status = 2;
             break;
         }
+
+        // Plans with exact bounds see no variance in the pilot (the certified one still pays its radius), and every
+        // design they pick is exact.
+        for (const PoolPlanMode mode : {PoolPlanMode::kModel, PoolPlanMode::kCertified}) {
+            for (const bool full_request : {false, true}) {
+                PoolSamplingEstimator planned(0, 0, 1000, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                              Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false,
+                                              full_request, true, mode, 0.05F, 64);
+                if (!RelativelyClose(planned.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                                     1e-4)) {
+                    status = 6;
+                }
+            }
+        }
+
+        // With loose bounds, plans for a 2% RMS error land near the truth for the pooled, direct and uniform designs.
+        for (const bool direct_request : {false, true}) {
+            PoolSamplingEstimator planned(0, 0, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                          Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, direct_request, false,
+                                          true, PoolPlanMode::kModel, 0.02F, 256);
+            if (!RelativelyClose(planned.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                                 0.1)) {
+                status = 7;
+            }
+        }
+        PoolSamplingEstimator planned_uniform(0, 0, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                              Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false, false,
+                                              true, PoolPlanMode::kModel, 0.02F, 256, true);
+        if (!RelativelyClose(planned_uniform.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                             0.1)) {
+            status = 8;
+        }
+
+        // The uniform baseline scans from scratch, so many uniform draws land near the truth whatever the bounds.
+        PoolSamplingEstimator uniform(0, 20000, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                      Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, false, false, true,
+                                      PoolPlanMode::kFixed, 0.0F, PoolSamplingEstimator::kDefaultPilotSize, true);
+        if (!RelativelyClose(uniform.EstimateDistance(source_metadata, target_metadata, norm_order), truth, 0.05)) {
+            status = 9;
+        }
+        if (status != 0) {
+            break;
+        }
     }
 
     if (status == 0) {

@@ -14,6 +14,7 @@
 #include <memory>
 #include <numbers>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -26,6 +27,7 @@
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
+#include "pool_plan.h"
 #include "utils.h"
 #include "weights_generator.h"
 
@@ -684,15 +686,20 @@ class DoubleWeightedSampler {
         }
     }
 
-    unsigned int Sample() {
+    unsigned int Sample() { return Sample(gen_); }
+
+    // Draws with the caller's generator, so that several samplers can share one random stream.
+    unsigned int Sample(std::mt19937& gen) const {
         std::uniform_real_distribution<double> dis(0.0, total_);
-        auto it = std::ranges::upper_bound(cumulative_, dis(gen_));
+        auto it = std::ranges::upper_bound(cumulative_, dis(gen));
         if (it == cumulative_.end()) {
             // Rounding can return the total itself; map it to the last index with positive weight.
             it = std::ranges::lower_bound(cumulative_, total_);
         }
         return static_cast<unsigned int>(std::distance(cumulative_.begin(), it));
     }
+
+    std::mt19937& Generator() { return gen_; }
 
    private:
     std::vector<double> cumulative_;
@@ -701,16 +708,21 @@ class DoubleWeightedSampler {
 };
 
 // Draws `num_draws` indices with replacement and returns (index, multiplicity) pairs sorted by index.
-std::vector<std::pair<unsigned int, unsigned int>> DrawWithReplacement(DoubleWeightedSampler& sampler,
-                                                                       unsigned int num_draws) {
+std::vector<std::pair<unsigned int, unsigned int>> DrawWithReplacement(const DoubleWeightedSampler& sampler,
+                                                                       unsigned int num_draws, std::mt19937& gen) {
     std::unordered_map<unsigned int, unsigned int> count_map;
     count_map.reserve(num_draws);
     for (unsigned int draw = 0; draw < num_draws; ++draw) {
-        ++count_map[sampler.Sample()];
+        ++count_map[sampler.Sample(gen)];
     }
     std::vector<std::pair<unsigned int, unsigned int>> counts(count_map.begin(), count_map.end());
     std::ranges::sort(counts);
     return counts;
+}
+
+std::vector<std::pair<unsigned int, unsigned int>> DrawWithReplacement(DoubleWeightedSampler& sampler,
+                                                                       unsigned int num_draws) {
+    return DrawWithReplacement(sampler, num_draws, sampler.Generator());
 }
 
 std::uint64_t HashPoint(const Point& point) { return Fingerprint::Of(point.data(), point.size()); }
@@ -830,6 +842,422 @@ std::vector<Distance> ExactDistancesFromUpperBounds(const std::vector<Point>& qu
 
 double ElapsedMilliseconds(std::chrono::steady_clock::time_point begin, std::chrono::steady_clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
+// Distances already computed for source points. Modified QALSH on a fixed index and an exact scan return the same
+// distance whenever a point is queried again, so the production stages reuse a pilot's work; they never reuse its
+// random draws.
+struct DistanceCache {
+    std::unordered_map<unsigned int, Distance> crude;  // Modified QALSH distance, clipped with U_a when fusing
+    std::unordered_map<unsigned int, double> crude_query_ms;  // Time one thread spent on each of those queries
+    std::unordered_map<unsigned int, Distance> exact;
+};
+
+// What the pool stages read once every source point has its upper bound.
+struct PoolStageInputs {
+    const std::vector<Point>& sources;
+    const std::vector<double>& upper_bounds;  // U_a, zero for exact target matches
+    double total_upper_bound;
+    const QalshAnnSearcher* qalsh_searcher;  // Null for the direct baseline, which builds no index
+    const LinearScanAnnSearcher& exact_searcher;
+    unsigned int exact_batch_size;  // Requested batch size for scalar exact scans (0: auto)
+    bool fuse;
+};
+
+// Runs Modified QALSH on the given distinct points that have no cached crude distance yet.
+void QueryCrudeDistances(const std::vector<unsigned int>& point_ids, const PoolStageInputs& inputs,
+                         DistanceCache& cache) {
+    std::vector<unsigned int> new_ids;
+    std::ranges::copy_if(point_ids, std::back_inserter(new_ids),
+                         [&cache](unsigned int point_id) { return !cache.crude.contains(point_id); });
+    std::vector<Distance> distances(new_ids.size(), 0.0F);
+    std::vector<double> query_ms(new_ids.size(), 0.0);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+#endif
+    {
+        std::unique_ptr<AnnSearcher> local_searcher = inputs.qalsh_searcher->Clone();
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp for schedule(dynamic)
+#endif
+        for (long long index = 0; index < static_cast<long long>(new_ids.size()); ++index) {
+            const unsigned int point_id = new_ids[static_cast<size_t>(index)];
+            const auto begin = std::chrono::steady_clock::now();
+            const Distance qalsh_distance = local_searcher->Search(inputs.sources[point_id]).distance;
+            query_ms[static_cast<size_t>(index)] = ElapsedMilliseconds(begin, std::chrono::steady_clock::now());
+            // Both bounds are distances to real target points, so their minimum is still an upper bound.
+            distances[static_cast<size_t>(index)] =
+                inputs.fuse ? std::min(qalsh_distance, static_cast<Distance>(inputs.upper_bounds[point_id]))
+                            : qalsh_distance;
+        }
+    }
+    for (size_t index = 0; index < new_ids.size(); ++index) {
+        cache.crude.emplace(new_ids[index], distances[index]);
+        cache.crude_query_ms.emplace(new_ids[index], query_ms[index]);
+    }
+}
+
+// Exact nearest-neighbor distances for the given distinct points that have no cached exact distance yet. Each scan
+// starts from the point's bound, which must be a distance to a real target point.
+void ScanExactDistances(const std::vector<unsigned int>& point_ids, const std::vector<Distance>& start_bounds,
+                        const PoolStageInputs& inputs, DistanceCache& cache) {
+    std::vector<unsigned int> new_ids;
+    std::vector<Point> queries;
+    std::vector<Distance> bounds;
+    for (size_t index = 0; index < point_ids.size(); ++index) {
+        if (!cache.exact.contains(point_ids[index])) {
+            new_ids.push_back(point_ids[index]);
+            queries.push_back(inputs.sources[point_ids[index]]);
+            bounds.push_back(start_bounds[index]);
+        }
+    }
+    if (new_ids.empty()) {
+        return;
+    }
+    const std::vector<Distance> distances = ExactDistancesFromUpperBounds(
+        queries, bounds, inputs.exact_searcher, ResolveExactBatchSize(inputs.exact_batch_size, queries.size()));
+    for (size_t index = 0; index < new_ids.size(); ++index) {
+        cache.exact.emplace(new_ids[index], distances[index]);
+    }
+}
+
+enum class PoolDesign {
+    kPooled,  // K draws in proportion to U_a, QALSH on the distinct ones, T resamples in proportion to D_a / U_a
+    kFull,    // QALSH on every source point and T draws in proportion to D_a (the --full ablation)
+    kDirect,  // No QALSH: T draws in proportion to U_a (the --direct baseline)
+    kUniform,  // No bounds and no QALSH: T uniform draws, scanned from scratch (the --uniform baseline)
+};
+
+const char* PoolDesignName(PoolDesign design) {
+    switch (design) {
+        case PoolDesign::kPooled:
+            return "pooled";
+        case PoolDesign::kFull:
+            return "full";
+        case PoolDesign::kDirect:
+            return "direct";
+        case PoolDesign::kUniform:
+            return "uniform";
+    }
+    return "unknown";
+}
+
+struct PoolRunStats {
+    unsigned int pool_draws{0};
+    size_t pool_distinct{0};
+    size_t exact_distinct{0};
+    double qalsh_ms{0.0};
+    double exact_ms{0.0};
+    double crude_total{0.0};
+};
+
+// Where an exact scan of a point starts: its crude distance once QALSH ran, else U_a, which is a real distance
+// for every design but the uniform one, whose constant weights bound nothing.
+Distance ExactStartBound(PoolDesign design, unsigned int point_id, const PoolStageInputs& inputs,
+                         const DistanceCache& cache) {
+    if (design == PoolDesign::kUniform) {
+        return std::numeric_limits<Distance>::infinity();
+    }
+    if (design == PoolDesign::kDirect) {
+        return static_cast<Distance>(inputs.upper_bounds[point_id]);
+    }
+    return cache.crude.at(point_id);
+}
+
+// One estimate with the given design and budget. Draws come from `gen` when it is given, and otherwise from each
+// sampler's own generator.
+double RunPoolDesign(PoolDesign design, unsigned int pool_size, unsigned int num_samples, const PoolStageInputs& inputs,
+                     DistanceCache& cache, std::mt19937* gen, PoolRunStats& stats) {
+    using Clock = std::chrono::steady_clock;
+    const auto begin = Clock::now();
+    const auto draw = [gen](DoubleWeightedSampler& sampler, unsigned int num_draws) {
+        return DrawWithReplacement(sampler, num_draws, gen != nullptr ? *gen : sampler.Generator());
+    };
+
+    if (design == PoolDesign::kDirect || design == PoolDesign::kUniform) {
+        // Baselines without QALSH: scan T points drawn in proportion to U_a, which is constant for the uniform
+        // design.
+        DoubleWeightedSampler direct_sampler(inputs.upper_bounds);
+        const std::vector<std::pair<unsigned int, unsigned int>> selected = draw(direct_sampler, num_samples);
+        std::vector<unsigned int> point_ids;
+        std::vector<Distance> bounds;
+        for (const auto& [point_id, multiplicity] : selected) {
+            (void)multiplicity;
+            point_ids.push_back(point_id);
+            bounds.push_back(ExactStartBound(design, point_id, inputs, cache));
+        }
+        ScanExactDistances(point_ids, bounds, inputs, cache);
+        double ratio_sum = 0.0;
+        for (const auto& [point_id, multiplicity] : selected) {
+            ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(cache.exact.at(point_id)) /
+                         inputs.upper_bounds[point_id];
+        }
+        stats.exact_distinct = selected.size();
+        stats.exact_ms = ElapsedMilliseconds(begin, Clock::now());
+        return inputs.total_upper_bound * ratio_sum / static_cast<double>(num_samples);
+    }
+
+    // Stage 2: K draws in proportion to U_a, or every source point with a positive bound once for the full design;
+    // Modified QALSH runs once per distinct pooled point.
+    DoubleWeightedSampler pool_sampler(inputs.upper_bounds);
+    std::vector<std::pair<unsigned int, unsigned int>> pool;
+    if (design == PoolDesign::kFull) {
+        for (unsigned int point_id = 0; point_id < inputs.sources.size(); ++point_id) {
+            if (inputs.upper_bounds[point_id] > 0.0) {
+                pool.emplace_back(point_id, 1U);
+            }
+        }
+    } else {
+        pool = draw(pool_sampler, pool_size);
+        stats.pool_draws = pool_size;
+    }
+    std::vector<unsigned int> pool_ids(pool.size());
+    std::ranges::transform(pool, pool_ids.begin(), [](const auto& entry) { return entry.first; });
+    QueryCrudeDistances(pool_ids, inputs, cache);
+    stats.pool_distinct = pool.size();
+    const auto pool_end = Clock::now();
+    stats.qalsh_ms = ElapsedMilliseconds(begin, pool_end);
+
+    // Stage 3: resample pool draws in proportion to D_a / U_a (D_a for the full design), then scan exactly from D_a.
+    std::vector<double> resample_weights(pool.size(), 0.0);
+    double pool_ratio_sum = 0.0;
+    for (size_t pool_index = 0; pool_index < pool.size(); ++pool_index) {
+        const auto& [point_id, multiplicity] = pool[pool_index];
+        const auto crude = static_cast<double>(cache.crude.at(point_id));
+        resample_weights[pool_index] = static_cast<double>(multiplicity) *
+                                       (design == PoolDesign::kFull ? crude : crude / inputs.upper_bounds[point_id]);
+        pool_ratio_sum += resample_weights[pool_index];
+    }
+    if (pool_ratio_sum <= 0.0) {
+        Log::info("Every pooled point matches a target point exactly; the pooled estimate is zero.");
+        return 0.0;
+    }
+    // W estimates the total crude distance sum_a D_a from the pool; the full design knows it exactly.
+    stats.crude_total = design == PoolDesign::kFull
+                            ? pool_ratio_sum
+                            : inputs.total_upper_bound / static_cast<double>(pool_size) * pool_ratio_sum;
+
+    DoubleWeightedSampler resampler(resample_weights);
+    const std::vector<std::pair<unsigned int, unsigned int>> selected = draw(resampler, num_samples);
+    std::vector<unsigned int> point_ids;
+    std::vector<Distance> bounds;
+    for (const auto& [pool_index, multiplicity] : selected) {
+        (void)multiplicity;
+        point_ids.push_back(pool[pool_index].first);
+        bounds.push_back(cache.crude.at(pool[pool_index].first));
+    }
+    ScanExactDistances(point_ids, bounds, inputs, cache);
+
+    double ratio_sum = 0.0;
+    for (const auto& [pool_index, multiplicity] : selected) {
+        const unsigned int point_id = pool[pool_index].first;
+        ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(cache.exact.at(point_id)) /
+                     static_cast<double>(cache.crude.at(point_id));
+    }
+    stats.exact_distinct = selected.size();
+    stats.exact_ms = ElapsedMilliseconds(pool_end, Clock::now());
+    return stats.crude_total * ratio_sum / static_cast<double>(num_samples);
+}
+
+// Uniform sample, without replacement, of the source points with a positive bound whose Modified QALSH times price
+// querying every source point.
+constexpr unsigned int kFullCostProbeSize = 64;
+// Pool sizes tried around the square-root rule, in steps of 2^(1/4) on either side.
+constexpr int kPoolSizeSearchSteps = 8;
+// Pools are never larger than this many draws per source point; beyond it the full design is cheaper anyway.
+constexpr double kMaxPoolDrawsPerPoint = 64.0;
+// Share of the failure probability delta that the certified plan spends on the pilot.
+constexpr double kPilotFailureShare = 0.5;
+
+struct PoolPlanSettings {
+    PoolPlanMode mode;
+    PoolDesign requested;  // kPooled lets the plan switch to kFull when that is predicted to be cheaper
+    double target_error;
+    double delta;
+    unsigned int pilot_size;
+};
+
+struct PoolPlanChoice {
+    PoolDesign design;
+    unsigned int pool_size;
+    unsigned int num_samples;
+};
+
+std::vector<unsigned int> UniformProbeIds(const std::vector<double>& upper_bounds, unsigned int probe_size,
+                                          std::mt19937& gen) {
+    std::vector<unsigned int> candidates;
+    for (unsigned int point_id = 0; point_id < upper_bounds.size(); ++point_id) {
+        if (upper_bounds[point_id] > 0.0) {
+            candidates.push_back(point_id);
+        }
+    }
+    const size_t probe_count = std::min<size_t>(probe_size, candidates.size());
+    for (size_t index = 0; index < probe_count; ++index) {
+        std::uniform_int_distribution<size_t> dis(index, candidates.size() - 1);
+        std::swap(candidates[index], candidates[dis(gen)]);
+    }
+    candidates.resize(probe_count);
+    return candidates;
+}
+
+double MeanQueryMs(const std::vector<unsigned int>& point_ids, const DistanceCache& cache) {
+    double total = 0.0;
+    for (const unsigned int point_id : point_ids) {
+        total += cache.crude_query_ms.at(point_id);
+    }
+    return total / static_cast<double>(point_ids.size());
+}
+
+// Expected number of distinct source points without a cached crude distance among `pool_size` draws in proportion
+// to U_a.
+double ExpectedNewDistinct(const PoolStageInputs& inputs, unsigned int pool_size, const DistanceCache& cache) {
+    const auto num_points = static_cast<long long>(inputs.upper_bounds.size());
+    double expected = 0.0;
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for reduction(+ : expected) schedule(static)
+#endif
+    for (long long point_id = 0; point_id < num_points; ++point_id) {
+        const double probability = inputs.upper_bounds[static_cast<size_t>(point_id)] / inputs.total_upper_bound;
+        if (probability > 0.0 && !cache.crude.contains(static_cast<unsigned int>(point_id))) {
+            expected -= std::expm1(static_cast<double>(pool_size) * std::log1p(-probability));
+        }
+    }
+    return expected;
+}
+
+// Source points with a positive bound and no cached crude distance.
+size_t UncachedPositivePoints(const PoolStageInputs& inputs, const DistanceCache& cache) {
+    size_t count = 0;
+    for (unsigned int point_id = 0; point_id < inputs.upper_bounds.size(); ++point_id) {
+        if (inputs.upper_bounds[point_id] > 0.0 && !cache.crude.contains(point_id)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+// Runs the pilot and picks the design, pool size and sample count. The pilot draws points in proportion to U_a;
+// every distinct one gets Modified QALSH (unless the design is direct) and an exact scan, which give the ratios
+// x = v / U and z = D / U. Disjoint pairs of draws estimate or certify the variance coefficients, and the pilot's
+// timings price a QALSH query and an exact scan. The plan then sizes the requested design for the target, and a
+// pooled request switches to the full design when that is predicted to finish sooner.
+PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageInputs& inputs, DistanceCache& cache,
+                              std::mt19937& gen) {
+    using Clock = std::chrono::steady_clock;
+    const auto begin = Clock::now();
+    const bool uses_qalsh =
+        settings.requested != PoolDesign::kDirect && settings.requested != PoolDesign::kUniform;
+
+    const DoubleWeightedSampler sampler(inputs.upper_bounds);
+    std::vector<unsigned int> draws(settings.pilot_size);
+    for (unsigned int& draw : draws) {
+        draw = sampler.Sample(gen);
+    }
+    std::vector<unsigned int> distinct = draws;
+    std::ranges::sort(distinct);
+    distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+
+    // A pilot-sized batch spends much of its wall time starting threads and waiting for the last query, so a QALSH
+    // query is priced by its own thread time spread over every thread, as in a large batch.
+    const auto num_threads = static_cast<double>(MaxExactScanThreads());
+    double qalsh_ms_per_query = 0.0;
+    if (uses_qalsh) {
+        QueryCrudeDistances(distinct, inputs, cache);
+        qalsh_ms_per_query = MeanQueryMs(distinct, cache) / num_threads;
+    }
+    std::vector<Distance> bounds(distinct.size());
+    for (size_t index = 0; index < distinct.size(); ++index) {
+        bounds[index] = ExactStartBound(settings.requested, distinct[index], inputs, cache);
+    }
+    const auto exact_begin = Clock::now();
+    ScanExactDistances(distinct, bounds, inputs, cache);
+    const double exact_ms_per_query =
+        ElapsedMilliseconds(exact_begin, Clock::now()) / static_cast<double>(distinct.size());
+
+    std::vector<PoolPlan::PilotDraw> pilot(draws.size());
+    for (size_t index = 0; index < draws.size(); ++index) {
+        const unsigned int point_id = draws[index];
+        const double bound = inputs.upper_bounds[point_id];
+        const double crude = uses_qalsh ? static_cast<double>(cache.crude.at(point_id)) : bound;
+        pilot[index] = PoolPlan::PilotDraw{.x = static_cast<double>(cache.exact.at(point_id)) / bound,
+                                           .z = crude / bound};
+    }
+
+    // RMS targets bound the relative variance by epsilon^2; the certified plan applies Chebyshev with the part of
+    // delta that the pilot does not spend.
+    double eta = settings.target_error * settings.target_error;
+    std::optional<PoolPlan::Coefficients> coefficients;
+    if (settings.mode == PoolPlanMode::kCertified) {
+        const double alpha = kPilotFailureShare * settings.delta;
+        coefficients = PoolPlan::CertifyCoefficients(pilot, alpha);
+        if (!coefficients) {
+            Log::error("A pilot of {} draws is too small to certify the variance coefficients; increase --pilot-size.",
+                       draws.size());
+        }
+        eta *= settings.delta - alpha;
+    } else {
+        coefficients = PoolPlan::EstimateCoefficients(pilot);
+    }
+
+    PoolPlanChoice choice{.design = settings.requested, .pool_size = 0, .num_samples = 0};
+    unsigned int pooled_size = 0;
+    unsigned int pooled_samples = 0;
+    double pooled_ms = 0.0;
+    double full_ms = 0.0;
+    double full_qalsh_ms_per_query = qalsh_ms_per_query;
+    const unsigned int full_samples = PoolPlan::OneStageSamples(coefficients->lambda1, eta);
+    if (settings.requested == PoolDesign::kDirect || settings.requested == PoolDesign::kUniform) {
+        choice.num_samples = PoolPlan::OneStageSamples(coefficients->lambda0, eta);
+    } else if (settings.requested == PoolDesign::kFull) {
+        choice.num_samples = full_samples;
+    } else {
+        // The pilot's points come in proportion to U_a like the pool's, while querying every source point costs what
+        // a uniform sample of them costs.
+        const std::vector<unsigned int> probe = UniformProbeIds(inputs.upper_bounds, kFullCostProbeSize, gen);
+        QueryCrudeDistances(probe, inputs, cache);
+        full_qalsh_ms_per_query = MeanQueryMs(probe, cache) / num_threads;
+
+        const unsigned int square_root_size =
+            PoolPlan::SquareRootPoolSize(*coefficients, eta, qalsh_ms_per_query, exact_ms_per_query);
+        const double max_pool_size =
+            kMaxPoolDrawsPerPoint * static_cast<double>(std::ranges::count_if(inputs.upper_bounds, [](double bound) {
+                return bound > 0.0;
+            }));
+        pooled_ms = std::numeric_limits<double>::infinity();
+        for (int step = -kPoolSizeSearchSteps; step <= kPoolSizeSearchSteps; ++step) {
+            const double scaled = std::round(static_cast<double>(square_root_size) * std::exp2(step / 4.0));
+            const auto pool_size = static_cast<unsigned int>(std::clamp(scaled, 1.0, std::max(1.0, max_pool_size)));
+            const std::optional<unsigned int> num_samples =
+                PoolPlan::SamplesForPool(*coefficients, eta, pool_size);
+            if (!num_samples) {
+                continue;
+            }
+            const double cost = qalsh_ms_per_query * ExpectedNewDistinct(inputs, pool_size, cache) +
+                                exact_ms_per_query * static_cast<double>(*num_samples);
+            if (cost < pooled_ms) {
+                pooled_ms = cost;
+                pooled_size = pool_size;
+                pooled_samples = *num_samples;
+            }
+        }
+        full_ms = full_qalsh_ms_per_query * static_cast<double>(UncachedPositivePoints(inputs, cache)) +
+                  exact_ms_per_query * static_cast<double>(full_samples);
+        if (pooled_ms <= full_ms) {
+            choice = PoolPlanChoice{.design = PoolDesign::kPooled, .pool_size = pooled_size, .num_samples = pooled_samples};
+        } else {
+            choice = PoolPlanChoice{.design = PoolDesign::kFull, .pool_size = 0, .num_samples = full_samples};
+        }
+    }
+
+    Log::info(
+        "Pool plan: mode={} design={} target_error={:.4g} eta={:.4e} pilot_draws={} pilot_distinct={} lambda0={:.6f} "
+        "lambda1={:.6f} qalsh_ms={:.5f} full_qalsh_ms={:.5f} exact_ms={:.5f} pooled_K={} pooled_T={} "
+        "pooled_predicted_ms={:.2f} full_T={} full_predicted_ms={:.2f} pilot_ms={:.3f}",
+        settings.mode == PoolPlanMode::kCertified ? "certified" : "model", PoolDesignName(choice.design),
+        settings.target_error, eta, draws.size(), distinct.size(), coefficients->lambda0, coefficients->lambda1,
+        qalsh_ms_per_query, full_qalsh_ms_per_query, exact_ms_per_query, pooled_size, pooled_samples, pooled_ms,
+        full_samples, full_ms, ElapsedMilliseconds(begin, Clock::now()));
+    return choice;
 }
 
 }  // namespace
@@ -1233,7 +1661,8 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
                                              unsigned int disk_block_size, unsigned int disk_query_batch_size,
                                              std::optional<float> expected_approximation_ratio,
                                              DiskQalshSearchOptions disk_qalsh_options, bool direct, bool full,
-                                             bool fuse)
+                                             bool fuse, PoolPlanMode plan_mode, float target_error,
+                                             unsigned int pilot_size, bool uniform)
     : pool_size_(pool_size),
       num_samples_(num_samples),
       subsample_size_(subsample_size),
@@ -1248,7 +1677,11 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
       disk_qalsh_options_(disk_qalsh_options),
       direct_(direct),
       full_(full),
-      fuse_(fuse) {
+      fuse_(fuse),
+      plan_mode_(plan_mode),
+      target_error_(target_error),
+      pilot_size_(pilot_size),
+      uniform_(uniform) {
     if (full_ && disk_based_) {
         Log::error("The --full ablation is available only in memory.");
     }
@@ -1260,6 +1693,36 @@ PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned in
     }
     if (disk_block_size_ == 0 || disk_query_batch_size_ == 0) {
         Log::error("Disk block size and disk query batch size must be positive.");
+    }
+    if (uniform_ && (direct_ || full_ || disk_based_)) {
+        Log::error("The --uniform baseline runs in memory and cannot be combined with --direct or --full.");
+    }
+    if (plan_mode_ != PoolPlanMode::kFixed) {
+        if (disk_based_) {
+            Log::error("--plan is available only in memory.");
+        }
+        if (pool_size_ != 0 || num_samples_ != 0) {
+            Log::error("--plan chooses the pool size and the sample count; do not pass -K or -n with it.");
+        }
+        if (!(target_error_ > 0.0F && target_error_ < 1.0F)) {
+            Log::error("--plan needs a target error in (0, 1), got {}", target_error_);
+        }
+        if (pilot_size_ < 4) {
+            Log::error("--plan needs a pilot of at least four draws, got {}", pilot_size_);
+        }
+    }
+    if (plan_mode_ == PoolPlanMode::kCertified) {
+        if (!(delta_ > 0.0F && delta_ < 1.0F)) {
+            Log::error("The certified plan needs a failure probability in (0, 1), got {}", delta_);
+        }
+        if (!fuse_ && !direct_) {
+            // The certificate needs D_a <= U_a, which only clipping guarantees.
+            Log::error("The certified plan cannot be combined with --no-fuse.");
+        }
+        if (uniform_) {
+            // The certificate needs ratios v_a / U_a in (0, 1], which constant weights do not give.
+            Log::error("The certified plan cannot be combined with --uniform.");
+        }
     }
 }
 
@@ -1304,16 +1767,18 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
         Log::error("Source and target dimension mismatch: {} vs {}.", from.num_dimensions, to.num_dimensions);
     }
 
+    // A plan picks K and T after its pilot instead.
+    const bool planned = plan_mode_ != PoolPlanMode::kFixed;
     QalshConfig qalsh_config{.approximation_ratio = approximation_ratio_};
     qalsh_config.Regularize(to.num_points, norm_order);
-    const unsigned int num_samples = ResolveNumSamples(qalsh_config, norm_order);
-    const unsigned int pool_size = direct_ || full_ ? 0 : ResolvePoolSize(num_samples);
+    const unsigned int num_samples = planned ? 0 : ResolveNumSamples(qalsh_config, norm_order);
+    const unsigned int pool_size = planned || direct_ || full_ || uniform_ ? 0 : ResolvePoolSize(num_samples);
 
     // Build the QALSH index on the target set; its loaded target points are shared by every later stage.
     const auto index_begin = Clock::now();
     QalshAnnSearcher qalsh_searcher(approximation_ratio_);
     std::shared_ptr<const std::vector<Point>> targets;
-    if (direct_) {
+    if (direct_ || uniform_) {
         targets = std::make_shared<const std::vector<Point>>(
             PointSet::LoadPointsFromFile(to.file_path, to.num_points, to.num_dimensions));
     } else {
@@ -1322,15 +1787,19 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
     }
     const auto index_end = Clock::now();
 
-    // Stage 1: a cheap upper bound U_a for every source point; exact target matches contribute zero.
+    // Stage 1: a cheap upper bound U_a for every source point; exact target matches contribute zero. The uniform
+    // baseline weighs every source point equally instead.
     const std::vector<Point> sources = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
-    std::vector<double> upper_bounds = SubsampleUpperBounds(sources, *targets, subsample_size_, norm_order);
-    const std::vector<char> exact_matches = ExactTargetMatches(sources, *targets);
+    std::vector<double> upper_bounds(sources.size(), 1.0);
     unsigned int num_exact_matches = 0;
-    for (size_t source_index = 0; source_index < sources.size(); ++source_index) {
-        if (exact_matches[source_index] != 0) {
-            upper_bounds[source_index] = 0.0;
-            ++num_exact_matches;
+    if (!uniform_) {
+        upper_bounds = SubsampleUpperBounds(sources, *targets, subsample_size_, norm_order);
+        const std::vector<char> exact_matches = ExactTargetMatches(sources, *targets);
+        for (size_t source_index = 0; source_index < sources.size(); ++source_index) {
+            if (exact_matches[source_index] != 0) {
+                upper_bounds[source_index] = 0.0;
+                ++num_exact_matches;
+            }
         }
     }
     const double total_upper_bound = std::accumulate(upper_bounds.begin(), upper_bounds.end(), 0.0);
@@ -1340,122 +1809,55 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
         return 0.0F;
     }
 
-    if (direct_) {
-        // Baseline without QALSH: scan T points drawn in proportion to U_a, starting from U_a.
-        DoubleWeightedSampler direct_sampler(upper_bounds);
-        const std::vector<std::pair<unsigned int, unsigned int>> selected =
-            DrawWithReplacement(direct_sampler, num_samples);
-        std::vector<Point> queries;
-        std::vector<Distance> query_upper_bounds;
-        for (const auto& [point_id, multiplicity] : selected) {
-            (void)multiplicity;
-            queries.push_back(sources[point_id]);
-            query_upper_bounds.push_back(static_cast<Distance>(upper_bounds[point_id]));
-        }
-        LinearScanAnnSearcher exact_searcher;
-        exact_searcher.InitLoaded(targets, to.num_dimensions, norm_order);
-        const std::vector<Distance> exact_distances = ExactDistancesFromUpperBounds(
-            queries, query_upper_bounds, exact_searcher, ResolveExactBatchSize(exact_batch_size_, queries.size()));
-        double ratio_sum = 0.0;
-        for (size_t selected_index = 0; selected_index < selected.size(); ++selected_index) {
-            const auto& [point_id, multiplicity] = selected[selected_index];
-            ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(exact_distances[selected_index]) /
-                         upper_bounds[point_id];
-        }
-        const auto exact_end = Clock::now();
-        Log::info(
-            "Pool sampling stats: subsample_size={} exact_matches={} pool_draws=0 pool_distinct=0 exact_draws={} "
-            "exact_distinct={} index_ms={:.3f} upper_bound_ms={:.3f} pool_qalsh_ms=0.000 exact_ms={:.3f}",
-            std::min<size_t>(subsample_size_, targets->size()), num_exact_matches, num_samples, selected.size(),
-            ElapsedMilliseconds(index_begin, index_end), ElapsedMilliseconds(index_end, upper_bound_end),
-            ElapsedMilliseconds(upper_bound_end, exact_end));
-        return static_cast<float>(total_upper_bound * ratio_sum / static_cast<double>(num_samples));
-    }
-
-    // Stage 2: K draws in proportion to U_a; Modified QALSH runs once per distinct pooled point.
-    DoubleWeightedSampler pool_sampler(upper_bounds);
-    std::vector<std::pair<unsigned int, unsigned int>> pool;
-    if (full_) {
-        // Ablation: every source point with a positive bound enters once, so its inclusion probability is one.
-        for (unsigned int point_id = 0; point_id < sources.size(); ++point_id) {
-            if (upper_bounds[point_id] > 0.0) {
-                pool.emplace_back(point_id, 1U);
-            }
-        }
-    } else {
-        pool = DrawWithReplacement(pool_sampler, pool_size);
-    }
-    std::vector<Distance> crude_distances(pool.size(), 0.0F);
-#ifdef QALSH4C_USE_OPENMP
-#pragma omp parallel
-#endif
-    {
-        std::unique_ptr<AnnSearcher> local_searcher = qalsh_searcher.Clone();
-#ifdef QALSH4C_USE_OPENMP
-#pragma omp for schedule(dynamic)
-#endif
-        for (long long pool_index = 0; pool_index < static_cast<long long>(pool.size()); ++pool_index) {
-            const unsigned int point_id = pool[static_cast<size_t>(pool_index)].first;
-            const Distance qalsh_distance = local_searcher->Search(sources[point_id]).distance;
-            // Both bounds are distances to real target points, so their minimum is still an upper bound.
-            crude_distances[static_cast<size_t>(pool_index)] =
-                fuse_ ? std::min(qalsh_distance, static_cast<Distance>(upper_bounds[point_id])) : qalsh_distance;
-        }
-    }
-    const auto pool_end = Clock::now();
-
-    // Stage 3: resample pool draws in proportion to D_a / U_a (D_a for the full ablation), then scan exactly from
-    // D_a.
-    std::vector<double> resample_weights(pool.size(), 0.0);
-    double pool_ratio_sum = 0.0;
-    for (size_t pool_index = 0; pool_index < pool.size(); ++pool_index) {
-        const auto& [point_id, multiplicity] = pool[pool_index];
-        const double crude = static_cast<double>(crude_distances[pool_index]);
-        resample_weights[pool_index] = static_cast<double>(multiplicity) * (full_ ? crude : crude / upper_bounds[point_id]);
-        pool_ratio_sum += resample_weights[pool_index];
-    }
-    if (pool_ratio_sum <= 0.0) {
-        Log::info("Every pooled point matches a target point exactly; the pooled estimate is zero.");
-        return 0.0F;
-    }
-    // W estimates the total crude distance sum_a D_a from the pool; the full ablation knows it exactly.
-    const double crude_total =
-        full_ ? pool_ratio_sum : total_upper_bound / static_cast<double>(pool_size) * pool_ratio_sum;
-
-    DoubleWeightedSampler resampler(resample_weights);
-    const std::vector<std::pair<unsigned int, unsigned int>> selected = DrawWithReplacement(resampler, num_samples);
-    std::vector<Point> queries;
-    std::vector<Distance> query_upper_bounds;
-    queries.reserve(selected.size());
-    query_upper_bounds.reserve(selected.size());
-    for (const auto& [pool_index, multiplicity] : selected) {
-        (void)multiplicity;
-        queries.push_back(sources[pool[pool_index].first]);
-        query_upper_bounds.push_back(crude_distances[pool_index]);
-    }
-
     LinearScanAnnSearcher exact_searcher;
     exact_searcher.InitLoaded(targets, to.num_dimensions, norm_order);
-    const unsigned int exact_batch_size = ResolveExactBatchSize(exact_batch_size_, queries.size());
-    const std::vector<Distance> exact_distances =
-        ExactDistancesFromUpperBounds(queries, query_upper_bounds, exact_searcher, exact_batch_size);
-
-    double ratio_sum = 0.0;
-    for (size_t selected_index = 0; selected_index < selected.size(); ++selected_index) {
-        const auto& [pool_index, multiplicity] = selected[selected_index];
-        ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(exact_distances[selected_index]) /
-                     static_cast<double>(crude_distances[pool_index]);
+    const PoolStageInputs inputs{
+        .sources = sources,
+        .upper_bounds = upper_bounds,
+        .total_upper_bound = total_upper_bound,
+        .qalsh_searcher = direct_ || uniform_ ? nullptr : &qalsh_searcher,
+        .exact_searcher = exact_searcher,
+        .exact_batch_size = exact_batch_size_,
+        .fuse = fuse_,
+    };
+    PoolDesign design = uniform_  ? PoolDesign::kUniform
+                        : direct_ ? PoolDesign::kDirect
+                        : full_   ? PoolDesign::kFull
+                                  : PoolDesign::kPooled;
+    unsigned int run_pool_size = pool_size;
+    unsigned int run_num_samples = num_samples;
+    DistanceCache cache;
+    PoolRunStats stats;
+    double estimate = 0.0;
+    if (planned) {
+        // One random stream serves the pilot and the production draws, which keeps them independent even with a
+        // fixed seed.
+        std::mt19937 gen = Random::SeededGenerator();
+        const PoolPlanChoice choice =
+            PlanPoolDesign(PoolPlanSettings{.mode = plan_mode_,
+                                            .requested = design,
+                                            .target_error = target_error_,
+                                            .delta = delta_,
+                                            .pilot_size = pilot_size_},
+                           inputs, cache, gen);
+        design = choice.design;
+        run_pool_size = choice.pool_size;
+        run_num_samples = choice.num_samples;
+        estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, &gen, stats);
+    } else {
+        estimate = RunPoolDesign(design, run_pool_size, run_num_samples, inputs, cache, nullptr, stats);
     }
-    const double estimate = crude_total * ratio_sum / static_cast<double>(num_samples);
-    const auto exact_end = Clock::now();
 
     Log::info(
         "Pool sampling stats: subsample_size={} exact_matches={} pool_draws={} pool_distinct={} exact_draws={} "
         "exact_distinct={} index_ms={:.3f} upper_bound_ms={:.3f} pool_qalsh_ms={:.3f} exact_ms={:.3f}",
-        std::min<size_t>(subsample_size_, targets->size()), num_exact_matches, pool_size, pool.size(), num_samples,
-        selected.size(), ElapsedMilliseconds(index_begin, index_end), ElapsedMilliseconds(index_end, upper_bound_end),
-        ElapsedMilliseconds(upper_bound_end, pool_end), ElapsedMilliseconds(pool_end, exact_end));
-    Log::info("Total upper bound: {:.6f}; estimated crude total: {:.6f}", total_upper_bound, crude_total);
+        uniform_ ? 0 : std::min<size_t>(subsample_size_, targets->size()), num_exact_matches, stats.pool_draws,
+        stats.pool_distinct,
+        run_num_samples, stats.exact_distinct, ElapsedMilliseconds(index_begin, index_end),
+        ElapsedMilliseconds(index_end, upper_bound_end), stats.qalsh_ms, stats.exact_ms);
+    if (design == PoolDesign::kPooled || design == PoolDesign::kFull) {
+        Log::info("Total upper bound: {:.6f}; estimated crude total: {:.6f}", total_upper_bound, stats.crude_total);
+    }
     return static_cast<float>(estimate);
 }
 

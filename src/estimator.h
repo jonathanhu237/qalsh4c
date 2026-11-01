@@ -57,6 +57,13 @@ class SamplingEstimator : public Estimator {
     unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
 };
 
+// How PoolSamplingEstimator chooses its pool size K and sample count T.
+enum class PoolPlanMode {
+    kFixed,      // K and T as given, or the QALSH4C sample count with kAutoPoolSizePerSample draws per sample
+    kModel,      // A pilot estimates the variance coefficients and costs; K and T target an RMS relative error
+    kCertified,  // A pilot certifies upper bounds on the coefficients; K and T meet an (epsilon, delta) guarantee
+};
+
 // Two-stage QALSH4C. Every source point gets a cheap upper bound from a uniform target subsample; a pool is
 // drawn in proportion to these bounds, Modified QALSH runs only on pooled points, and exact scans run on
 // points resampled from the pool in proportion to D / U.
@@ -65,6 +72,8 @@ class PoolSamplingEstimator : public Estimator {
     // A pool size of 0 selects this many first-stage draws per second-stage sample, the ratio chosen on the
     // MNIST development workloads for both norms.
     static constexpr unsigned int kAutoPoolSizePerSample = 5;
+    // Pilot draws in proportion to U_a for the model and certified plans.
+    static constexpr unsigned int kDefaultPilotSize = 256;
 
     PoolSamplingEstimator(unsigned int pool_size, unsigned int num_samples, unsigned int subsample_size,
                           float approximation_ratio, float epsilon, float delta, unsigned int exact_batch_size,
@@ -72,7 +81,8 @@ class PoolSamplingEstimator : public Estimator {
                           unsigned int disk_query_batch_size = Global::kDefaultDiskQueryBatchSize,
                           std::optional<float> expected_approximation_ratio = std::nullopt,
                           DiskQalshSearchOptions disk_qalsh_options = {}, bool direct = false, bool full = false,
-                          bool fuse = true);
+                          bool fuse = true, PoolPlanMode plan_mode = PoolPlanMode::kFixed, float target_error = 0.0F,
+                          unsigned int pilot_size = kDefaultPilotSize, bool uniform = false);
     [[nodiscard]] bool RequiresIndex() const override;
     void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
                                  float norm_order) override;
@@ -100,4 +110,8 @@ class PoolSamplingEstimator : public Estimator {
     bool direct_{false};  // Baseline: skip QALSH and scan points drawn in proportion to U_a directly
     bool full_{false};    // Ablation: query every source point instead of a pool (in memory only)
     bool fuse_{true};     // Clip QALSH distances with the subsample upper bounds, D_a = min(QALSH(a), U_a)
+    PoolPlanMode plan_mode_{PoolPlanMode::kFixed};
+    float target_error_{0.0F};  // RMS relative error (model) or epsilon with delta_ (certified)
+    unsigned int pilot_size_{kDefaultPilotSize};
+    bool uniform_{false};  // Baseline: uniform draws without bounds or QALSH, scanned from scratch
 };
