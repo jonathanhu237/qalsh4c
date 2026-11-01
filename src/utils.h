@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <Eigen/Eigen>
 #include <random>
 #include <vector>
@@ -21,6 +22,12 @@ class Calc {
 class Random {
    public:
     static std::mt19937 SeededGenerator();
+};
+
+class Fingerprint {
+   public:
+    // FNV-1a over coordinate bits; +0.0 and -0.0 hash alike because they compare equal.
+    static std::uint64_t Of(const Coordinate* coordinates, size_t num_dimensions);
 };
 
 class Memory {

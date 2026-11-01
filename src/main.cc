@@ -299,6 +299,58 @@ int main(int argc, char** argv) {
     });
 
     // ------------------------------
+    // pool estimate
+    // ------------------------------
+    CLI::App* pool = estimate->add_subcommand(
+        "pool", "Estimate Chamfer distance with two-stage sampling that runs QALSH only on pooled points.");
+    unsigned int pool_size{0};
+    unsigned int pool_num_samples{0};
+    unsigned int pool_subsample_size{100};
+    float pool_approximation_ratio{Global::kDefaultApproximationRatio};
+    float pool_epsilon{Global::kQalsh4cEpsilon};
+    float pool_delta{Global::kQalsh4cDelta};
+    unsigned int pool_exact_batch_size{0};
+    pool->add_option("-K,--pool-size", pool_size,
+                     "Number of first-stage draws in proportion to the upper bounds (0: five times the "
+                     "second-stage sample count)")
+        ->default_val(0);
+    pool->add_option("-n,--num-samples", pool_num_samples,
+                     "Number of second-stage draws (0: the QALSH4C automatic sample count, used as a reference "
+                     "budget)")
+        ->default_val(0);
+    pool->add_option("-s,--subsample-size", pool_subsample_size,
+                     "Size of the uniform target subsample that gives every source point an upper bound")
+        ->default_val(pool_subsample_size)
+        ->check(CLI::PositiveNumber);
+    pool->add_option("-c,--approximation-ratio", pool_approximation_ratio, "Approximation ratio for QALSH")
+        ->default_val(Global::kDefaultApproximationRatio);
+    pool->add_option("-e,--epsilon", pool_epsilon, "Epsilon for the automatic second-stage sample count")
+        ->default_val(Global::kQalsh4cEpsilon);
+    pool->add_option("--delta", pool_delta, "Failure probability for the automatic second-stage sample count")
+        ->default_val(Global::kQalsh4cDelta);
+    pool->add_option("--exact-batch-size", pool_exact_batch_size, "Batch size for exact linear scans (0: auto)")
+        ->default_val(0);
+    bool pool_direct{false};
+    pool->add_flag("--direct", pool_direct,
+                   "Baseline: skip QALSH and draw the exact scans in proportion to the subsample upper bounds");
+    bool pool_full{false};
+    pool->add_flag("--full", pool_full, "Ablation: run QALSH for every source point instead of a sampled pool");
+    bool pool_no_fuse{false};
+    pool->add_flag("--no-fuse", pool_no_fuse,
+                   "Ablation: keep raw QALSH distances instead of clipping them with the subsample upper bounds");
+    const CLI::Option* pool_approximation_ratio_option = (*pool)["--approximation-ratio"];
+    pool->callback([&]() {
+        // With --disk-based, -c must match the persistent index; without it the index's own ratio is used.
+        const std::optional<float> expected_approximation_ratio =
+            pool_approximation_ratio_option->count() > 0 ? std::optional<float>(pool_approximation_ratio)
+                                                         : std::nullopt;
+        estimator = std::make_unique<PoolSamplingEstimator>(
+            pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
+            pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
+            disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse);
+    });
+
+    // ------------------------------
     // dataset
     // ------------------------------
     CLI::App* dataset = app.add_subcommand("dataset", "Prepare datasets for QALSH4C.");

@@ -181,6 +181,22 @@ The implementation computes `Delta_j` as the stable miss-probability tail
 
 Pass `--use-cache` to reuse generated quadtree weights. Quadtree cache filenames include the norm order, method, max-levels value, and source point set, for example `l1_quadtree_l3_weights_A.bin`, and cache contents are raw float32 weights.
 
+`estimate pool` avoids running QALSH for every source point. Each source point first gets a cheap upper bound,
+its distance to a uniform subsample of `-s/--subsample-size` target points, and source points that coincide with
+a target point are dropped because they contribute zero. The estimator then draws `-K/--pool-size` points in
+proportion to these bounds, runs Modified QALSH only on the distinct pooled points, and resamples
+`-n/--num-samples` pool draws in proportion to `D/U` for exact scans. `-n 0` reuses the QALSH4C automatic sample
+count as a reference budget; it does not by itself carry the QALSH4C `(epsilon, delta)` guarantee over to the
+pooled estimator. `-K 0` (the default) draws five times as many pool points as exact samples, and `--direct`
+skips QALSH entirely and scans points drawn in proportion to the upper bounds, which serves as a baseline. The estimate stays
+unbiased because each stage divides by its own sampling probability. With `--disk-based`, the estimator streams
+`A` once, probes the persistent QALSH index only for pooled points, and scans `B` sequentially for the exact
+stage. Logs report the pool size, the number of distinct QALSH queries, and the time spent in each stage:
+
+```bash
+./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool -K 300 -n 100 -s 100
+```
+
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
 
 ```bash

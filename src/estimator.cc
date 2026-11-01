@@ -1,10 +1,13 @@
 #include "estimator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <filesystem>
 #include <format>
 #include <limits>
@@ -646,6 +649,166 @@ unsigned int AutomaticQalshSampleCount(const QalshConfig& qalsh_config, float no
     return std::max(1U, static_cast<unsigned int>(std::ceil(min_samples)));
 }
 
+// Draws indices in proportion to double-precision weights. Pool estimates divide by these exact
+// probabilities, so the cumulative sums must not lose precision on large source sets.
+class DoubleWeightedSampler {
+   public:
+    explicit DoubleWeightedSampler(const std::vector<double>& weights) : gen_(Random::SeededGenerator()) {
+        cumulative_.reserve(weights.size());
+        double running_total = 0.0;
+        for (const double weight : weights) {
+            running_total += weight;
+            cumulative_.push_back(running_total);
+        }
+        total_ = running_total;
+        if (!(total_ > 0.0) || !std::isfinite(total_)) {
+            Log::error("Pool sampling requires a positive finite total weight, got {}", total_);
+        }
+    }
+
+    unsigned int Sample() {
+        std::uniform_real_distribution<double> dis(0.0, total_);
+        auto it = std::ranges::upper_bound(cumulative_, dis(gen_));
+        if (it == cumulative_.end()) {
+            // Rounding can return the total itself; map it to the last index with positive weight.
+            it = std::ranges::lower_bound(cumulative_, total_);
+        }
+        return static_cast<unsigned int>(std::distance(cumulative_.begin(), it));
+    }
+
+   private:
+    std::vector<double> cumulative_;
+    double total_{0.0};
+    std::mt19937 gen_;
+};
+
+// Draws `num_draws` indices with replacement and returns (index, multiplicity) pairs sorted by index.
+std::vector<std::pair<unsigned int, unsigned int>> DrawWithReplacement(DoubleWeightedSampler& sampler,
+                                                                       unsigned int num_draws) {
+    std::unordered_map<unsigned int, unsigned int> count_map;
+    count_map.reserve(num_draws);
+    for (unsigned int draw = 0; draw < num_draws; ++draw) {
+        ++count_map[sampler.Sample()];
+    }
+    std::vector<std::pair<unsigned int, unsigned int>> counts(count_map.begin(), count_map.end());
+    std::ranges::sort(counts);
+    return counts;
+}
+
+std::uint64_t HashPoint(const Point& point) { return Fingerprint::Of(point.data(), point.size()); }
+
+// Marks source points that coincide with a target point, whose nearest-neighbor distance is zero.
+std::vector<char> ExactTargetMatches(const std::vector<Point>& sources, const std::vector<Point>& targets) {
+    std::vector<std::uint64_t> target_hashes(targets.size());
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long target_index = 0; target_index < static_cast<long long>(targets.size()); ++target_index) {
+        target_hashes[static_cast<size_t>(target_index)] = HashPoint(targets[static_cast<size_t>(target_index)]);
+    }
+
+    std::unordered_multimap<std::uint64_t, unsigned int> target_index_by_hash;
+    target_index_by_hash.reserve(targets.size());
+    for (size_t target_index = 0; target_index < targets.size(); ++target_index) {
+        target_index_by_hash.emplace(target_hashes[target_index], static_cast<unsigned int>(target_index));
+    }
+
+    std::vector<char> matches(sources.size(), 0);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long source_index = 0; source_index < static_cast<long long>(sources.size()); ++source_index) {
+        const Point& source = sources[static_cast<size_t>(source_index)];
+        const auto [begin, end] = target_index_by_hash.equal_range(HashPoint(source));
+        for (auto it = begin; it != end; ++it) {
+            if (targets[it->second] == source) {
+                matches[static_cast<size_t>(source_index)] = 1;
+                break;
+            }
+        }
+    }
+    return matches;
+}
+
+// Ids of a uniform random subset of min(subsample_size, num_targets) target points, in ascending order.
+std::vector<unsigned int> UniformSubsampleIds(size_t num_targets, unsigned int subsample_size) {
+    std::vector<unsigned int> subsample_ids(num_targets);
+    std::iota(subsample_ids.begin(), subsample_ids.end(), 0U);
+    if (subsample_size < num_targets) {
+        // Partial Fisher-Yates shuffle: the first subsample_size ids form a uniform subset.
+        std::mt19937 gen = Random::SeededGenerator();
+        for (size_t index = 0; index < subsample_size; ++index) {
+            std::uniform_int_distribution<size_t> dis(index, num_targets - 1);
+            std::swap(subsample_ids[index], subsample_ids[dis(gen)]);
+        }
+        subsample_ids.resize(subsample_size);
+        std::ranges::sort(subsample_ids);
+    }
+    return subsample_ids;
+}
+
+// Distance from every source point to its nearest neighbor in a uniform target subsample. Any target point
+// gives a valid upper bound on a source point's nearest-neighbor distance.
+std::vector<double> SubsampleUpperBounds(const std::vector<Point>& sources, const std::vector<Point>& targets,
+                                         unsigned int subsample_size, float norm_order) {
+    const std::vector<unsigned int> subsample_ids = UniformSubsampleIds(targets.size(), subsample_size);
+
+    std::vector<double> upper_bounds(sources.size(), 0.0);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long source_index = 0; source_index < static_cast<long long>(sources.size()); ++source_index) {
+        const Point& source = sources[static_cast<size_t>(source_index)];
+        Distance best = std::numeric_limits<Distance>::infinity();
+        for (const unsigned int target_id : subsample_ids) {
+            best = std::min(best, Calc::LpDistanceBounded(targets[target_id], source, norm_order, best));
+        }
+        upper_bounds[static_cast<size_t>(source_index)] = static_cast<double>(best);
+    }
+    return upper_bounds;
+}
+
+// Exact nearest-neighbor distances for the given queries. Each scan starts from the query's upper bound, which
+// must be a distance to a real target point so that the scan still returns the exact distance.
+std::vector<Distance> ExactDistancesFromUpperBounds(const std::vector<Point>& queries,
+                                                    const std::vector<Distance>& upper_bounds,
+                                                    const LinearScanAnnSearcher& shared_searcher,
+                                                    unsigned int batch_size) {
+    std::vector<Distance> distances(queries.size(), 0.0F);
+    const size_t num_batches = (queries.size() + batch_size - 1) / batch_size;
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+#endif
+    {
+        LinearScanAnnSearcher searcher = shared_searcher;
+        std::vector<Point> batch_queries;
+        std::vector<Distance> batch_upper_bounds;
+
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp for schedule(dynamic)
+#endif
+        for (long long batch = 0; batch < static_cast<long long>(num_batches); ++batch) {
+            const size_t begin = static_cast<size_t>(batch) * batch_size;
+            const size_t end = std::min(begin + static_cast<size_t>(batch_size), queries.size());
+            batch_queries.assign(queries.begin() + static_cast<std::ptrdiff_t>(begin),
+                                 queries.begin() + static_cast<std::ptrdiff_t>(end));
+            batch_upper_bounds.assign(upper_bounds.begin() + static_cast<std::ptrdiff_t>(begin),
+                                      upper_bounds.begin() + static_cast<std::ptrdiff_t>(end));
+            const std::vector<AnnResult> results =
+                searcher.SearchBatchWithUpperBounds(batch_queries, batch_upper_bounds);
+            for (size_t index = 0; index < results.size(); ++index) {
+                distances[begin + index] = results[index].distance;
+            }
+        }
+    }
+    return distances;
+}
+
+double ElapsedMilliseconds(std::chrono::steady_clock::time_point begin, std::chrono::steady_clock::time_point end) {
+    return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
 }  // namespace
 
 void Estimator::PreflightBothDirections([[maybe_unused]] const PointSetMetadata& a_metadata,
@@ -1018,4 +1181,460 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
 #endif
 
     return estimation / updated_num_samples;
+}
+
+// --------------------------------------------------
+// PoolSamplingEstimator Implementation
+// --------------------------------------------------
+PoolSamplingEstimator::PoolSamplingEstimator(unsigned int pool_size, unsigned int num_samples,
+                                             unsigned int subsample_size, float approximation_ratio, float epsilon,
+                                             float delta, unsigned int exact_batch_size, bool disk_based,
+                                             unsigned int disk_block_size, unsigned int disk_query_batch_size,
+                                             std::optional<float> expected_approximation_ratio,
+                                             DiskQalshSearchOptions disk_qalsh_options, bool direct, bool full,
+                                             bool fuse)
+    : pool_size_(pool_size),
+      num_samples_(num_samples),
+      subsample_size_(subsample_size),
+      approximation_ratio_(approximation_ratio),
+      epsilon_(epsilon),
+      delta_(delta),
+      exact_batch_size_(exact_batch_size),
+      disk_based_(disk_based),
+      disk_block_size_(disk_block_size),
+      disk_query_batch_size_(disk_query_batch_size),
+      expected_approximation_ratio_(expected_approximation_ratio),
+      disk_qalsh_options_(disk_qalsh_options),
+      direct_(direct),
+      full_(full),
+      fuse_(fuse) {
+    if (full_ && disk_based_) {
+        Log::error("The --full ablation is available only in memory.");
+    }
+    if (subsample_size_ == 0) {
+        Log::error("Pool sampling requires a positive subsample size.");
+    }
+    if (!std::isfinite(approximation_ratio_) || approximation_ratio_ <= 1.0F) {
+        Log::error("Pool sampling requires approximation ratio c > 1, got {}", approximation_ratio_);
+    }
+    if (disk_block_size_ == 0 || disk_query_batch_size_ == 0) {
+        Log::error("Disk block size and disk query batch size must be positive.");
+    }
+}
+
+bool PoolSamplingEstimator::RequiresIndex() const { return disk_based_; }
+
+void PoolSamplingEstimator::PreflightBothDirections(const PointSetMetadata& a_metadata,
+                                                    const PointSetMetadata& b_metadata, float norm_order) {
+    if (!disk_based_) {
+        return;
+    }
+    const DiskBasedQalshAnnSearcher searcher(expected_approximation_ratio_, disk_qalsh_options_);
+    searcher.PreflightIndex(b_metadata, norm_order);
+    searcher.PreflightIndex(a_metadata, norm_order);
+}
+
+unsigned int PoolSamplingEstimator::ResolveNumSamples(const QalshConfig& qalsh_config, float norm_order) const {
+    if (num_samples_ != 0) {
+        return num_samples_;
+    }
+    const unsigned int num_samples = AutomaticQalshSampleCount(qalsh_config, norm_order, epsilon_, delta_);
+    Log::info("PoolSamplingEstimator automatically selected {} second-stage samples.", num_samples);
+    return num_samples;
+}
+
+unsigned int PoolSamplingEstimator::ResolvePoolSize(unsigned int num_samples) const {
+    if (pool_size_ != 0) {
+        return pool_size_;
+    }
+    const unsigned int pool_size = kAutoPoolSizePerSample * num_samples;
+    Log::info("PoolSamplingEstimator automatically selected pool size {} ({} x second-stage samples).", pool_size,
+              kAutoPoolSizePerSample);
+    return pool_size;
+}
+
+float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, const PointSetMetadata& to,
+                                               float norm_order) {
+    if (disk_based_) {
+        return EstimateDiskBased(from, to, norm_order);
+    }
+    using Clock = std::chrono::steady_clock;
+    if (from.num_dimensions != to.num_dimensions) {
+        Log::error("Source and target dimension mismatch: {} vs {}.", from.num_dimensions, to.num_dimensions);
+    }
+
+    QalshConfig qalsh_config{.approximation_ratio = approximation_ratio_};
+    qalsh_config.Regularize(to.num_points, norm_order);
+    const unsigned int num_samples = ResolveNumSamples(qalsh_config, norm_order);
+    const unsigned int pool_size = direct_ || full_ ? 0 : ResolvePoolSize(num_samples);
+
+    // Build the QALSH index on the target set; its loaded target points are shared by every later stage.
+    const auto index_begin = Clock::now();
+    QalshAnnSearcher qalsh_searcher(approximation_ratio_);
+    std::shared_ptr<const std::vector<Point>> targets;
+    if (direct_) {
+        targets = std::make_shared<const std::vector<Point>>(
+            PointSet::LoadPointsFromFile(to.file_path, to.num_points, to.num_dimensions));
+    } else {
+        qalsh_searcher.Init(to, norm_order);
+        targets = qalsh_searcher.TargetPoints();
+    }
+    const auto index_end = Clock::now();
+
+    // Stage 1: a cheap upper bound U_a for every source point; exact target matches contribute zero.
+    const std::vector<Point> sources = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
+    std::vector<double> upper_bounds = SubsampleUpperBounds(sources, *targets, subsample_size_, norm_order);
+    const std::vector<char> exact_matches = ExactTargetMatches(sources, *targets);
+    unsigned int num_exact_matches = 0;
+    for (size_t source_index = 0; source_index < sources.size(); ++source_index) {
+        if (exact_matches[source_index] != 0) {
+            upper_bounds[source_index] = 0.0;
+            ++num_exact_matches;
+        }
+    }
+    const double total_upper_bound = std::accumulate(upper_bounds.begin(), upper_bounds.end(), 0.0);
+    const auto upper_bound_end = Clock::now();
+    if (total_upper_bound <= 0.0) {
+        Log::info("Every source point matches a target point exactly; the distance is zero.");
+        return 0.0F;
+    }
+
+    if (direct_) {
+        // Baseline without QALSH: scan T points drawn in proportion to U_a, starting from U_a.
+        DoubleWeightedSampler direct_sampler(upper_bounds);
+        const std::vector<std::pair<unsigned int, unsigned int>> selected =
+            DrawWithReplacement(direct_sampler, num_samples);
+        std::vector<Point> queries;
+        std::vector<Distance> query_upper_bounds;
+        for (const auto& [point_id, multiplicity] : selected) {
+            (void)multiplicity;
+            queries.push_back(sources[point_id]);
+            query_upper_bounds.push_back(static_cast<Distance>(upper_bounds[point_id]));
+        }
+        LinearScanAnnSearcher exact_searcher;
+        exact_searcher.InitLoaded(targets, to.num_dimensions, norm_order);
+        const std::vector<Distance> exact_distances = ExactDistancesFromUpperBounds(
+            queries, query_upper_bounds, exact_searcher, ResolveExactBatchSize(exact_batch_size_, queries.size()));
+        double ratio_sum = 0.0;
+        for (size_t selected_index = 0; selected_index < selected.size(); ++selected_index) {
+            const auto& [point_id, multiplicity] = selected[selected_index];
+            ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(exact_distances[selected_index]) /
+                         upper_bounds[point_id];
+        }
+        const auto exact_end = Clock::now();
+        Log::info(
+            "Pool sampling stats: subsample_size={} exact_matches={} pool_draws=0 pool_distinct=0 exact_draws={} "
+            "exact_distinct={} index_ms={:.3f} upper_bound_ms={:.3f} pool_qalsh_ms=0.000 exact_ms={:.3f}",
+            std::min<size_t>(subsample_size_, targets->size()), num_exact_matches, num_samples, selected.size(),
+            ElapsedMilliseconds(index_begin, index_end), ElapsedMilliseconds(index_end, upper_bound_end),
+            ElapsedMilliseconds(upper_bound_end, exact_end));
+        return static_cast<float>(total_upper_bound * ratio_sum / static_cast<double>(num_samples));
+    }
+
+    // Stage 2: K draws in proportion to U_a; Modified QALSH runs once per distinct pooled point.
+    DoubleWeightedSampler pool_sampler(upper_bounds);
+    std::vector<std::pair<unsigned int, unsigned int>> pool;
+    if (full_) {
+        // Ablation: every source point with a positive bound enters once, so its inclusion probability is one.
+        for (unsigned int point_id = 0; point_id < sources.size(); ++point_id) {
+            if (upper_bounds[point_id] > 0.0) {
+                pool.emplace_back(point_id, 1U);
+            }
+        }
+    } else {
+        pool = DrawWithReplacement(pool_sampler, pool_size);
+    }
+    std::vector<Distance> crude_distances(pool.size(), 0.0F);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+#endif
+    {
+        std::unique_ptr<AnnSearcher> local_searcher = qalsh_searcher.Clone();
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp for schedule(dynamic)
+#endif
+        for (long long pool_index = 0; pool_index < static_cast<long long>(pool.size()); ++pool_index) {
+            const unsigned int point_id = pool[static_cast<size_t>(pool_index)].first;
+            const Distance qalsh_distance = local_searcher->Search(sources[point_id]).distance;
+            // Both bounds are distances to real target points, so their minimum is still an upper bound.
+            crude_distances[static_cast<size_t>(pool_index)] =
+                fuse_ ? std::min(qalsh_distance, static_cast<Distance>(upper_bounds[point_id])) : qalsh_distance;
+        }
+    }
+    const auto pool_end = Clock::now();
+
+    // Stage 3: resample pool draws in proportion to D_a / U_a (D_a for the full ablation), then scan exactly from
+    // D_a.
+    std::vector<double> resample_weights(pool.size(), 0.0);
+    double pool_ratio_sum = 0.0;
+    for (size_t pool_index = 0; pool_index < pool.size(); ++pool_index) {
+        const auto& [point_id, multiplicity] = pool[pool_index];
+        const double crude = static_cast<double>(crude_distances[pool_index]);
+        resample_weights[pool_index] = static_cast<double>(multiplicity) * (full_ ? crude : crude / upper_bounds[point_id]);
+        pool_ratio_sum += resample_weights[pool_index];
+    }
+    if (pool_ratio_sum <= 0.0) {
+        Log::info("Every pooled point matches a target point exactly; the pooled estimate is zero.");
+        return 0.0F;
+    }
+    // W estimates the total crude distance sum_a D_a from the pool; the full ablation knows it exactly.
+    const double crude_total =
+        full_ ? pool_ratio_sum : total_upper_bound / static_cast<double>(pool_size) * pool_ratio_sum;
+
+    DoubleWeightedSampler resampler(resample_weights);
+    const std::vector<std::pair<unsigned int, unsigned int>> selected = DrawWithReplacement(resampler, num_samples);
+    std::vector<Point> queries;
+    std::vector<Distance> query_upper_bounds;
+    queries.reserve(selected.size());
+    query_upper_bounds.reserve(selected.size());
+    for (const auto& [pool_index, multiplicity] : selected) {
+        (void)multiplicity;
+        queries.push_back(sources[pool[pool_index].first]);
+        query_upper_bounds.push_back(crude_distances[pool_index]);
+    }
+
+    LinearScanAnnSearcher exact_searcher;
+    exact_searcher.InitLoaded(targets, to.num_dimensions, norm_order);
+    const unsigned int exact_batch_size = ResolveExactBatchSize(exact_batch_size_, queries.size());
+    const std::vector<Distance> exact_distances =
+        ExactDistancesFromUpperBounds(queries, query_upper_bounds, exact_searcher, exact_batch_size);
+
+    double ratio_sum = 0.0;
+    for (size_t selected_index = 0; selected_index < selected.size(); ++selected_index) {
+        const auto& [pool_index, multiplicity] = selected[selected_index];
+        ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(exact_distances[selected_index]) /
+                     static_cast<double>(crude_distances[pool_index]);
+    }
+    const double estimate = crude_total * ratio_sum / static_cast<double>(num_samples);
+    const auto exact_end = Clock::now();
+
+    Log::info(
+        "Pool sampling stats: subsample_size={} exact_matches={} pool_draws={} pool_distinct={} exact_draws={} "
+        "exact_distinct={} index_ms={:.3f} upper_bound_ms={:.3f} pool_qalsh_ms={:.3f} exact_ms={:.3f}",
+        std::min<size_t>(subsample_size_, targets->size()), num_exact_matches, pool_size, pool.size(), num_samples,
+        selected.size(), ElapsedMilliseconds(index_begin, index_end), ElapsedMilliseconds(index_end, upper_bound_end),
+        ElapsedMilliseconds(upper_bound_end, pool_end), ElapsedMilliseconds(pool_end, exact_end));
+    Log::info("Total upper bound: {:.6f}; estimated crude total: {:.6f}", total_upper_bound, crude_total);
+    return static_cast<float>(estimate);
+}
+
+float PoolSamplingEstimator::EstimateDiskBased(const PointSetMetadata& from, const PointSetMetadata& to,
+                                               float norm_order) {
+    using Clock = std::chrono::steady_clock;
+    ValidateDiskScanMetadata(from, to);
+    const unsigned int num_dimensions = from.num_dimensions;
+    const unsigned int num_samples =
+        num_samples_ != 0
+            ? num_samples_
+            : ResolveNumSamples(DiskQalsh::ValidateIndex(to, norm_order, expected_approximation_ratio_).ToConfig(),
+                                norm_order);
+    const unsigned int pool_size = direct_ ? 0 : ResolvePoolSize(num_samples);
+    std::ifstream query_input;
+    std::ifstream target_input;
+    OpenPointSetForRead(query_input, from.file_path, "query");
+    OpenPointSetForRead(target_input, to.file_path, "target");
+
+    // Stage 1: stream A once against a uniform target subsample held in memory.
+    const auto upper_bound_begin = Clock::now();
+    const std::vector<unsigned int> subsample_ids = UniformSubsampleIds(to.num_points, subsample_size_);
+    std::vector<Coordinate> subsample(subsample_ids.size() * num_dimensions);
+    for (size_t index = 0; index < subsample_ids.size(); ++index) {
+        ReadPointIntoBuffer(target_input, to, subsample_ids[index], subsample.data() + index * num_dimensions,
+                            "target");
+    }
+    // Hash every target point in one sequential pass; source points whose hash matches are verified below.
+    std::unordered_multimap<std::uint64_t, unsigned int> target_index_by_hash;
+    target_index_by_hash.reserve(to.num_points);
+    std::vector<Coordinate> target_block;
+    std::vector<std::uint64_t> block_hashes;
+    target_input.clear();
+    target_input.seekg(0, std::ios::beg);
+    for (unsigned int block_begin = 0; block_begin < to.num_points; block_begin += disk_block_size_) {
+        const unsigned int target_count = std::min(disk_block_size_, to.num_points - block_begin);
+        ReadContiguousPointBatch(target_input, to, block_begin, target_count, target_block, "target");
+        block_hashes.resize(target_count);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (long long target_index = 0; target_index < static_cast<long long>(target_count); ++target_index) {
+            block_hashes[static_cast<size_t>(target_index)] = Fingerprint::Of(
+                target_block.data() + static_cast<size_t>(target_index) * num_dimensions, num_dimensions);
+        }
+        for (unsigned int target_index = 0; target_index < target_count; ++target_index) {
+            target_index_by_hash.emplace(block_hashes[target_index], block_begin + target_index);
+        }
+    }
+
+    std::vector<double> upper_bounds(from.num_points, 0.0);
+    std::vector<std::uint64_t> source_hashes(from.num_points, 0);
+    std::vector<Coordinate> query_batch;
+    for (unsigned int batch_begin = 0; batch_begin < from.num_points; batch_begin += disk_block_size_) {
+        const unsigned int query_count = std::min(disk_block_size_, from.num_points - batch_begin);
+        ReadContiguousPointBatch(query_input, from, batch_begin, query_count, query_batch, "query");
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
+            const Coordinate* query = query_batch.data() + static_cast<size_t>(query_index) * num_dimensions;
+            Distance best = std::numeric_limits<Distance>::infinity();
+            for (size_t index = 0; index < subsample_ids.size(); ++index) {
+                best = std::min(best, Calc::LpDistanceBoundedRaw(subsample.data() + index * num_dimensions, query,
+                                                                 num_dimensions, norm_order, best));
+            }
+            upper_bounds[batch_begin + static_cast<size_t>(query_index)] = static_cast<double>(best);
+            source_hashes[batch_begin + static_cast<size_t>(query_index)] = Fingerprint::Of(query, num_dimensions);
+        }
+    }
+
+    // Exact target matches contribute zero; hash hits are confirmed by reading both points.
+    unsigned int num_exact_matches = 0;
+    std::vector<Coordinate> source_point(num_dimensions);
+    std::vector<Coordinate> target_point(num_dimensions);
+    for (unsigned int source_index = 0; source_index < from.num_points; ++source_index) {
+        const auto [begin, end] = target_index_by_hash.equal_range(source_hashes[source_index]);
+        if (begin == end || upper_bounds[source_index] == 0.0) {
+            continue;
+        }
+        ReadPointIntoBuffer(query_input, from, source_index, source_point.data(), "query");
+        for (auto it = begin; it != end; ++it) {
+            ReadPointIntoBuffer(target_input, to, it->second, target_point.data(), "target");
+            if (source_point == target_point) {
+                upper_bounds[source_index] = 0.0;
+                ++num_exact_matches;
+                break;
+            }
+        }
+    }
+    const double total_upper_bound = std::accumulate(upper_bounds.begin(), upper_bounds.end(), 0.0);
+    const auto upper_bound_end = Clock::now();
+    if (total_upper_bound <= 0.0) {
+        Log::info("Every source point matches a target point exactly; the distance is zero.");
+        return 0.0F;
+    }
+
+    if (direct_) {
+        // Baseline without QALSH: scan T points drawn in proportion to U_a, starting from U_a.
+        DoubleWeightedSampler direct_sampler(upper_bounds);
+        const std::vector<std::pair<unsigned int, unsigned int>> selected =
+            DrawWithReplacement(direct_sampler, num_samples);
+        double ratio_sum = 0.0;
+        for (size_t batch_begin = 0; batch_begin < selected.size(); batch_begin += disk_query_batch_size_) {
+            const auto query_count =
+                static_cast<unsigned int>(std::min<size_t>(disk_query_batch_size_, selected.size() - batch_begin));
+            query_batch.resize(static_cast<size_t>(query_count) * num_dimensions);
+            std::vector<AnnResult> batch_results(query_count);
+            for (unsigned int batch_index = 0; batch_index < query_count; ++batch_index) {
+                const unsigned int point_id = selected[batch_begin + batch_index].first;
+                ReadPointIntoBuffer(query_input, from, point_id,
+                                    query_batch.data() + static_cast<size_t>(batch_index) * num_dimensions, "query");
+                batch_results[batch_index] =
+                    AnnResult{.distance = static_cast<Distance>(upper_bounds[point_id]), .point_id = 0};
+            }
+            ScanDiskTargetBlocks(query_batch, query_count, to, norm_order, disk_block_size_, target_input,
+                                 target_block, batch_results);
+            for (unsigned int batch_index = 0; batch_index < query_count; ++batch_index) {
+                const auto& [point_id, multiplicity] = selected[batch_begin + batch_index];
+                ratio_sum += static_cast<double>(multiplicity) *
+                             static_cast<double>(batch_results[batch_index].distance) / upper_bounds[point_id];
+            }
+        }
+        const auto exact_end = Clock::now();
+        Log::info(
+            "Pool sampling stats: subsample_size={} exact_matches={} pool_draws=0 pool_distinct=0 exact_draws={} "
+            "exact_distinct={} index_ms=0.000 upper_bound_ms={:.3f} pool_qalsh_ms=0.000 exact_ms={:.3f}",
+            subsample_ids.size(), num_exact_matches, num_samples, selected.size(),
+            ElapsedMilliseconds(upper_bound_begin, upper_bound_end), ElapsedMilliseconds(upper_bound_end, exact_end));
+        return static_cast<float>(total_upper_bound * ratio_sum / static_cast<double>(num_samples));
+    }
+
+    // Stage 2: read the pooled points and probe the persistent QALSH index only for them.
+    DoubleWeightedSampler pool_sampler(upper_bounds);
+    const std::vector<std::pair<unsigned int, unsigned int>> pool = DrawWithReplacement(pool_sampler, pool_size);
+    std::vector<Coordinate> pooled_points(pool.size() * num_dimensions);
+    for (size_t pool_index = 0; pool_index < pool.size(); ++pool_index) {
+        ReadPointIntoBuffer(query_input, from, pool[pool_index].first,
+                            pooled_points.data() + pool_index * num_dimensions, "query");
+    }
+
+    DiskBasedQalshAnnSearcher qalsh_searcher(expected_approximation_ratio_, disk_qalsh_options_);
+    qalsh_searcher.ResetProfile();
+    qalsh_searcher.Init(to, norm_order);
+    const auto index_open_end = Clock::now();
+    std::vector<Distance> crude_distances(pool.size(), 0.0F);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp parallel
+#endif
+    {
+        std::unique_ptr<AnnSearcher> local_searcher = qalsh_searcher.Clone();
+        Point query_point(num_dimensions);
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp for schedule(dynamic)
+#endif
+        for (long long pool_index = 0; pool_index < static_cast<long long>(pool.size()); ++pool_index) {
+            const auto index = static_cast<size_t>(pool_index);
+            std::copy_n(pooled_points.data() + index * num_dimensions, num_dimensions, query_point.begin());
+            const Distance qalsh_distance = local_searcher->Search(query_point).distance;
+            crude_distances[index] =
+                fuse_ ? std::min(qalsh_distance, static_cast<Distance>(upper_bounds[pool[index].first]))
+                      : qalsh_distance;
+        }
+        auto* local_disk_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
+        if (local_disk_searcher != nullptr) {
+            const DiskQalshProfileSnapshot snapshot = local_disk_searcher->ProfileSnapshot();
+#ifdef QALSH4C_USE_OPENMP
+#pragma omp critical(pool_disk_qalsh_profile_merge)
+#endif
+            qalsh_searcher.MergeProfile(snapshot);
+        }
+    }
+    qalsh_searcher.PrintProfile();
+    const auto pool_end = Clock::now();
+
+    // Stage 3: resample pool draws in proportion to D_a / U_a, then scan B sequentially once per query batch.
+    std::vector<double> resample_weights(pool.size(), 0.0);
+    double pool_ratio_sum = 0.0;
+    for (size_t pool_index = 0; pool_index < pool.size(); ++pool_index) {
+        const auto& [point_id, multiplicity] = pool[pool_index];
+        resample_weights[pool_index] = static_cast<double>(multiplicity) *
+                                       static_cast<double>(crude_distances[pool_index]) / upper_bounds[point_id];
+        pool_ratio_sum += resample_weights[pool_index];
+    }
+    if (pool_ratio_sum <= 0.0) {
+        Log::info("Every pooled point matches a target point exactly; the pooled estimate is zero.");
+        return 0.0F;
+    }
+    const double crude_total = total_upper_bound / static_cast<double>(pool_size) * pool_ratio_sum;
+    DoubleWeightedSampler resampler(resample_weights);
+    const std::vector<std::pair<unsigned int, unsigned int>> selected = DrawWithReplacement(resampler, num_samples);
+    double ratio_sum = 0.0;
+    for (size_t batch_begin = 0; batch_begin < selected.size(); batch_begin += disk_query_batch_size_) {
+        const auto query_count =
+            static_cast<unsigned int>(std::min<size_t>(disk_query_batch_size_, selected.size() - batch_begin));
+        query_batch.resize(static_cast<size_t>(query_count) * num_dimensions);
+        std::vector<AnnResult> batch_results(query_count);
+        for (unsigned int batch_index = 0; batch_index < query_count; ++batch_index) {
+            const unsigned int pool_index = selected[batch_begin + batch_index].first;
+            std::copy_n(pooled_points.data() + static_cast<size_t>(pool_index) * num_dimensions, num_dimensions,
+                        query_batch.data() + static_cast<size_t>(batch_index) * num_dimensions);
+            batch_results[batch_index] = AnnResult{.distance = crude_distances[pool_index], .point_id = 0};
+        }
+        ScanDiskTargetBlocks(query_batch, query_count, to, norm_order, disk_block_size_, target_input, target_block,
+                             batch_results);
+        for (unsigned int batch_index = 0; batch_index < query_count; ++batch_index) {
+            const auto& [pool_index, multiplicity] = selected[batch_begin + batch_index];
+            ratio_sum += static_cast<double>(multiplicity) * static_cast<double>(batch_results[batch_index].distance) /
+                         static_cast<double>(crude_distances[pool_index]);
+        }
+    }
+    const double estimate = crude_total * ratio_sum / static_cast<double>(num_samples);
+    const auto exact_end = Clock::now();
+
+    Log::info(
+        "Pool sampling stats: subsample_size={} exact_matches={} pool_draws={} pool_distinct={} exact_draws={} "
+        "exact_distinct={} index_ms={:.3f} upper_bound_ms={:.3f} pool_qalsh_ms={:.3f} exact_ms={:.3f}",
+        subsample_ids.size(), num_exact_matches, pool_size, pool.size(), num_samples, selected.size(),
+        ElapsedMilliseconds(upper_bound_end, index_open_end), ElapsedMilliseconds(upper_bound_begin, upper_bound_end),
+        ElapsedMilliseconds(index_open_end, pool_end), ElapsedMilliseconds(pool_end, exact_end));
+    Log::info("Total upper bound: {:.6f}; estimated crude total: {:.6f}", total_upper_bound, crude_total);
+    return static_cast<float>(estimate);
 }

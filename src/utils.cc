@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <nlohmann/json.hpp>
@@ -178,6 +179,20 @@ std::mt19937 Random::SeededGenerator() {
         return std::mt19937(Global::kDefaultSeed);
     }
     return std::mt19937(std::random_device{}());
+}
+
+std::uint64_t Fingerprint::Of(const Coordinate* coordinates, size_t num_dimensions) {
+    std::uint64_t hash = 14695981039346656037ULL;
+    for (size_t dimension = 0; dimension < num_dimensions; ++dimension) {
+        const Coordinate normalized = coordinates[dimension] == 0.0F ? 0.0F : coordinates[dimension];
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &normalized, sizeof(bits));
+        for (unsigned int byte = 0; byte < sizeof(bits); ++byte) {
+            hash ^= (bits >> (8U * byte)) & 0xFFU;
+            hash *= 1099511628211ULL;
+        }
+    }
+    return hash;
 }
 
 float Memory::Usage() {
