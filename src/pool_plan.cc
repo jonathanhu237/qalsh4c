@@ -64,17 +64,32 @@ Coefficients EstimateCoefficients(const std::vector<PilotDraw>& draws) {
 
 Coefficients RelativeStandardErrors(const std::vector<PilotDraw>& draws) {
     const PairStatistics statistics = ComputePairStatistics(draws);
-    const auto relative_error = [](const std::vector<double>& values) {
+    const size_t num_pairs = statistics.h0.size();
+    if (num_pairs < 2) {
+        return Coefficients{.lambda0 = 0.0, .lambda1 = 0.0};
+    }
+    std::vector<double> pair_means(num_pairs);
+    for (size_t pair = 0; pair < num_pairs; ++pair) {
+        pair_means[pair] = 0.5 * (draws[2 * pair].x + draws[2 * pair + 1].x);
+    }
+    const double mean_ratio = Mean(pair_means);
+    const auto relative_error = [&](const std::vector<double>& values) {
         const double mean = Mean(values);
-        if (values.size() < 2 || !(mean > 0.0)) {
+        if (!(mean > 0.0)) {
             return 0.0;
         }
-        double sum_of_squares = 0.0;
-        for (const double value : values) {
-            sum_of_squares += (value - mean) * (value - mean);
+        // Linearization of mean(H) / mean(P)^2 around the pair means.
+        std::vector<double> influence(num_pairs);
+        for (size_t pair = 0; pair < num_pairs; ++pair) {
+            influence[pair] = (values[pair] - mean) / mean - 2.0 * (pair_means[pair] - mean_ratio) / mean_ratio;
         }
-        const auto count = static_cast<double>(values.size());
-        return std::sqrt(sum_of_squares / (count - 1.0) / count) / mean;
+        const double influence_mean = Mean(influence);
+        double sum_of_squares = 0.0;
+        for (const double value : influence) {
+            sum_of_squares += (value - influence_mean) * (value - influence_mean);
+        }
+        const auto count = static_cast<double>(num_pairs);
+        return std::sqrt(sum_of_squares / (count - 1.0) / count);
     };
     return Coefficients{.lambda0 = relative_error(statistics.h0), .lambda1 = relative_error(statistics.h1)};
 }

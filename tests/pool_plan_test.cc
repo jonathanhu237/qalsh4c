@@ -182,20 +182,30 @@ int main() {
             CheckClose(estimate.lambda1, 0.0, 1e-12, "lambda1 estimate");
         }
 
-        // Relative standard errors of the pair means: the pair (x, z) = (1, 1), (0.5, 1) gives H0 = H1 = 1/8 and a pair
-        // of equal draws gives zero, so two pairs of each kind have pair mean 1/16.
+        // Delta-method relative standard errors: the pair (x, z) = (1, 1), (0.5, 1) gives H0 = H1 = 1/8 and a pair of
+        // equal draws gives zero, so two pairs of each kind have mean 1/16, and the pair means of x vary as well.
         {
             const std::vector<PoolPlan::PilotDraw> draws{{.x = 1.0, .z = 1.0}, {.x = 0.5, .z = 1.0},
                                                          {.x = 0.7, .z = 1.0}, {.x = 0.7, .z = 1.0},
                                                          {.x = 1.0, .z = 1.0}, {.x = 0.5, .z = 1.0},
                                                          {.x = 0.3, .z = 1.0}, {.x = 0.3, .z = 1.0}};
             const std::vector<double> pairs{0.125, 0.0, 0.125, 0.0};
+            const std::vector<double> pair_means{0.75, 0.7, 0.75, 0.3};
             const double mean = 0.0625;
-            double sum_of_squares = 0.0;
-            for (const double value : pairs) {
-                sum_of_squares += (value - mean) * (value - mean);
+            const double mean_ratio = 0.625;
+            std::vector<double> influence;
+            for (size_t pair = 0; pair < pairs.size(); ++pair) {
+                influence.push_back((pairs[pair] - mean) / mean - 2.0 * (pair_means[pair] - mean_ratio) / mean_ratio);
             }
-            const double expected = std::sqrt(sum_of_squares / 3.0 / 4.0) / mean;
+            double influence_mean = 0.0;
+            for (const double value : influence) {
+                influence_mean += value / static_cast<double>(influence.size());
+            }
+            double sum_of_squares = 0.0;
+            for (const double value : influence) {
+                sum_of_squares += (value - influence_mean) * (value - influence_mean);
+            }
+            const double expected = std::sqrt(sum_of_squares / 3.0 / 4.0);
             const PoolPlan::Coefficients errors = PoolPlan::RelativeStandardErrors(draws);
             CheckClose(errors.lambda0, expected, 1e-12, "relative standard error of H0");
             CheckClose(errors.lambda1, expected, 1e-12, "relative standard error of H1");

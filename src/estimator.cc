@@ -1152,10 +1152,9 @@ PoolPlanChoice PlanPoolDesign(const PoolPlanSettings& settings, const PoolStageI
         settings.requested != PoolDesign::kDirect && settings.requested != PoolDesign::kUniform;
 
     const DoubleWeightedSampler sampler(inputs.upper_bounds);
-    // The model plan grows its pilot, doubling from pilot_size, until both variance coefficients are known to the
-    // relative standard error pilot_relative_error; plans scale with the coefficients, so this keeps the planning error
-    // to about that error squared in relative variance. The certified plan keeps its pilot fixed, because its
-    // confidence bounds assume a sample size chosen in advance.
+    // The model plan grows its pilot, doubling from pilot_size, until both coefficient estimates reach the estimated
+    // relative standard error pilot_relative_error, a stability heuristic. The certified plan keeps its pilot fixed,
+    // because its confidence bounds assume a sample size chosen in advance.
     const bool adaptive = settings.mode == PoolPlanMode::kModel && settings.pilot_relative_error > 0.0;
     std::vector<unsigned int> draws;
     std::vector<unsigned int> distinct;

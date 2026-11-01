@@ -30,9 +30,10 @@ struct Coefficients {
 // draws.
 [[nodiscard]] Coefficients EstimateCoefficients(const std::vector<PilotDraw>& draws);
 
-// Estimated relative standard errors of the two pair means behind EstimateCoefficients (sample standard deviation over
-// the square root of the number of pairs, divided by the mean; zero when a pair mean is zero). Plans scale with these
-// coefficients, so a relative error r inflates the expected relative variance of the final estimate by about r^2.
+// Delta-method estimates of the relative standard errors of the two coefficient estimates. With pair means
+// P_j = (x + x') / 2, mu = mean P_j and nu_i = mean H_ij, the error of lambda_i = nu_i / mu^2 is about
+// sd_j[(H_ij - nu_i) / nu_i - 2 (P_j - mu) / mu] / sqrt(L) for L pairs. This is a stability heuristic, not a confidence
+// bound; a coefficient whose pairs show no variation at all gets zero.
 [[nodiscard]] Coefficients RelativeStandardErrors(const std::vector<PilotDraw>& draws);
 
 // Upper bounds on lambda0 and lambda1 that hold together with probability at least 1 - alpha: a lower confidence

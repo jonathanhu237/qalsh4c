@@ -73,7 +73,7 @@ class PoolSamplingEstimator : public Estimator {
     // MNIST development workloads for both norms.
     static constexpr unsigned int kAutoPoolSizePerSample = 5;
     // Pilot draws in proportion to U_a: the fixed size of a certified plan's pilot and the starting size of a model
-    // plan's, which doubles until both variance coefficients reach the relative standard error below.
+    // plan's, which doubles until both coefficient estimates reach the estimated relative standard error below.
     static constexpr unsigned int kDefaultPilotSize = 128;
     static constexpr float kDefaultPilotRelativeError = 0.25F;
 
