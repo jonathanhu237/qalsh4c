@@ -226,7 +226,11 @@ B+ tree; pass `--layout sorted-array` to choose the persistent sorted-array
 layout. The file stores the actual projection vectors and layout metadata, so
 query processes do not regenerate projections. Existing matching indexes are
 reused; pass `--overwrite` to rebuild a selected target index. Historical flat
-`dot_vectors.bin`/`tables.bin` indexes must be rebuilt.
+`dot_vectors.bin`/`tables.bin` indexes must be rebuilt. The build also writes
+`fingerprints.bin`, one 64-bit hash per target point, which `estimate --disk-based pool` uses to detect source
+points that coincide with a target point without reading `B` again; hash hits are still confirmed by comparing the
+points. Running the build again on an existing index adds the file if it is missing, and estimates rehash `B` when
+the file is absent or no longer matches the target points.
 
 ```bash
 ./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist

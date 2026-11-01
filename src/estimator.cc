@@ -1442,14 +1442,22 @@ float PoolSamplingEstimator::EstimateDiskBased(const PointSetMetadata& from, con
         ReadPointIntoBuffer(target_input, to, subsample_ids[index], subsample.data() + index * num_dimensions,
                             "target");
     }
-    // Hash every target point in one sequential pass; source points whose hash matches are verified below.
+    // Target fingerprints come from the persistent index; indexes built before they were stored fall back to hashing
+    // every target point in one sequential pass. Source points whose hash matches are verified below.
     std::unordered_multimap<std::uint64_t, unsigned int> target_index_by_hash;
     target_index_by_hash.reserve(to.num_points);
     std::vector<Coordinate> target_block;
     std::vector<std::uint64_t> block_hashes;
+    const std::optional<std::vector<std::uint64_t>> stored_fingerprints = DiskQalsh::ReadFingerprints(to, norm_order);
+    if (stored_fingerprints.has_value()) {
+        for (unsigned int target_index = 0; target_index < to.num_points; ++target_index) {
+            target_index_by_hash.emplace((*stored_fingerprints)[target_index], target_index);
+        }
+    }
     target_input.clear();
     target_input.seekg(0, std::ios::beg);
-    for (unsigned int block_begin = 0; block_begin < to.num_points; block_begin += disk_block_size_) {
+    for (unsigned int block_begin = 0; !stored_fingerprints.has_value() && block_begin < to.num_points;
+         block_begin += disk_block_size_) {
         const unsigned int target_count = std::min(disk_block_size_, to.num_points - block_begin);
         ReadContiguousPointBatch(target_input, to, block_begin, target_count, target_block, "target");
         block_hashes.resize(target_count);

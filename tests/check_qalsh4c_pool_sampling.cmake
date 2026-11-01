@@ -69,6 +69,19 @@ if(NOT index_result EQUAL 0)
     message(FATAL_ERROR "Building the disk QALSH index failed:\n${index_stdout}\n${index_stderr}")
 endif()
 
+# The index stores one 8-byte fingerprint per target point for exact-match detection.
+set(fingerprints_path "${dataset_dir}/index/qalsh/l2/b/fingerprints.bin")
+function(check_fingerprints context)
+    if(NOT EXISTS "${fingerprints_path}")
+        message(FATAL_ERROR "Expected ${fingerprints_path} after ${context}")
+    endif()
+    file(SIZE "${fingerprints_path}" fingerprints_size)
+    if(NOT fingerprints_size EQUAL 9424)
+        message(FATAL_ERROR "Expected 1178 fingerprints (9424 bytes) after ${context}, got ${fingerprints_size} bytes")
+    endif()
+endfunction()
+check_fingerprints("building the index")
+
 function(run_disk_pool_estimate out_estimate)
     execute_process(
         COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate --disk-based
@@ -92,4 +105,35 @@ function(run_disk_pool_estimate out_estimate)
     set(${out_estimate} "${estimate_line}" PARENT_SCOPE)
 endfunction()
 
-run_disk_pool_estimate(disk_estimate)
+# Stored fingerprints and the fallback pass over B must find the same exact matches.
+run_disk_pool_estimate(with_fingerprints)
+file(REMOVE "${fingerprints_path}")
+run_disk_pool_estimate(without_fingerprints)
+if(NOT with_fingerprints STREQUAL without_fingerprints)
+    message(FATAL_ERROR "Disk pool estimate changed without stored fingerprints: "
+        "'${with_fingerprints}' vs '${without_fingerprints}'")
+endif()
+
+# Fingerprints that no longer match the target points are ignored instead of trusted.
+file(WRITE "${fingerprints_path}" "")
+foreach(point_index RANGE 1177)
+    file(APPEND "${fingerprints_path}" "00000000")
+endforeach()
+run_disk_pool_estimate(with_stale_fingerprints)
+if(NOT with_stale_fingerprints STREQUAL without_fingerprints)
+    message(FATAL_ERROR "Disk pool estimate trusted stale fingerprints: "
+        "'${with_stale_fingerprints}' vs '${without_fingerprints}'")
+endif()
+file(REMOVE "${fingerprints_path}")
+
+# Rerunning the index build on an existing index adds missing fingerprints.
+execute_process(
+    COMMAND "${QALSH4C_BIN}" index qalsh -p 2 -d "${dataset_dir}"
+    RESULT_VARIABLE backfill_result
+    OUTPUT_VARIABLE backfill_stdout
+    ERROR_VARIABLE backfill_stderr
+)
+if(NOT backfill_result EQUAL 0)
+    message(FATAL_ERROR "Re-running the disk QALSH index build failed:\n${backfill_stdout}\n${backfill_stderr}")
+endif()
+check_fingerprints("re-running the index build")
