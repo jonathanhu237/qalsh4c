@@ -1384,7 +1384,7 @@ void BPlusTreeIndex::Build(const std::string& path, IndexConfig config,
 
         // The whole struct, padding included, is written to the file, so zero it to keep index files deterministic.
         DiskFileHeader header;
-        std::memset(&header, 0, sizeof(header));
+        std::memset(static_cast<void*>(&header), 0, sizeof(header));
         std::copy(kBPlusMagic.begin(), kBPlusMagic.end(), std::begin(header.magic));
         header.version = kVersion;
         header.endian = kEndianMarker;
@@ -1529,7 +1529,7 @@ void SortedArrayIndex::Build(const std::string& path, IndexConfig config,
 
         // The whole struct, padding included, is written to the file, so zero it to keep index files deterministic.
         DiskFileHeader header;
-        std::memset(&header, 0, sizeof(header));
+        std::memset(static_cast<void*>(&header), 0, sizeof(header));
         std::copy(kSortedArrayMagic.begin(), kSortedArrayMagic.end(), std::begin(header.magic));
         header.version = kVersion;
         header.endian = kEndianMarker;
