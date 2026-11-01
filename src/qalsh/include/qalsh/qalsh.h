@@ -518,6 +518,14 @@ class DefaultQalshStrategy final : public SearchStrategy {
         if (finish_requested_) {
             return {};
         }
+        if constexpr (!CustomRule) {
+            if (!compact_state_.empty()) {
+                if (hit.point_id >= compact_state_.size()) {
+                    throw std::invalid_argument("projection hit point id is out of range");
+                }
+                return accept_builtin_id(hit.point_id);
+            }
+        }
         if (hit.point_id >= collision_state_.size()) {
             throw std::invalid_argument("projection hit point id is out of range");
         }
@@ -545,13 +553,17 @@ class DefaultQalshStrategy final : public SearchStrategy {
     // unused projection fields. Built-in indexes validate IDs at Build/Open;
     // the engine validates external hits before entering this private handler.
     HitDecision accept_builtin_id(PointId point_id) {
-        auto& count = collision_state_[point_id];
         // Remaining collisions: zero marks an already accepted point.
         // Counting down avoids reloading a threshold after every store.
-        if (count == 0) return {};
-        --count;
-        if (count != 0) return {};
-        return {.candidate = point_id};
+        const auto count_down = [point_id](auto& count) -> HitDecision {
+            if (count == 0) return {};
+            --count;
+            if (count != 0) return {};
+            return {.candidate = point_id};
+        };
+        // The branch is fixed for a whole query, so it predicts perfectly.
+        return compact_state_.empty() ? count_down(collision_state_[point_id])
+                                      : count_down(compact_state_[point_id]);
     }
 
    public:
@@ -598,6 +610,9 @@ class DefaultQalshStrategy final : public SearchStrategy {
     QueryStart query_{};
     // Standard mode: remaining hits. Custom mode: observed hits/sentinel.
     std::vector<std::uint32_t> collision_state_;
+    // Standard mode with a threshold below 256 counts in one byte per point instead, which keeps the counters of
+    // concurrent queries in cache on large target sets.
+    std::vector<std::uint8_t> compact_state_;
     TableScanSchedule table_schedule_;
     bool radius_advanced_{false};
     bool finish_requested_{false};

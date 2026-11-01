@@ -1,5 +1,7 @@
 option(QALSH_WINDOW_FORCE_SCALAR
        "Force the private window-clamp implementation to use its scalar fallback" OFF)
+option(QALSH_WIDE_COLLISION_COUNTERS
+       "Keep four-byte collision counters for every query, for the counter-width ablation" OFF)
 
 add_library(qalsh4c_qalsh STATIC src/qalsh.cc)
 
@@ -22,6 +24,11 @@ if(OpenMP_CXX_FOUND)
     target_compile_options(qalsh4c_qalsh PRIVATE
         $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fopenmp-simd>
     )
+endif()
+
+# Ablation-build switch: results are identical, only the per-query counter footprint changes.
+if(QALSH_WIDE_COLLISION_COUNTERS)
+    target_compile_definitions(qalsh4c_qalsh PRIVATE QALSH_WIDE_COLLISION_COUNTERS)
 endif()
 
 # This is a private validation-build switch.  It is intentionally off for

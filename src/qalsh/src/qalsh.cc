@@ -2856,7 +2856,19 @@ void DefaultQalshStrategy::start(const QueryStart& query) {
                     active_collision_threshold_ <= query.num_hash_tables,
                 "default QALSH strategy has an invalid collision threshold");
     }
-    collision_state_.assign(query.num_points, candidate_rule_ ? 0U : active_collision_threshold_);
+#ifdef QALSH_WIDE_COLLISION_COUNTERS
+    constexpr bool kCompactCounters = false;
+#else
+    constexpr bool kCompactCounters = true;
+#endif
+    if (kCompactCounters && !candidate_rule_ &&
+        active_collision_threshold_ <= std::numeric_limits<std::uint8_t>::max()) {
+        compact_state_.assign(query.num_points, static_cast<std::uint8_t>(active_collision_threshold_));
+        collision_state_.clear();
+    } else {
+        compact_state_.clear();
+        collision_state_.assign(query.num_points, candidate_rule_ ? 0U : active_collision_threshold_);
+    }
     table_schedule_.start(query.num_hash_tables);
 
     if (candidate_budget_override_set_) {
