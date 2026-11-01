@@ -22,6 +22,7 @@
 
 #include "ann_searcher.h"
 #include "config.h"
+#include "exact_scan.h"
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
@@ -148,6 +149,23 @@ void ScanDiskTargetBlocks(const std::vector<Coordinate>& query_batch, unsigned i
     target_input.seekg(0, std::ios::beg);
     if (!target_input) {
         Log::error("Failed to seek target point set file: {}", target_metadata.file_path.string());
+    }
+
+    if (ExactScan::Supports(norm_order) && !Global::kUseScalarExactScan) {
+        std::vector<const Coordinate*> queries(query_count);
+        std::vector<Distance> upper_bounds(query_count);
+        for (unsigned int query_index = 0; query_index < query_count; ++query_index) {
+            queries[query_index] = query_batch.data() + static_cast<size_t>(query_index) * target_metadata.num_dimensions;
+            upper_bounds[query_index] = batch_results[query_index].distance;
+        }
+        ExactScan scan(queries, target_metadata.num_dimensions, norm_order, upper_bounds);
+        for (unsigned int block_begin = 0; block_begin < target_metadata.num_points; block_begin += disk_block_size) {
+            const unsigned int target_count = std::min(disk_block_size, target_metadata.num_points - block_begin);
+            ReadContiguousPointBatch(target_input, target_metadata, block_begin, target_count, target_block, "target");
+            scan.ScanBlock(target_block.data(), target_count, block_begin);
+        }
+        batch_results = scan.Results();
+        return;
     }
 
     for (unsigned int block_begin = 0; block_begin < target_metadata.num_points; block_begin += disk_block_size) {
@@ -775,6 +793,11 @@ std::vector<Distance> ExactDistancesFromUpperBounds(const std::vector<Point>& qu
                                                     const LinearScanAnnSearcher& shared_searcher,
                                                     unsigned int batch_size) {
     std::vector<Distance> distances(queries.size(), 0.0F);
+    if (shared_searcher.UsesBatchedScan()) {
+        const std::vector<AnnResult> results = shared_searcher.SearchBatched(queries, upper_bounds);
+        std::ranges::transform(results, distances.begin(), &AnnResult::distance);
+        return distances;
+    }
     const size_t num_batches = (queries.size() + batch_size - 1) / batch_size;
 
 #ifdef QALSH4C_USE_OPENMP
@@ -870,6 +893,14 @@ float AnnEstimator::EstimateDistance(const PointSetMetadata& from, const PointSe
     ann_searcher_->Init(to, norm_order);
     std::vector<Point> query_points = PointSet::LoadPointsFromFile(from.file_path, from.num_points, from.num_dimensions);
     std::vector<Distance> distances(from.num_points, 0.0F);
+
+    const auto* linear_scan = dynamic_cast<const LinearScanAnnSearcher*>(ann_searcher_.get());
+    if (linear_scan != nullptr && linear_scan->UsesBatchedScan()) {
+        const std::vector<AnnResult> results = linear_scan->SearchBatched(
+            query_points, std::vector<Distance>(query_points.size(), std::numeric_limits<Distance>::infinity()));
+        std::ranges::transform(results, distances.begin(), &AnnResult::distance);
+        return std::accumulate(distances.begin(), distances.end(), 0.0F);
+    }
 
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
@@ -1061,12 +1092,26 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
         Log::info("Using specified exact batch size: {}", exact_batch_size);
     }
 
-#ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
     LinearScanAnnSearcher shared_ann_searcher;
     InitExactScanSearcher(shared_ann_searcher, to, norm_order, loaded_target_points);
     Estimate estimation = 0.0F;
 
+    if (shared_ann_searcher.UsesBatchedScan()) {
+        std::vector<Distance> upper_bounds(sample_counts.size());
+        for (size_t sample_index = 0; sample_index < sample_counts.size(); ++sample_index) {
+            upper_bounds[sample_index] = weights_are_upper_bounds ? weights[sample_counts[sample_index].first]
+                                                                  : std::numeric_limits<float>::infinity();
+        }
+        const std::vector<AnnResult> results = shared_ann_searcher.SearchBatched(query_points, upper_bounds);
+        for (size_t sample_index = 0; sample_index < sample_counts.size(); ++sample_index) {
+            const auto& [point_id, count] = sample_counts[sample_index];
+            estimation += (static_cast<float>(count) * sum * results[sample_index].distance / weights[point_id]);
+        }
+        return estimation / updated_num_samples;
+    }
+
+#ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel reduction(+ : estimation)
     {
         LinearScanAnnSearcher ann_searcher = shared_ann_searcher;
@@ -1126,11 +1171,7 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
         }
     }
 #else
-    Estimate estimation = 0.0F;
-    LinearScanAnnSearcher ann_searcher;
-    InitExactScanSearcher(ann_searcher, to, norm_order, loaded_target_points);
-
-    std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
+    LinearScanAnnSearcher& ann_searcher = shared_ann_searcher;
 
     if (exact_batch_size == 1) {
         for (size_t sample_index = 0; sample_index < sample_counts.size(); ++sample_index) {

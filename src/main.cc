@@ -44,6 +44,9 @@ int main(int argc, char** argv) {
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
         ->default_str(Global::kUseFixedSeed ? "True" : "False");
+    app.add_flag("--scalar-exact-scan", Global::kUseScalarExactScan,
+                 "Ablation: find exact nearest neighbors with the scalar kernel instead of the batched L1/L2 kernels")
+        ->default_str(Global::kUseScalarExactScan ? "True" : "False");
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);

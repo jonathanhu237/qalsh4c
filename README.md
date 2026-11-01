@@ -205,6 +205,13 @@ The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab
 ./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction both ann linear_scan
 ```
 
+Exact nearest neighbors, in linear scan and in the exact stage of every sampling estimator (in memory and
+disk-based), are found in batches. A fast pass computes approximate distances for blocks of targets: blocked matrix
+products through `||x - y||^2 = ||x||^2 + ||y||^2 - 2 <x, y>` for L2, and vectorized sums of absolute differences
+shared by groups of queries for L1. A rounding-error bound decides which targets can still win, and every one of them
+is rescored with the scalar kernel, so the distances are the same as a scalar scan's. Pass `--scalar-exact-scan`
+before the subcommand to use the scalar kernel throughout, as an ablation.
+
 Pass `--disk-based` at the `estimate` level to use an external-memory
 implementation where available. Disk-based exact linear scan streams query
 points from disk in batches and scans target points in blocks instead of loading

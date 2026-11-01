@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "disk_qalsh_index.h"
+#include "exact_scan.h"
 #include "global.h"
 #include "log.h"
 #include "utils.h"
@@ -173,6 +174,29 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatchWithUpperBounds(
         }
     }
     return results;
+}
+
+bool LinearScanAnnSearcher::UsesBatchedScan() const {
+    return !Global::kUseScalarExactScan && ExactScan::Supports(norm_order_);
+}
+
+std::vector<AnnResult> LinearScanAnnSearcher::SearchBatched(
+    const std::vector<Point>& query_points, const std::vector<Distance>& initial_upper_bounds) const {
+    if (!base_points_) {
+        Log::error("Linear scan searcher is not initialized.");
+    }
+    std::vector<const Coordinate*> queries;
+    queries.reserve(query_points.size());
+    for (const Point& query_point : query_points) {
+        if (query_point.size() != num_dimensions_) {
+            Log::error("Query point dimension {} does not match target dimension {}.", query_point.size(),
+                       num_dimensions_);
+        }
+        queries.push_back(query_point.data());
+    }
+    ExactScan scan(queries, num_dimensions_, norm_order_, initial_upper_bounds);
+    scan.ScanPoints(*base_points_);
+    return scan.Results();
 }
 
 // ---------------------------------------------

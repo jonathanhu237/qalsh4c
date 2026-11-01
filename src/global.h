@@ -12,6 +12,8 @@ class Global {
     static constexpr unsigned int kScanSize = 128;
 
     static bool kUseFixedSeed;
+    // Find exact nearest neighbors with the scalar kernel instead of the batched ExactScan (ablation).
+    static bool kUseScalarExactScan;
     static constexpr unsigned int kDefaultSeed = 42;
     static constexpr unsigned int kDefaultDiskBlockSize = 4096;
     static constexpr unsigned int kDefaultDiskQueryBatchSize = 64;
