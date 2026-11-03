@@ -20,6 +20,9 @@ class Global {
     static bool kQalshStopAtRoundBoundary;
     // Diagnostic: when not empty, pool plans write every pilot draw (point id, U_a, D_a, v_a) to this CSV file.
     static std::string kPilotDumpPath;
+    // Diagnostic: when not empty, pool sampling writes every source point's final upper bound, the one its exact-scan
+    // draws follow, to this file as float64 values.
+    static std::string kBoundsDumpPath;
     static constexpr unsigned int kDefaultSeed = 42;
     static constexpr unsigned int kDefaultDiskBlockSize = 4096;
     static constexpr unsigned int kDefaultDiskQueryBatchSize = 64;

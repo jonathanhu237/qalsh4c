@@ -1,8 +1,10 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "ann_searcher.h"
+#include "static_c2lsh.h"
 #include "weights_generator.h"
 
 class Estimator {
@@ -85,7 +87,8 @@ class PoolSamplingEstimator : public Estimator {
                           DiskQalshSearchOptions disk_qalsh_options = {}, bool direct = false, bool full = false,
                           bool fuse = true, PoolPlanMode plan_mode = PoolPlanMode::kFixed, float target_error = 0.0F,
                           unsigned int pilot_size = kDefaultPilotSize, bool uniform = false,
-                          float pilot_relative_error = kDefaultPilotRelativeError, unsigned int num_strata = 0);
+                          float pilot_relative_error = kDefaultPilotRelativeError, unsigned int num_strata = 0,
+                          std::optional<StaticC2lshOptions> static_options = std::nullopt);
     [[nodiscard]] bool RequiresIndex() const override;
     void PreflightBothDirections(const PointSetMetadata& a_metadata, const PointSetMetadata& b_metadata,
                                  float norm_order) override;
@@ -93,7 +96,8 @@ class PoolSamplingEstimator : public Estimator {
 
    private:
     // External-memory variant: streams A once, probes the persistent QALSH index only for pooled points, and scans
-    // B sequentially in query batches for the exact stage.
+    // B sequentially in query batches for the exact stage. The static design builds no index: it streams A and B
+    // once for its projections and B once more per chunk of source points to verify their neighbors.
     float EstimateDiskBased(const PointSetMetadata& from, const PointSetMetadata& to, float norm_order);
     unsigned int ResolveNumSamples(const QalshConfig& qalsh_config, float norm_order) const;
     unsigned int ResolvePoolSize(unsigned int num_samples) const;
@@ -119,4 +123,7 @@ class PoolSamplingEstimator : public Estimator {
     bool uniform_{false};  // Baseline: uniform draws without bounds or QALSH, scanned from scratch
     float pilot_relative_error_{kDefaultPilotRelativeError};  // Model plans grow the pilot to this (0: fixed)
     unsigned int num_strata_{0};  // Equal-count strata by U_a whose QALSH use a plan decides (0: unstratified)
+    // Tighten U_a with static C2LSH witnesses and draw the exact scans in proportion to the tightened bounds, as the
+    // direct baseline does with U_a.
+    std::optional<StaticC2lshOptions> static_options_;
 };

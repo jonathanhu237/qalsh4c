@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
                      "costs, and K and T target an RMS relative error of --target-error), or certified (a pilot "
                      "certifies the coefficients, so the relative error exceeds --target-error with probability at "
                      "most --delta). A pooled plan switches to querying every source point when that is predicted "
-                     "to be cheaper.")
+                     "to be cheaper. With --disk-based, a plan needs --direct or --static.")
         ->check(CLI::IsMember({"fixed", "model", "certified"}))
         ->default_val("fixed");
     float pool_target_error{0.0F};
@@ -382,6 +382,34 @@ int main(int argc, char** argv) {
     bool pool_no_fuse{false};
     pool->add_flag("--no-fuse", pool_no_fuse,
                    "Ablation: keep raw QALSH distances instead of clipping them with the subsample upper bounds");
+    bool pool_static{false};
+    pool->add_flag("--static", pool_static,
+                   "Skip QALSH: tighten every subsample upper bound with the Morton neighbors of a static C2LSH "
+                   "structure over A and B (collision threshold m - 1, c = 2), then draw the exact scans in proportion "
+                   "to the tightened bounds");
+    StaticC2lshOptions static_options;
+    pool->add_option("--static-projections", static_options.num_projections,
+                     "Projections m of each static structure (0: the smallest m with |B| m (2 pi)^(-(m-1)/2) <= 1)")
+        ->default_val(0);
+    pool->add_option("--static-repetitions", static_options.num_repetitions,
+                     "Independent static structures; every source point keeps its nearest neighbor over all of them")
+        ->default_val(static_options.num_repetitions)
+        ->check(CLI::PositiveNumber);
+    pool->add_option("--static-window", static_options.window,
+                     "Targets checked on each side of a source point in every Morton order")
+        ->default_val(static_options.window)
+        ->check(CLI::PositiveNumber);
+    pool->add_option("--static-bucket-width", static_options.bucket_width,
+                     "Finest bucket width w of the static structures (0: the smallest positive upper bound)")
+        ->default_val(0.0)
+        ->check(CLI::NonNegativeNumber);
+    pool->add_option("--static-chunk-size", static_options.disk_chunk_size,
+                     "With --disk-based: source points held in memory while their static neighbors are verified; B is "
+                     "read once per chunk (0: as many as 256 MiB holds)")
+        ->default_val(0);
+    pool->add_option("--bounds-dump", Global::kBoundsDumpPath,
+                     "Diagnostic: write every source point's final upper bound, the one its exact-scan draws follow, "
+                     "to this file as float64 values");
     const CLI::Option* pool_approximation_ratio_option = (*pool)["--approximation-ratio"];
     pool->callback([&]() {
         // With --disk-based, -c must match the persistent index; without it the index's own ratio is used.
@@ -395,7 +423,8 @@ int main(int argc, char** argv) {
             pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
             pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
             disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse, plan_mode, pool_target_error,
-            pool_pilot_size, pool_uniform, pool_pilot_relative_error, pool_num_strata);
+            pool_pilot_size, pool_uniform, pool_pilot_relative_error, pool_num_strata,
+            pool_static ? std::optional<StaticC2lshOptions>(static_options) : std::nullopt);
     });
 
     // ------------------------------

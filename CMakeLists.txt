@@ -67,6 +67,7 @@ add_executable(qalsh4c
     src/pool_plan.cc
     src/main.cc
     src/point_set.cc
+    src/static_c2lsh.cc
     src/utils.cc
     src/weights_generator.cc
 )
@@ -143,6 +144,7 @@ if(BUILD_TESTING)
         src/global.cc
         src/pool_plan.cc
         src/point_set.cc
+        src/static_c2lsh.cc
         src/utils.cc
         src/weights_generator.cc
     )
@@ -165,6 +167,7 @@ if(BUILD_TESTING)
         src/global.cc
         src/pool_plan.cc
         src/point_set.cc
+        src/static_c2lsh.cc
         src/utils.cc
         src/weights_generator.cc
     )
@@ -195,6 +198,15 @@ if(BUILD_TESTING)
         target_compile_definitions(quadtree_weights_generator_test PRIVATE QALSH4C_USE_OPENMP)
     endif()
     add_test(NAME quadtree_weights_generator_test COMMAND quadtree_weights_generator_test)
+
+    add_executable(static_c2lsh_test tests/static_c2lsh_test.cc src/static_c2lsh.cc src/utils.cc src/global.cc)
+    target_include_directories(static_c2lsh_test PRIVATE src)
+    target_link_libraries(static_c2lsh_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(static_c2lsh_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(static_c2lsh_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME static_c2lsh_test COMMAND static_c2lsh_test)
 
     add_executable(log_error_test tests/log_error_test.cc)
     target_include_directories(log_error_test PRIVATE src)
