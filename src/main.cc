@@ -114,6 +114,35 @@ int main(int argc, char** argv) {
                                     .layout = DiskQalsh::ParseIndexLayout(qalsh_index_layout)});
     });
 
+    CLI::App* static_index = index->add_subcommand(
+        "static", "Build a persistent static C2LSH index: projection vectors and the point set's projections.");
+    StaticIndexRequest static_index_request;
+    std::string static_index_target{"b"};
+    static_index->add_option("-p,--norm-order", static_index_request.norm_order, "Norm order")
+        ->required()
+        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
+    static_index->add_option("-d,--dataset-directory", static_index_request.dataset_directory,
+                             "Directory for the dataset")
+        ->required();
+    static_index->add_option("--target", static_index_target, "Point set to index: a, b, or both")
+        ->default_val("b")
+        ->check(CLI::IsMember({"a", "b", "both"}));
+    static_index->add_option("--projections", static_index_request.num_projections,
+                             "Projections m of each structure (0: the smallest m with n m (2 pi)^(-(m-1)/2) <= 1 "
+                             "for the indexed set's size n)")
+        ->default_val(0);
+    static_index->add_option("--repetitions", static_index_request.num_repetitions,
+                             "Structures the index holds; estimates may use fewer")
+        ->default_val(4)
+        ->check(CLI::PositiveNumber);
+    static_index->add_option("--seed", static_index_request.seed, "Seed for the projection vectors")
+        ->default_val(Global::kDefaultSeed);
+    static_index->add_flag("--overwrite", static_index_request.overwrite, "Overwrite an existing selected index");
+    static_index->callback([&]() {
+        static_index_request.target_selection = DiskQalsh::ParseTargetSelection(static_index_target);
+        command = std::make_unique<StaticIndexCommand>(static_index_request);
+    });
+
     // ------------------------------
     // estimate
     // ------------------------------
@@ -403,6 +432,9 @@ int main(int argc, char** argv) {
                      "Finest bucket width w of the static structures (0: the smallest positive upper bound)")
         ->default_val(0.0)
         ->check(CLI::NonNegativeNumber);
+    pool->add_flag("--static-index", static_options.disk_index,
+                   "With --disk-based: read B's projections from its persistent static index (`index static`) "
+                   "instead of reading B's coordinates");
     pool->add_option("--static-chunk-size", static_options.disk_chunk_size,
                      "With --disk-based: source points held in memory while their static neighbors are verified; B is "
                      "read once per chunk (0: as many as 256 MiB holds)")

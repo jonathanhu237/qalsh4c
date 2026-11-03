@@ -2,7 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <limits>
+#include <optional>
 #include <random>
 #include <vector>
 
@@ -23,6 +26,11 @@ struct StaticC2lshOptions {
     // External memory only: source points held in memory while their neighbors are verified, one pass over B per
     // chunk; 0 selects as many as kDefaultChunkBytes holds.
     unsigned int disk_chunk_size{0};
+    // External memory only: read B's projections from its persistent static index instead of its coordinates.
+    bool disk_index{false};
+    // Without an index: draw the projection vectors from std::mt19937(vector_seed), the way an index draws them,
+    // instead of from the run's generator.
+    std::optional<std::uint32_t> vector_seed{};
 };
 
 struct StaticC2lshStats {
@@ -70,7 +78,36 @@ struct Neighbors {
 Neighbors MortonNeighbors(const std::vector<std::int64_t>& bucket_ids, unsigned int num_sources,
                           unsigned int num_targets, unsigned int num_projections, unsigned int window);
 
+// A persistent static index of one point set, built once like the disk QALSH index: m R projection vectors drawn from
+// a seed, and the set's projections onto them. An external-memory estimate then reads 4 m R bytes per target point
+// instead of its coordinates, and draws only the level phases and shifts itself. It lives in
+// <dataset>/index/static/l<p>/<a|b>.
+struct Index {
+    std::filesystem::path directory;
+    float norm_order{0.0F};
+    unsigned int num_points{0};
+    unsigned int num_dimensions{0};
+    unsigned int num_projections{0};  // m
+    unsigned int num_repetitions{0};  // R the index holds; an estimate may use fewer
+    std::uint32_t seed{0};
+    std::vector<float> vectors;  // d x m R, column-major; repetition r owns columns [r m, (r + 1) m)
+};
+
+[[nodiscard]] std::filesystem::path IndexDirectory(const PointSetMetadata& points, float norm_order);
+// num_projections 0 selects DefaultNumProjections(points.num_points). An index with the same parameters is kept.
+void BuildIndex(const PointSetMetadata& points, float norm_order, unsigned int num_projections,
+                unsigned int num_repetitions, std::uint32_t seed, unsigned int block_size, bool overwrite);
+[[nodiscard]] Index OpenIndex(const PointSetMetadata& points, float norm_order);
+
 }  // namespace StaticC2lsh
+
+struct StaticC2lshDiskOptions {
+    unsigned int block_size{0};  // Points per sequential read
+    const StaticC2lsh::Index* index{nullptr};  // B's projections; null projects B from its point file
+    // Called with every block of B, in id order, during the first verification pass, which then reads every block, so
+    // that an estimator can scan its pilot queries in the same pass.
+    std::function<void(const Coordinate* block, unsigned int count, unsigned int first_id)> target_block_hook;
+};
 
 // Tightens every positive upper bound U_a to min(U_a, distance to the nearest Morton neighbor over all repetitions).
 // Every neighbor is a real target point, so the result is still an upper bound, and it never exceeds the distance to
@@ -80,12 +117,13 @@ std::vector<double> StaticC2lshUpperBounds(const std::vector<Point>& sources, co
                                            const StaticC2lshOptions& options, std::mt19937& gen,
                                            StaticC2lshStats& stats);
 
-// The same bounds for point sets on disk. A and B are streamed from their files in blocks of block_size points, and
-// memory holds no point vectors beyond one block or one chunk of source points: the projections (m R floats per
-// point), one repetition's bucket ids and Morton keys, and the neighbor lists. B is read once for the projections and
-// once per chunk of source points to verify the neighbors, skipping blocks that hold no neighbor. With the same
-// generator state it returns exactly what StaticC2lshUpperBounds returns.
+// The same bounds for point sets on disk. A is streamed from its file in blocks of disk.block_size points, and B too
+// unless disk.index holds its projections; memory holds no point vectors beyond one block or one chunk of source
+// points: the projections (m R floats per point), one repetition's bucket ids and Morton keys, and the neighbor lists.
+// B is read once per chunk of source points to verify the neighbors, skipping blocks that hold no neighbor. With the
+// same generator state, and the index's seed as options.vector_seed when an index is used, it returns exactly what
+// StaticC2lshUpperBounds returns.
 std::vector<double> StaticC2lshUpperBoundsDisk(const PointSetMetadata& sources, const PointSetMetadata& targets,
                                                const std::vector<double>& upper_bounds, float norm_order,
-                                               const StaticC2lshOptions& options, unsigned int block_size,
+                                               const StaticC2lshOptions& options, const StaticC2lshDiskOptions& disk,
                                                std::mt19937& gen, StaticC2lshStats& stats);

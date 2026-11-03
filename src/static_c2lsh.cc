@@ -4,16 +4,21 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <numbers>
 #include <random>
 #include <utility>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "global.h"
 #include "log.h"
@@ -154,8 +159,8 @@ bool IsSupportedNorm(float norm_order) {
     return std::abs(norm_order - 1.0F) < Global::kEpsilon || std::abs(norm_order - 2.0F) < Global::kEpsilon;
 }
 
-// Points per projection product. Chunks start at multiples of this over the sequence of sources and then targets, in
-// memory and on disk alike, so that both compute every projection with the same matrix product.
+// Points per projection product. Chunks start at multiples of this within each point set, in memory, on disk and in a
+// persistent index alike, so that all of them compute every projection with the same matrix product.
 size_t ProjectionChunkRows(Eigen::Index d) {
     return std::clamp(kProjectionBlockCoordinates / static_cast<size_t>(d), kMinProjectionRows, kMaxProjectionRows);
 }
@@ -167,17 +172,12 @@ void ProjectChunk(const Coordinate* points, size_t rows, const Eigen::MatrixXf& 
     result.noalias() = block * projections;
 }
 
-// Projections a . o of every source and then every target on every column of `projections`, row-major with one row
-// per point. One pass over the points serves every repetition.
-std::vector<float> ProjectPoints(const std::vector<Point>& sources, const std::vector<Point>& targets,
-                                 const Eigen::MatrixXf& projections) {
+// Projections of every point onto every column of `projections`, row-major with one row per point.
+void ProjectRows(const std::vector<Point>& points, const Eigen::MatrixXf& projections, float* output) {
     const Eigen::Index d = projections.rows();
     const auto columns = static_cast<size_t>(projections.cols());
-    const size_t num_sources = sources.size();
-    const size_t num_points = num_sources + targets.size();
     const size_t chunk_rows = ProjectionChunkRows(d);
-    const size_t num_chunks = (num_points + chunk_rows - 1) / chunk_rows;
-    std::vector<float> projected(num_points * columns);
+    const size_t num_chunks = (points.size() + chunk_rows - 1) / chunk_rows;
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel
 #endif
@@ -188,17 +188,14 @@ std::vector<float> ProjectPoints(const std::vector<Point>& sources, const std::v
 #endif
         for (long long chunk = 0; chunk < static_cast<long long>(num_chunks); ++chunk) {
             const size_t begin = static_cast<size_t>(chunk) * chunk_rows;
-            const size_t rows = std::min(chunk_rows, num_points - begin);
+            const size_t rows = std::min(chunk_rows, points.size() - begin);
             block.resize(rows * static_cast<size_t>(d));
             for (size_t row = 0; row < rows; ++row) {
-                const size_t point = begin + row;
-                const Point& coordinates = point < num_sources ? sources[point] : targets[point - num_sources];
-                std::ranges::copy(coordinates, block.data() + row * static_cast<size_t>(d));
+                std::ranges::copy(points[begin + row], block.data() + row * static_cast<size_t>(d));
             }
-            ProjectChunk(block.data(), rows, projections, projected.data() + begin * columns);
+            ProjectChunk(block.data(), rows, projections, output + begin * columns);
         }
     }
-    return projected;
 }
 
 void OpenPointFile(std::ifstream& input, const PointSetMetadata& metadata) {
@@ -221,35 +218,26 @@ void ReadPoints(std::ifstream& input, const PointSetMetadata& metadata, size_t f
     }
 }
 
-// ProjectPoints for point files. The sources and then the targets are read sequentially in groups of whole chunks of
-// at least block_size points, and the chunks of a group are projected in parallel.
-std::vector<float> ProjectPointFiles(const PointSetMetadata& sources, const PointSetMetadata& targets,
-                                     const Eigen::MatrixXf& projections, unsigned int block_size,
-                                     double& read_bytes) {
+// ProjectRows for a point file. The points are read sequentially in groups of whole chunks of at least block_size
+// points, the chunks of a group are projected in parallel, and `consume(first_point, rows, values)` receives each
+// group's projections in order.
+template <typename Consume>
+void ProjectPointFile(const PointSetMetadata& points, const Eigen::MatrixXf& projections, unsigned int block_size,
+                      double& read_bytes, Consume&& consume) {
     const Eigen::Index d = projections.rows();
     const auto columns = static_cast<size_t>(projections.cols());
-    const size_t num_sources = sources.num_points;
-    const size_t num_points = num_sources + targets.num_points;
     const size_t chunk_rows = ProjectionChunkRows(d);
     const size_t group_rows = std::max<size_t>(1, (block_size + chunk_rows - 1) / chunk_rows) * chunk_rows;
-    std::ifstream source_input;
-    std::ifstream target_input;
-    OpenPointFile(source_input, sources);
-    OpenPointFile(target_input, targets);
-    std::vector<float> projected(num_points * columns);
+    std::ifstream input;
+    OpenPointFile(input, points);
     std::vector<Coordinate> group;
-    for (size_t group_begin = 0; group_begin < num_points; group_begin += group_rows) {
-        const size_t rows = std::min(group_rows, num_points - group_begin);
-        const size_t source_rows = group_begin < num_sources ? std::min(rows, num_sources - group_begin) : 0;
+    std::vector<float> values;
+    for (size_t group_begin = 0; group_begin < points.num_points; group_begin += group_rows) {
+        const size_t rows = std::min<size_t>(group_rows, points.num_points - group_begin);
         group.resize(rows * static_cast<size_t>(d));
-        if (source_rows > 0) {
-            ReadPoints(source_input, sources, group_begin, source_rows, group.data());
-        }
-        if (rows > source_rows) {
-            ReadPoints(target_input, targets, group_begin + source_rows - num_sources, rows - source_rows,
-                       group.data() + source_rows * static_cast<size_t>(d));
-        }
-        read_bytes += static_cast<double>(rows * static_cast<size_t>(d) * sizeof(Coordinate));
+        values.resize(rows * columns);
+        ReadPoints(input, points, group_begin, rows, group.data());
+        read_bytes += static_cast<double>(group.size() * sizeof(Coordinate));
         const size_t num_chunks = (rows + chunk_rows - 1) / chunk_rows;
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(dynamic)
@@ -257,10 +245,21 @@ std::vector<float> ProjectPointFiles(const PointSetMetadata& sources, const Poin
         for (long long chunk = 0; chunk < static_cast<long long>(num_chunks); ++chunk) {
             const size_t begin = static_cast<size_t>(chunk) * chunk_rows;
             ProjectChunk(group.data() + begin * static_cast<size_t>(d), std::min(chunk_rows, rows - begin),
-                         projections, projected.data() + (group_begin + begin) * columns);
+                         projections, values.data() + begin * columns);
         }
+        consume(group_begin, rows, values.data());
     }
-    return projected;
+}
+
+// Projection vectors for `columns` projections: standard Gaussian for L2 and standard Cauchy for L1, the p-stable laws
+// of the two norms. The matrix fills column by column, so the first k columns of a draw are a draw of k columns.
+Eigen::MatrixXf DrawProjectionVectors(Eigen::Index d, Eigen::Index columns, float norm_order, std::mt19937& gen) {
+    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
+        std::cauchy_distribution<float> cauchy(0.0F, 1.0F);
+        return Eigen::MatrixXf::NullaryExpr(d, columns, [&]() { return cauchy(gen); });
+    }
+    std::normal_distribution<float> normal(0.0F, 1.0F);
+    return Eigen::MatrixXf::NullaryExpr(d, columns, [&]() { return normal(gen); });
 }
 
 // Bucket ids floor((a_i . o + b_i) / width) for the m projections that start at column `first_column`, m per point.
@@ -479,62 +478,63 @@ BoundRange PositiveBoundRange(const std::vector<double>& upper_bounds) {
     return range;
 }
 
-// The random draws of every structure: m projection vectors per repetition, standard Gaussian for L2 and standard
-// Cauchy for L1 (the p-stable laws of the two norms), then each repetition's level phase and shifts.
-struct Structures {
-    Eigen::MatrixXf projections;  // d x mR; repetition r owns columns [r m, (r + 1) m)
+// Each repetition's level phase and shifts. A random phase per structure puts the level widths at w 2^(k + U),
+// U ~ U[0, 1), which spreads the gap between an ideal width and the level below it; the shifts cover every level up to
+// twice the largest bound.
+struct Levels {
     std::vector<double> widths;
     std::vector<unsigned int> top_levels;
     std::vector<std::vector<double>> shifts;
 };
 
-Structures DrawStructures(Eigen::Index d, unsigned int m, unsigned int repetitions, float norm_order,
-                          double bucket_width, double max_bound, std::mt19937& gen) {
-    Structures structures;
-    const auto columns = static_cast<Eigen::Index>(static_cast<size_t>(m) * repetitions);
-    if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
-        std::cauchy_distribution<float> cauchy(0.0F, 1.0F);
-        structures.projections = Eigen::MatrixXf::NullaryExpr(d, columns, [&]() { return cauchy(gen); });
-    } else {
-        std::normal_distribution<float> normal(0.0F, 1.0F);
-        structures.projections = Eigen::MatrixXf::NullaryExpr(d, columns, [&]() { return normal(gen); });
-    }
-    // A random phase per structure puts the level widths at w 2^(k + U), U ~ U[0, 1), which spreads the gap between
-    // an ideal width and the level below it; the shifts cover every level up to twice the largest bound.
+Levels DrawLevels(unsigned int m, unsigned int repetitions, double bucket_width, double max_bound, std::mt19937& gen) {
+    Levels levels;
     std::uniform_real_distribution<double> phase(0.0, 1.0);
-    structures.widths.resize(repetitions);
-    structures.top_levels.resize(repetitions);
-    structures.shifts.assign(repetitions, std::vector<double>(m));
+    levels.widths.resize(repetitions);
+    levels.top_levels.resize(repetitions);
+    levels.shifts.assign(repetitions, std::vector<double>(m));
     for (unsigned int repetition = 0; repetition < repetitions; ++repetition) {
         const double width = bucket_width * std::exp2(phase(gen));
-        const double levels = std::ceil(std::log2(max_bound / width));
-        structures.widths[repetition] = width;
-        structures.top_levels[repetition] = static_cast<unsigned int>(std::clamp(levels, 0.0, kMaxTopLevel)) + 1;
-        std::uniform_real_distribution<double> shift(0.0, width * std::exp2(structures.top_levels[repetition]));
-        for (double& value : structures.shifts[repetition]) {
+        const double top = std::ceil(std::log2(max_bound / width));
+        levels.widths[repetition] = width;
+        levels.top_levels[repetition] = static_cast<unsigned int>(std::clamp(top, 0.0, kMaxTopLevel)) + 1;
+        std::uniform_real_distribution<double> shift(0.0, width * std::exp2(levels.top_levels[repetition]));
+        for (double& value : levels.shifts[repetition]) {
             value = shift(gen);
         }
     }
-    return structures;
+    return levels;
+}
+
+// The projection vectors of a run without an index: from the run's generator, or from options.vector_seed, which is
+// how a persistent index draws them.
+Eigen::MatrixXf DrawRunVectors(const StaticC2lshOptions& options, Eigen::Index d, Eigen::Index columns,
+                               float norm_order, std::mt19937& gen) {
+    if (options.vector_seed.has_value()) {
+        std::mt19937 vector_gen(*options.vector_seed);
+        return DrawProjectionVectors(d, columns, norm_order, vector_gen);
+    }
+    return DrawProjectionVectors(d, columns, norm_order, gen);
 }
 
 // Every repetition's Morton neighbors of every source: num_sources rows of repetitions * 2 * window * m target ids,
-// which are verified together once all structures are sorted.
-std::vector<unsigned int> CollectNeighbors(const std::vector<float>& projected, const Structures& structures,
-                                           unsigned int m, unsigned int num_sources, unsigned int num_targets,
-                                           unsigned int window, const std::vector<double>& upper_bounds,
-                                           size_t num_positive, StaticC2lshStats& stats) {
+// which are verified together once all structures are sorted. Repetition r reads columns [r m, (r + 1) m) of the
+// projections, which hold num_columns values per point.
+std::vector<unsigned int> CollectNeighbors(const std::vector<float>& projected, size_t num_columns,
+                                           const Levels& levels, unsigned int m, unsigned int num_sources,
+                                           unsigned int num_targets, unsigned int window,
+                                           const std::vector<double>& upper_bounds, size_t num_positive,
+                                           StaticC2lshStats& stats) {
     using Clock = std::chrono::steady_clock;
-    const auto repetitions = static_cast<unsigned int>(structures.widths.size());
-    const size_t num_columns = static_cast<size_t>(m) * repetitions;
+    const auto repetitions = static_cast<unsigned int>(levels.widths.size());
     const size_t row_size = 2 * static_cast<size_t>(window) * m;
     std::vector<unsigned int> candidates(static_cast<size_t>(num_sources) * repetitions * row_size);
     double level_sum = 0.0;
     for (unsigned int repetition = 0; repetition < repetitions; ++repetition) {
         const auto bucket_begin = Clock::now();
         const std::vector<std::int64_t> bucket_ids =
-            RebasedBucketIds(projected, num_columns, repetition * m, m, structures.shifts[repetition],
-                             structures.widths[repetition], structures.top_levels[repetition]);
+            RebasedBucketIds(projected, num_columns, repetition * m, m, levels.shifts[repetition],
+                             levels.widths[repetition], levels.top_levels[repetition]);
         const auto sort_begin = Clock::now();
         const StaticC2lsh::Neighbors neighbors =
             StaticC2lsh::MortonNeighbors(bucket_ids, num_sources, num_targets, m, window);
@@ -570,13 +570,15 @@ void DistinctNeighbors(const std::vector<unsigned int>& candidates, size_t sourc
 // The verification of StaticC2lshUpperBounds for point files, one chunk of sources at a time. A chunk is read once,
 // and B is streamed in blocks of block_size points, reading only the blocks that hold a neighbor of the chunk. Each
 // distance starts from its source's best bound at the start of the block; the minimum over the neighbors is exact
-// either way, so the bounds equal those of the in-memory verification.
+// either way, so the bounds equal those of the in-memory verification. A block hook sees every block of B once: the
+// first pass reads every block, or a pass of its own does when no source has a neighbor to verify.
 std::vector<double> VerifyFromFiles(const PointSetMetadata& sources, const PointSetMetadata& targets,
                                     const std::vector<double>& upper_bounds,
                                     const std::vector<unsigned int>& candidates, size_t neighbors_per_source,
-                                    float norm_order, unsigned int chunk_size, unsigned int block_size,
+                                    float norm_order, unsigned int chunk_size, const StaticC2lshDiskOptions& disk,
                                     StaticC2lshStats& stats, size_t& num_checked) {
     const size_t d = sources.num_dimensions;
+    const size_t block_size = disk.block_size;
     std::ifstream source_input;
     std::ifstream target_input;
     OpenPointFile(source_input, sources);
@@ -588,6 +590,16 @@ std::vector<double> VerifyFromFiles(const PointSetMetadata& sources, const Point
     std::vector<std::pair<unsigned int, unsigned int>> pairs;  // (target, source in the chunk)
     std::vector<Distance> best;
     std::vector<Distance> distances;
+    bool hook_pending = static_cast<bool>(disk.target_block_hook);
+    const auto read_block = [&](size_t block_begin, size_t block_end) {
+        block.resize((block_end - block_begin) * d);
+        ReadPoints(target_input, targets, block_begin, block_end - block_begin, block.data());
+        stats.read_mib += static_cast<double>(block.size() * sizeof(Coordinate)) / (1 << 20);
+        if (hook_pending) {
+            disk.target_block_hook(block.data(), static_cast<unsigned int>(block_end - block_begin),
+                                   static_cast<unsigned int>(block_begin));
+        }
+    };
     for (size_t chunk_begin = 0; chunk_begin < sources.num_points; chunk_begin += chunk_size) {
         const size_t chunk_end = std::min<size_t>(chunk_begin + chunk_size, sources.num_points);
         pairs.clear();
@@ -615,19 +627,19 @@ std::vector<double> VerifyFromFiles(const PointSetMetadata& sources, const Point
         }
 
         size_t pair_begin = 0;
-        for (size_t block_begin = 0; block_begin < targets.num_points && pair_begin < pairs.size();
-             block_begin += block_size) {
+        for (size_t block_begin = 0; block_begin < targets.num_points; block_begin += block_size) {
+            if (pair_begin == pairs.size() && !hook_pending) {
+                break;
+            }
             const size_t block_end = std::min<size_t>(block_begin + block_size, targets.num_points);
             size_t pair_end = pair_begin;
             while (pair_end < pairs.size() && pairs[pair_end].first < block_end) {
                 ++pair_end;
             }
-            if (pair_end == pair_begin) {
+            if (pair_end == pair_begin && !hook_pending) {
                 continue;  // No neighbor in this block: skip reading it.
             }
-            block.resize((block_end - block_begin) * d);
-            ReadPoints(target_input, targets, block_begin, block_end - block_begin, block.data());
-            stats.read_mib += static_cast<double>(block.size() * sizeof(Coordinate)) / (1 << 20);
+            read_block(block_begin, block_end);
             distances.resize(pair_end - pair_begin);
 #ifdef QALSH4C_USE_OPENMP
 #pragma omp parallel for schedule(static)
@@ -644,14 +656,193 @@ std::vector<double> VerifyFromFiles(const PointSetMetadata& sources, const Point
             }
             pair_begin = pair_end;
         }
+        hook_pending = false;
         for (size_t source = chunk_begin; source < chunk_end; ++source) {
             tightened[source] = std::min(upper_bounds[source], static_cast<double>(best[source - chunk_begin]));
+        }
+    }
+    if (hook_pending) {
+        ++stats.verify_passes;
+        for (size_t block_begin = 0; block_begin < targets.num_points; block_begin += block_size) {
+            read_block(block_begin, std::min<size_t>(block_begin + block_size, targets.num_points));
         }
     }
     return tightened;
 }
 
+std::string NormDirectoryName(float norm_order) {
+    return std::abs(norm_order - 1.0F) < Global::kEpsilon ? "l1" : "l2";
+}
+
+constexpr int kIndexVersion = 1;
+constexpr const char* kIndexMetadataFile = "meta.json";
+constexpr const char* kIndexVectorsFile = "vectors.bin";
+constexpr const char* kIndexProjectionsFile = "projections.bin";
+// Points per read of an index's projections.
+constexpr size_t kIndexReadRows = 65536;
+
+StaticC2lsh::Index ReadIndexMetadata(const std::filesystem::path& directory) {
+    std::ifstream input(directory / kIndexMetadataFile);
+    if (!input.is_open()) {
+        Log::error("Could not open static index metadata in {}.", directory.string());
+    }
+    StaticC2lsh::Index index;
+    try {
+        const nlohmann::json value = nlohmann::json::parse(input);
+        if (value.at("version").get<int>() != kIndexVersion) {
+            Log::error("Unsupported static index version in {}.", directory.string());
+        }
+        index.directory = directory;
+        index.norm_order = value.at("norm_order").get<float>();
+        index.num_points = value.at("num_points").get<unsigned int>();
+        index.num_dimensions = value.at("num_dimensions").get<unsigned int>();
+        index.num_projections = value.at("num_projections").get<unsigned int>();
+        index.num_repetitions = value.at("num_repetitions").get<unsigned int>();
+        index.seed = value.at("seed").get<std::uint32_t>();
+    } catch (const nlohmann::json::exception& error) {
+        Log::error("Invalid static index metadata in {}: {}", directory.string(), error.what());
+    }
+    return index;
+}
+
+// Copies the first `columns` projections of every point in an index into `output`, row-major.
+void ReadIndexProjections(const StaticC2lsh::Index& index, size_t columns, float* output, double& read_bytes) {
+    const size_t stride = static_cast<size_t>(index.num_projections) * index.num_repetitions;
+    std::ifstream input(index.directory / kIndexProjectionsFile, std::ios::binary);
+    if (!input.is_open()) {
+        Log::error("Could not open static index projections in {}.", index.directory.string());
+    }
+    std::vector<float> rows;
+    for (size_t first = 0; first < index.num_points; first += kIndexReadRows) {
+        const size_t count = std::min<size_t>(kIndexReadRows, index.num_points - first);
+        rows.resize(count * stride);
+        const auto bytes = static_cast<std::streamsize>(rows.size() * sizeof(float));
+        input.read(reinterpret_cast<char*>(rows.data()), bytes);
+        if (input.gcount() != bytes) {
+            Log::error("Failed to read static index projections from {}.", index.directory.string());
+        }
+        read_bytes += static_cast<double>(bytes);
+        for (size_t row = 0; row < count; ++row) {
+            std::copy_n(rows.data() + row * stride, columns, output + (first + row) * columns);
+        }
+    }
+}
+
 }  // namespace
+
+namespace StaticC2lsh {
+
+std::filesystem::path IndexDirectory(const PointSetMetadata& points, float norm_order) {
+    std::string target = points.file_path.stem().string();
+    std::ranges::transform(target, target.begin(),
+                           [](unsigned char letter) { return static_cast<char>(std::tolower(letter)); });
+    return points.file_path.parent_path() / "index" / "static" / NormDirectoryName(norm_order) / target;
+}
+
+void BuildIndex(const PointSetMetadata& points, float norm_order, unsigned int num_projections,
+                unsigned int num_repetitions, std::uint32_t seed, unsigned int block_size, bool overwrite) {
+    if (!IsSupportedNorm(norm_order)) {
+        Log::error("Static C2LSH supports only L1 and L2, got norm order {}.", norm_order);
+    }
+    if (points.num_points == 0 || points.num_dimensions == 0) {
+        Log::error("A static index needs a non-empty point set with a positive dimension.");
+    }
+    if (num_repetitions == 0 || block_size == 0) {
+        Log::error("A static index needs at least one repetition and a positive block size.");
+    }
+    const unsigned int m = num_projections != 0 ? num_projections : DefaultNumProjections(points.num_points);
+    if (m < 2 || m > kMaxProjections) {
+        Log::error("Static C2LSH needs between 2 and {} projections, got {}.", kMaxProjections, m);
+    }
+    const std::filesystem::path directory = IndexDirectory(points, norm_order);
+    if (std::filesystem::exists(directory / kIndexMetadataFile) && !overwrite) {
+        const Index existing = ReadIndexMetadata(directory);
+        if (std::abs(existing.norm_order - norm_order) < Global::kEpsilon && existing.num_points == points.num_points &&
+            existing.num_dimensions == points.num_dimensions && existing.num_projections == m &&
+            existing.num_repetitions == num_repetitions && existing.seed == seed) {
+            Log::info("Static index already exists at {}.", directory.string());
+            return;
+        }
+        Log::error("Static index at {} does not match the requested parameters. Use --overwrite to rebuild it.",
+                   directory.string());
+    }
+
+    std::filesystem::create_directories(directory);
+    // Without metadata an index never opens, so a failed rebuild cannot leave a stale index behind.
+    std::filesystem::remove(directory / kIndexMetadataFile);
+    Log::info("Building static index at {}.", directory.string());
+    const auto d = static_cast<Eigen::Index>(points.num_dimensions);
+    const auto columns = static_cast<Eigen::Index>(static_cast<size_t>(m) * num_repetitions);
+    std::mt19937 vector_gen(seed);
+    const Eigen::MatrixXf vectors = DrawProjectionVectors(d, columns, norm_order, vector_gen);
+    {
+        std::ofstream output(directory / kIndexVectorsFile, std::ios::binary | std::ios::trunc);
+        output.write(reinterpret_cast<const char*>(vectors.data()),
+                     static_cast<std::streamsize>(static_cast<size_t>(vectors.size()) * sizeof(float)));
+        if (!output) {
+            Log::error("Failed to write static index vectors to {}.", directory.string());
+        }
+    }
+    {
+        std::ofstream output(directory / kIndexProjectionsFile, std::ios::binary | std::ios::trunc);
+        double read_bytes = 0.0;
+        ProjectPointFile(points, vectors, block_size, read_bytes,
+                         [&](size_t /*first*/, size_t rows, const float* values) {
+                             output.write(reinterpret_cast<const char*>(values),
+                                          static_cast<std::streamsize>(rows * static_cast<size_t>(columns) *
+                                                                       sizeof(float)));
+                         });
+        if (!output) {
+            Log::error("Failed to write static index projections to {}.", directory.string());
+        }
+    }
+    const nlohmann::json metadata = {
+        {"version", kIndexVersion},       {"norm_order", norm_order},           {"num_points", points.num_points},
+        {"num_dimensions", points.num_dimensions}, {"num_projections", m}, {"num_repetitions", num_repetitions},
+        {"seed", seed},
+    };
+    std::ofstream output(directory / kIndexMetadataFile, std::ios::trunc);
+    output << metadata.dump(4) << '\n';
+    if (!output) {
+        Log::error("Failed to write static index metadata to {}.", directory.string());
+    }
+    Log::info("Built static index at {}: m={} repetitions={} seed={}.", directory.string(), m, num_repetitions, seed);
+}
+
+Index OpenIndex(const PointSetMetadata& points, float norm_order) {
+    const std::filesystem::path directory = IndexDirectory(points, norm_order);
+    if (!std::filesystem::exists(directory / kIndexMetadataFile)) {
+        Log::error("Missing static index at {}. Run `index static -p {} -d {} --target {}` first.", directory.string(),
+                   NormDirectoryName(norm_order).substr(1), points.file_path.parent_path().string(),
+                   directory.filename().string());
+    }
+    Index index = ReadIndexMetadata(directory);
+    if (std::abs(index.norm_order - norm_order) >= Global::kEpsilon || index.num_points != points.num_points ||
+        index.num_dimensions != points.num_dimensions) {
+        Log::error("Static index at {} was built for {} points of dimension {} under L{}, not for {}.",
+                   directory.string(), index.num_points, index.num_dimensions, index.norm_order,
+                   points.file_path.string());
+    }
+    if (index.num_projections < 2 || index.num_projections > kMaxProjections || index.num_repetitions == 0) {
+        Log::error("Static index at {} has invalid parameters.", directory.string());
+    }
+    const size_t columns = static_cast<size_t>(index.num_projections) * index.num_repetitions;
+    const size_t vector_bytes = static_cast<size_t>(index.num_dimensions) * columns * sizeof(float);
+    const size_t projection_bytes = static_cast<size_t>(index.num_points) * columns * sizeof(float);
+    if (std::filesystem::file_size(directory / kIndexVectorsFile) != vector_bytes ||
+        std::filesystem::file_size(directory / kIndexProjectionsFile) != projection_bytes) {
+        Log::error("Static index at {} has files of unexpected size; rebuild it with --overwrite.", directory.string());
+    }
+    index.vectors.resize(static_cast<size_t>(index.num_dimensions) * columns);
+    std::ifstream input(directory / kIndexVectorsFile, std::ios::binary);
+    input.read(reinterpret_cast<char*>(index.vectors.data()), static_cast<std::streamsize>(vector_bytes));
+    if (input.gcount() != static_cast<std::streamsize>(vector_bytes)) {
+        Log::error("Failed to read static index vectors from {}.", directory.string());
+    }
+    return index;
+}
+
+}  // namespace StaticC2lsh
 
 std::vector<double> StaticC2lshUpperBounds(const std::vector<Point>& sources, const std::vector<Point>& targets,
                                            const std::vector<double>& upper_bounds, float norm_order,
@@ -676,13 +867,17 @@ std::vector<double> StaticC2lshUpperBounds(const std::vector<Point>& sources, co
 
     const auto projection_begin = Clock::now();
     const auto d = static_cast<Eigen::Index>(targets.front().size());
-    const Structures structures =
-        DrawStructures(d, m, options.num_repetitions, norm_order, stats.bucket_width, range.max, gen);
-    const std::vector<float> projected = ProjectPoints(sources, targets, structures.projections);
+    const size_t num_columns = static_cast<size_t>(m) * options.num_repetitions;
+    const Eigen::MatrixXf projections =
+        DrawRunVectors(options, d, static_cast<Eigen::Index>(num_columns), norm_order, gen);
+    const Levels levels = DrawLevels(m, options.num_repetitions, stats.bucket_width, range.max, gen);
+    std::vector<float> projected((sources.size() + targets.size()) * num_columns);
+    ProjectRows(sources, projections, projected.data());
+    ProjectRows(targets, projections, projected.data() + sources.size() * num_columns);
     stats.projection_ms += ElapsedMilliseconds(projection_begin, Clock::now());
     const auto num_sources = static_cast<unsigned int>(sources.size());
     const std::vector<unsigned int> candidates =
-        CollectNeighbors(projected, structures, m, num_sources, static_cast<unsigned int>(targets.size()),
+        CollectNeighbors(projected, num_columns, levels, m, num_sources, static_cast<unsigned int>(targets.size()),
                          options.window, upper_bounds, range.num_positive, stats);
 
     const auto verify_begin = Clock::now();
@@ -718,8 +913,9 @@ std::vector<double> StaticC2lshUpperBounds(const std::vector<Point>& sources, co
 
 std::vector<double> StaticC2lshUpperBoundsDisk(const PointSetMetadata& sources, const PointSetMetadata& targets,
                                                const std::vector<double>& upper_bounds, float norm_order,
-                                               const StaticC2lshOptions& options, unsigned int block_size,
-                                               std::mt19937& gen, StaticC2lshStats& stats) {
+                                               const StaticC2lshOptions& options,
+                                               const StaticC2lshDiskOptions& disk_options, std::mt19937& gen,
+                                               StaticC2lshStats& stats) {
     using Clock = std::chrono::steady_clock;
     ValidateOptions(norm_order, options);
     if (sources.num_dimensions != targets.num_dimensions || sources.num_dimensions == 0) {
@@ -732,11 +928,28 @@ std::vector<double> StaticC2lshUpperBoundsDisk(const PointSetMetadata& sources, 
     if (upper_bounds.size() != sources.num_points) {
         Log::error("Static C2LSH got {} upper bounds for {} source points.", upper_bounds.size(), sources.num_points);
     }
-    if (block_size == 0) {
+    if (disk_options.block_size == 0) {
         Log::error("Static C2LSH needs a positive disk block size.");
     }
-    const unsigned int m = options.num_projections != 0 ? options.num_projections
-                                                        : StaticC2lsh::DefaultNumProjections(targets.num_points);
+    const StaticC2lsh::Index* index = disk_options.index;
+    unsigned int m = options.num_projections != 0 ? options.num_projections
+                                                  : StaticC2lsh::DefaultNumProjections(targets.num_points);
+    if (index != nullptr) {
+        if (index->num_points != targets.num_points || index->num_dimensions != targets.num_dimensions ||
+            std::abs(index->norm_order - norm_order) >= Global::kEpsilon) {
+            Log::error("The static index at {} does not belong to {} under L{}.", index->directory.string(),
+                       targets.file_path.string(), norm_order);
+        }
+        if (options.num_projections != 0 && options.num_projections != index->num_projections) {
+            Log::error("The static index has m = {}, but {} projections were requested.", index->num_projections,
+                       options.num_projections);
+        }
+        if (options.num_repetitions > index->num_repetitions) {
+            Log::error("The static index holds {} repetitions, but {} were requested; rebuild it with more.",
+                       index->num_repetitions, options.num_repetitions);
+        }
+        m = index->num_projections;
+    }
     const BoundRange range = PositiveBoundRange(upper_bounds);
     stats = StaticC2lshStats{.num_projections = m};
     if (range.num_positive == 0) {
@@ -746,16 +959,34 @@ std::vector<double> StaticC2lshUpperBoundsDisk(const PointSetMetadata& sources, 
 
     const auto projection_begin = Clock::now();
     const auto d = static_cast<Eigen::Index>(sources.num_dimensions);
-    const Structures structures =
-        DrawStructures(d, m, options.num_repetitions, norm_order, stats.bucket_width, range.max, gen);
+    const size_t num_columns = static_cast<size_t>(m) * options.num_repetitions;
+    // An index's first m R vectors are the vectors of R repetitions drawn from its seed.
+    const Eigen::MatrixXf projections =
+        index != nullptr
+            ? Eigen::MatrixXf(Eigen::Map<const Eigen::MatrixXf>(index->vectors.data(), d,
+                                                                static_cast<Eigen::Index>(num_columns)))
+            : DrawRunVectors(options, d, static_cast<Eigen::Index>(num_columns), norm_order, gen);
+    const Levels levels = DrawLevels(m, options.num_repetitions, stats.bucket_width, range.max, gen);
+    std::vector<float> projected((static_cast<size_t>(sources.num_points) + targets.num_points) * num_columns);
     double read_bytes = 0.0;
-    const std::vector<float> projected =
-        ProjectPointFiles(sources, targets, structures.projections, block_size, read_bytes);
+    const auto store = [&](size_t offset) {
+        return [&projected, num_columns, offset](size_t first, size_t rows, const float* values) {
+            std::copy_n(values, rows * num_columns, projected.data() + (offset + first) * num_columns);
+        };
+    };
+    ProjectPointFile(sources, projections, disk_options.block_size, read_bytes, store(0));
+    if (index != nullptr) {
+        ReadIndexProjections(*index, num_columns,
+                             projected.data() + static_cast<size_t>(sources.num_points) * num_columns, read_bytes);
+    } else {
+        ProjectPointFile(targets, projections, disk_options.block_size, read_bytes, store(sources.num_points));
+    }
     stats.read_mib = read_bytes / (1 << 20);
     stats.projection_ms += ElapsedMilliseconds(projection_begin, Clock::now());
     const std::vector<unsigned int> candidates =
-        CollectNeighbors(projected, structures, m, sources.num_points, targets.num_points, options.window,
+        CollectNeighbors(projected, num_columns, levels, m, sources.num_points, targets.num_points, options.window,
                          upper_bounds, range.num_positive, stats);
+    std::vector<float>().swap(projected);
 
     const auto verify_begin = Clock::now();
     const size_t point_bytes = static_cast<size_t>(sources.num_dimensions) * sizeof(Coordinate);
@@ -766,7 +997,7 @@ std::vector<double> StaticC2lshUpperBoundsDisk(const PointSetMetadata& sources, 
     const size_t neighbors_per_source = static_cast<size_t>(options.num_repetitions) * 2 * options.window * m;
     size_t num_checked = 0;
     std::vector<double> tightened = VerifyFromFiles(sources, targets, upper_bounds, candidates, neighbors_per_source,
-                                                    norm_order, chunk_size, block_size, stats, num_checked);
+                                                    norm_order, chunk_size, disk_options, stats, num_checked);
     stats.verify_ms = ElapsedMilliseconds(verify_begin, Clock::now());
     stats.candidates_per_source = static_cast<double>(num_checked) / static_cast<double>(range.num_positive);
     return tightened;

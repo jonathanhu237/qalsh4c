@@ -223,13 +223,71 @@ void TestDiskMatchesMemory() {
             StaticC2lshUpperBounds(sources, targets, upper_bounds, norm_order, options, memory_gen, memory_stats);
         std::mt19937 disk_gen(23);
         StaticC2lshStats disk_stats;
-        const std::vector<double> disk = StaticC2lshUpperBoundsDisk(source_metadata, target_metadata, upper_bounds,
-                                                                    norm_order, options, 10, disk_gen, disk_stats);
+        const StaticC2lshDiskOptions disk_options{.block_size = 10, .index = nullptr, .target_block_hook = {}};
+        const std::vector<double> disk = StaticC2lshUpperBoundsDisk(
+            source_metadata, target_metadata, upper_bounds, norm_order, options, disk_options, disk_gen, disk_stats);
         Check(memory == disk, "disk bounds equal the in-memory bounds for p = " + std::to_string(norm_order));
         Check(memory_stats.candidates_per_source == disk_stats.candidates_per_source,
               "disk and memory check the same neighbors");
         Check(disk_stats.verify_passes == 25, "400 sources in chunks of 16 take 25 passes over B");
         Check(disk_stats.read_mib > 0.0, "the disk variant reports its reads");
+    }
+    std::filesystem::remove_all(directory);
+}
+
+// A persistent index replaces B's coordinates by its projections onto vectors drawn from the index's seed, so a disk
+// run on the index must equal an in-memory run that draws its vectors from the same seed. A block hook must see every
+// block of B once, in order, in the same pass that verifies the neighbors.
+void TestIndexMatchesMemory() {
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "static_c2lsh_index_test";
+    std::filesystem::remove_all(directory);
+    std::filesystem::create_directories(directory);
+    std::mt19937 data_gen(29);
+    const unsigned int d = 40;
+    const std::vector<Point> sources = GaussianPoints(300, d, 1.0F, data_gen);
+    const std::vector<Point> targets = GaussianPoints(900, d, 1.0F, data_gen);
+    WritePointFile(directory / "A.bin", sources);
+    WritePointFile(directory / "B.bin", targets);
+    const PointSetMetadata source_metadata{.file_path = directory / "A.bin", .num_points = 300, .num_dimensions = d};
+    const PointSetMetadata target_metadata{.file_path = directory / "B.bin", .num_points = 900, .num_dimensions = d};
+
+    for (const float norm_order : {1.0F, 2.0F}) {
+        StaticC2lsh::BuildIndex(target_metadata, norm_order, 0, 2, 99, 64, true);
+        const StaticC2lsh::Index index = StaticC2lsh::OpenIndex(target_metadata, norm_order);
+        Check(index.directory ==
+                  directory / "index" / "static" / (norm_order == 1.0F ? "l1" : "l2") / "b",
+              "the index lives next to its point set");
+        Check(index.num_repetitions == 2 && index.seed == 99, "the index records its parameters");
+        Check(index.num_projections == StaticC2lsh::DefaultNumProjections(900), "the index uses the default m");
+
+        std::vector<double> upper_bounds(sources.size());
+        for (size_t source = 0; source < sources.size(); ++source) {
+            upper_bounds[source] = Calc::LpDistance(sources[source], targets[source % 13], norm_order);
+        }
+        StaticC2lshOptions memory_options{.num_projections = 0, .num_repetitions = 2, .window = 1};
+        memory_options.vector_seed = 99;
+        std::mt19937 memory_gen(31);
+        StaticC2lshStats memory_stats;
+        const std::vector<double> memory =
+            StaticC2lshUpperBounds(sources, targets, upper_bounds, norm_order, memory_options, memory_gen, memory_stats);
+
+        unsigned int blocks_seen = 0;
+        unsigned int next_first = 0;
+        bool in_order = true;
+        StaticC2lshDiskOptions disk_options{.block_size = 128, .index = &index, .target_block_hook = {}};
+        disk_options.target_block_hook = [&](const Coordinate*, unsigned int count, unsigned int first_id) {
+            in_order = in_order && first_id == next_first;
+            next_first = first_id + count;
+            ++blocks_seen;
+        };
+        const StaticC2lshOptions disk_run{.num_projections = 0, .num_repetitions = 2, .window = 1, .disk_index = true};
+        std::mt19937 disk_gen(31);
+        StaticC2lshStats disk_stats;
+        const std::vector<double> disk = StaticC2lshUpperBoundsDisk(
+            source_metadata, target_metadata, upper_bounds, norm_order, disk_run, disk_options, disk_gen, disk_stats);
+        Check(memory == disk, "bounds on the index equal the in-memory bounds for p = " + std::to_string(norm_order));
+        Check(in_order && next_first == 900 && blocks_seen == 8, "the hook sees the eight blocks of B once, in order");
+        Check(disk_stats.verify_passes == 1, "the hook rides along with the only verification pass");
     }
     std::filesystem::remove_all(directory);
 }
@@ -242,6 +300,7 @@ int main() {
     TestMortonNeighborsAgainstBruteForce();
     TestUpperBounds();
     TestDiskMatchesMemory();
+    TestIndexMatchesMemory();
     if (failures != 0) {
         std::cerr << failures << " checks failed\n";
         return 1;

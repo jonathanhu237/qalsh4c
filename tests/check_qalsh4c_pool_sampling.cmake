@@ -205,6 +205,11 @@ function(run_disk_static_estimate context)
         message(FATAL_ERROR "${context} failed:\n${disk_stdout}\n${disk_stderr}")
     endif()
     check_contains("${disk_stdout}" "Relative Error:" "${context}")
+    # A broken estimate, such as zero from an empty pool, still prints a relative error; require a sane one.
+    string(REGEX MATCH "Relative Error: ([0-9.]+)%" error_line "${disk_stdout}")
+    if(NOT CMAKE_MATCH_1 LESS 30)
+        message(FATAL_ERROR "${context} has relative error ${CMAKE_MATCH_1}%:\n${disk_stdout}")
+    endif()
     check_contains("${disk_stderr}" "Static C2LSH stats: m=" "${context}")
     check_contains("${disk_stderr}" "verify_passes=1" "${context}")
     check_contains("${disk_stderr}" "Pool sampling stats:" "${context}")
@@ -225,3 +230,38 @@ if(disk_plan_result EQUAL 0)
     message(FATAL_ERROR "A pooled plan on disk should fail:\n${disk_plan_stdout}\n${disk_plan_stderr}")
 endif()
 check_contains("${disk_plan_stderr}" "needs --direct or --static" "disk pooled plan")
+
+# A persistent static index replaces the projection pass over B; with a plan, the pilot rides along with verification.
+execute_process(
+    COMMAND "${QALSH4C_BIN}" index static -p 2 -d "${dataset_dir}" --repetitions 2
+    RESULT_VARIABLE static_index_result
+    OUTPUT_VARIABLE static_index_stdout
+    ERROR_VARIABLE static_index_stderr
+)
+if(NOT static_index_result EQUAL 0)
+    message(FATAL_ERROR "Building the static index failed:\n${static_index_stdout}\n${static_index_stderr}")
+endif()
+foreach(index_file meta.json vectors.bin projections.bin)
+    if(NOT EXISTS "${dataset_dir}/index/static/l2/b/${index_file}")
+        message(FATAL_ERROR "Expected ${index_file} in the static index")
+    endif()
+endforeach()
+run_disk_static_estimate("disk pool --static --static-index --plan model" --static-index --plan model --target-error 0.05)
+
+function(expect_static_failure context expected)
+    execute_process(
+        COMMAND "${QALSH4C_BIN}" estimate ${ARGN}
+        RESULT_VARIABLE failure_result
+        OUTPUT_VARIABLE failure_stdout
+        ERROR_VARIABLE failure_stderr
+    )
+    if(failure_result EQUAL 0)
+        message(FATAL_ERROR "${context} should fail:\n${failure_stdout}\n${failure_stderr}")
+    endif()
+    check_contains("${failure_stderr}" "${expected}" "${context}")
+endfunction()
+
+expect_static_failure("an index with too few repetitions" "holds 2 repetitions"
+    --disk-based -p 2 -d "${dataset_dir}" --direction ab pool --static --static-index --static-repetitions 3 -n 50)
+expect_static_failure("--static-index in memory" "--static-index needs --disk-based"
+    -p 2 -d "${dataset_dir}" --direction ab pool --static --static-index -n 50)
