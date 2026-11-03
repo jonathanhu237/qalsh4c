@@ -258,6 +258,60 @@ int main() {
             Check(covered >= static_cast<int>((1.0 - kAlpha) * kTrials), "certified coverage " + std::to_string(covered));
         }
 
+        // The confidence sequence follows the predictable plug-in empirical Bernstein recursion of Waudby-Smith and
+        // Ramdas; the reference values come from an independent transcription of their formulas.
+        {
+            PoolPlan::ConfidenceSequence sequence(0.1);
+            const std::vector<double> pattern{0.9, 0.7, 0.95, 0.8, 0.85, 1.0, 0.6, 0.75};
+            for (int round = 0; round < 25; ++round) {
+                for (const double value : pattern) {
+                    sequence.Add(value);
+                    if (sequence.Count() == 8) {
+                        CheckClose(sequence.Lower(), 0.05414423002353441, 1e-12, "lower bound after 8 values");
+                        CheckClose(sequence.Upper(), 1.0, 1e-12, "upper bound after 8 values");
+                    }
+                    if (sequence.Count() == 50) {
+                        CheckClose(sequence.Lower(), 0.6904084897577099, 1e-12, "lower bound after 50 values");
+                        CheckClose(sequence.Upper(), 0.9455915102422903, 1e-12, "upper bound after 50 values");
+                    }
+                }
+            }
+            CheckClose(sequence.Lower(), 0.7834565550492422, 1e-12, "lower bound after 200 values");
+            CheckClose(sequence.Upper(), 0.8552291020634225, 1e-12, "upper bound after 200 values");
+            CheckClose(sequence.Mean(), 0.81875, 1e-12, "sample mean after 200 values");
+        }
+
+        // Constant values certify their own mean, which is then exact.
+        {
+            PoolPlan::ConfidenceSequence sequence(0.1);
+            while (!sequence.CertifiesMean(0.05) && sequence.Count() < 100000) {
+                sequence.Add(1.0);
+            }
+            Check(sequence.CertifiesMean(0.05), "constant values should certify");
+            Check(sequence.Mean() == 1.0 && sequence.Upper() == 1.0, "constant values keep an exact mean");
+            Check(sequence.Lower() >= 1.0 / 1.05, "a certified lower bound is within epsilon of the mean");
+        }
+
+        // The sequence holds the true mean at every count at once at least as often as promised.
+        {
+            std::uniform_int_distribution<int> pick(0, 3);
+            const std::vector<double> support{0.1, 0.5, 0.9, 1.0};
+            const double mean = (0.1 + 0.5 + 0.9 + 1.0) / 4.0;
+            constexpr int kTrials = 400;
+            constexpr double kDelta = 0.2;
+            int escaped = 0;
+            for (int trial = 0; trial < kTrials; ++trial) {
+                PoolPlan::ConfidenceSequence sequence(kDelta);
+                bool left = false;
+                for (int index = 0; index < 400 && !left; ++index) {
+                    sequence.Add(support[static_cast<size_t>(pick(gen))]);
+                    left = mean < sequence.Lower() || mean > sequence.Upper();
+                }
+                escaped += left ? 1 : 0;
+            }
+            Check(escaped <= static_cast<int>(kDelta * kTrials), "confidence sequence misses " + std::to_string(escaped));
+        }
+
         // SamplesForPool returns the smallest T that meets the exact identity, and nothing when K is too small.
         {
             std::uniform_real_distribution<double> coefficient(0.0, 2.0);

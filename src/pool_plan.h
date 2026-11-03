@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -58,6 +59,39 @@ struct Coefficients {
 
 // Draws a one-stage design with per-draw relative variance lambda needs to reach relative variance eta.
 [[nodiscard]] unsigned int OneStageSamples(double lambda, double eta);
+
+// A time-uniform confidence sequence for the mean of i.i.d. values in [0, 1]: the predictable plug-in empirical
+// Bernstein sequence of Waudby-Smith and Ramdas (JRSS-B, 2023), kept as a running intersection. With probability at
+// least 1 - delta it holds the mean at every count at once, so a rule that decides when to stop by looking at it keeps
+// that guarantee at its random stopping time.
+class ConfidenceSequence {
+   public:
+    explicit ConfidenceSequence(double delta);
+    void Add(double value);
+    [[nodiscard]] size_t Count() const { return count_; }
+    [[nodiscard]] double Mean() const;  // Sample mean of the values so far
+    [[nodiscard]] double Lower() const { return lower_; }
+    [[nodiscard]] double Upper() const { return upper_; }
+    // True when every mean in [Lower, Upper] lies within relative error epsilon of Mean(): then, with the sequence
+    // holding the true mean, Mean() is within relative error epsilon of it.
+    [[nodiscard]] bool CertifiesMean(double epsilon) const;
+
+   private:
+    // Bets never exceed this, as the authors recommend; it keeps -log(1 - lambda) finite and the sequence stable.
+    static constexpr double kMaxBet = 0.5;
+
+    double log_term_;  // log(2 / delta)
+    size_t count_{0};
+    double sum_{0.0};
+    double sum_squared_deviations_{0.0};  // Sum of (x_i - mu_hat_i)^2
+    double previous_mean_{0.5};           // mu_hat_{t-1}, with the prior pseudo-observation 1/2
+    double previous_variance_{0.25};      // sigma_hat^2_{t-1}, with the prior pseudo-observation 1/4
+    double sum_bets_{0.0};
+    double sum_weighted_values_{0.0};
+    double sum_penalties_{0.0};
+    double lower_{0.0};
+    double upper_{1.0};
+};
 
 // Pilot moments of one stratum whose draws come in proportion to U_a within the stratum: the mean of x and the
 // pair means of H0 and H1. With U_h the stratum's total bound, drawing in proportion to U_a has per-draw variance

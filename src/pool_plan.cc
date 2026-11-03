@@ -135,6 +135,40 @@ unsigned int SquareRootPoolSize(Coefficients coefficients, double eta, double qa
 
 unsigned int OneStageSamples(double lambda, double eta) { return CeilCount(lambda / eta); }
 
+ConfidenceSequence::ConfidenceSequence(double delta) : log_term_(std::log(2.0 / delta)) {
+    if (!(delta > 0.0 && delta < 1.0)) {
+        throw std::invalid_argument("A confidence sequence needs a failure probability in (0, 1).");
+    }
+}
+
+void ConfidenceSequence::Add(double value) {
+    ++count_;
+    const auto t = static_cast<double>(count_);
+    // The bet depends only on earlier values: lambda_t = sqrt(2 log(2 / delta) / (sigma^2_{t-1} t log(1 + t))), capped.
+    const double bet = std::min(std::sqrt(2.0 * log_term_ / (previous_variance_ * t * std::log1p(t))), kMaxBet);
+    const double deviation = value - previous_mean_;
+    // v_t psi_E(lambda_t) with v_t = 4 (x_t - mu_hat_{t-1})^2 and psi_E(lambda) = (-log(1 - lambda) - lambda) / 4.
+    sum_penalties_ += deviation * deviation * (-std::log1p(-bet) - bet);
+    sum_bets_ += bet;
+    sum_weighted_values_ += bet * value;
+    sum_ += value;
+    const double mean = (0.5 + sum_) / (t + 1.0);
+    sum_squared_deviations_ += (value - mean) * (value - mean);
+    previous_mean_ = mean;
+    previous_variance_ = (0.25 + sum_squared_deviations_) / (t + 1.0);
+    const double center = sum_weighted_values_ / sum_bets_;
+    const double radius = (log_term_ + sum_penalties_) / sum_bets_;
+    lower_ = std::max(lower_, center - radius);
+    upper_ = std::min(upper_, center + radius);
+}
+
+double ConfidenceSequence::Mean() const { return count_ == 0 ? 0.0 : sum_ / static_cast<double>(count_); }
+
+bool ConfidenceSequence::CertifiesMean(double epsilon) const {
+    const double mean = Mean();
+    return lower_ > 0.0 && mean - lower_ <= epsilon * lower_ && upper_ - mean <= epsilon * upper_;
+}
+
 StratumMoments EstimateStratumMoments(const std::vector<PilotDraw>& draws) {
     const PairStatistics statistics = ComputePairStatistics(draws);
     return StratumMoments{.mean_ratio = statistics.mean_x, .h0 = Mean(statistics.h0), .h1 = Mean(statistics.h1)};

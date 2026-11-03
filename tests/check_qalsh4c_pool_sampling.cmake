@@ -265,3 +265,27 @@ expect_static_failure("an index with too few repetitions" "holds 2 repetitions"
     --disk-based -p 2 -d "${dataset_dir}" --direction ab pool --static --static-index --static-repetitions 3 -n 50)
 expect_static_failure("--static-index in memory" "--static-index needs --disk-based"
     -p 2 -d "${dataset_dir}" --direction ab pool --static --static-index -n 50)
+
+# Certified one-stage designs draw without a pilot until a confidence sequence certifies the estimate.
+function(run_certified_estimate context)
+    execute_process(
+        COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate ${ARGN}
+        RESULT_VARIABLE certified_result
+        OUTPUT_VARIABLE certified_stdout
+        ERROR_VARIABLE certified_stderr
+    )
+    if(NOT certified_result EQUAL 0)
+        message(FATAL_ERROR "${context} failed:\n${certified_stdout}\n${certified_stderr}")
+    endif()
+    check_contains("${certified_stderr}" "Sequential certification: epsilon=0.05 delta=0.1" "${context}")
+    string(REGEX MATCH "Relative Error: ([0-9.]+)%" error_line "${certified_stdout}")
+    if(NOT CMAKE_MATCH_1 LESS 30)
+        message(FATAL_ERROR "${context} has relative error ${CMAKE_MATCH_1}%:\n${certified_stdout}")
+    endif()
+endfunction()
+
+run_certified_estimate("pool --static --plan certified"
+    -p 2 -d "${dataset_dir}" --direction ab pool --static -s 20 --plan certified --target-error 0.05 --delta 0.1)
+run_certified_estimate("disk pool --static --static-index --plan certified"
+    --disk-based -p 2 -d "${dataset_dir}" --direction ab
+    pool --static --static-index --static-repetitions 2 -s 20 --plan certified --target-error 0.05 --delta 0.1)

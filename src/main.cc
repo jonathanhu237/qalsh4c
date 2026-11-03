@@ -369,10 +369,12 @@ int main(int argc, char** argv) {
     std::string pool_plan{"fixed"};
     pool->add_option("--plan", pool_plan,
                      "How to choose K and T: fixed (as given), model (a pilot estimates the variance coefficients and "
-                     "costs, and K and T target an RMS relative error of --target-error), or certified (a pilot "
-                     "certifies the coefficients, so the relative error exceeds --target-error with probability at "
-                     "most --delta). A pooled plan switches to querying every source point when that is predicted "
-                     "to be cheaper. With --disk-based, a plan needs --direct or --static.")
+                     "costs, and K and T target an RMS relative error of --target-error), or certified (the relative "
+                     "error exceeds --target-error with probability at most --delta: the one-stage designs --direct, "
+                     "--full and --static draw without a pilot until a time-uniform empirical Bernstein confidence "
+                     "sequence certifies their estimate, and the pooled design certifies its coefficients with a "
+                     "pilot). A pooled plan switches to querying every source point when that is predicted to be "
+                     "cheaper. With --disk-based, a plan needs --direct or --static.")
         ->check(CLI::IsMember({"fixed", "model", "certified"}))
         ->default_val("fixed");
     float pool_target_error{0.0F};
@@ -380,8 +382,8 @@ int main(int argc, char** argv) {
         ->default_val(0.0F);
     unsigned int pool_pilot_size{PoolSamplingEstimator::kDefaultPilotSize};
     pool->add_option("--pilot-size", pool_pilot_size,
-                     "Pilot draws in proportion to the upper bounds for --plan: the fixed size for certified plans and "
-                     "the starting size for model plans")
+                     "Pilot draws in proportion to the upper bounds for --plan: the fixed size for certified pooled "
+                     "plans and the starting size for model plans")
         ->default_val(PoolSamplingEstimator::kDefaultPilotSize);
     float pool_pilot_relative_error{PoolSamplingEstimator::kDefaultPilotRelativeError};
     pool->add_option("--pilot-relative-error", pool_pilot_relative_error,

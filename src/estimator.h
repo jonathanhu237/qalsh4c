@@ -63,7 +63,9 @@ class SamplingEstimator : public Estimator {
 enum class PoolPlanMode {
     kFixed,      // K and T as given, or the QALSH4C sample count with kAutoPoolSizePerSample draws per sample
     kModel,      // A pilot estimates the variance coefficients and costs; K and T target an RMS relative error
-    kCertified,  // A pilot certifies upper bounds on the coefficients; K and T meet an (epsilon, delta) guarantee
+    // An (epsilon, delta) guarantee: one-stage designs draw until a confidence sequence certifies the estimate; the
+    // pooled design certifies upper bounds on its coefficients with a pilot and sizes K and T from them
+    kCertified,
 };
 
 // Two-stage QALSH4C. Every source point gets a cheap upper bound from a uniform target subsample; a pool is

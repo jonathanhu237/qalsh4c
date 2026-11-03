@@ -1089,6 +1089,90 @@ double RunPoolDesign(PoolDesign design, unsigned int pool_size, unsigned int num
     return stats.crude_total * ratio_sum / static_cast<double>(num_samples);
 }
 
+// Exact queries a certified one-stage design draws before it consults its confidence sequence again in memory, where
+// a batch only needs to fill the batched exact scan. On disk every batch costs a pass over B, so the query batch size
+// is used instead.
+constexpr unsigned int kSequentialMemoryBatch = 256;
+
+struct SequentialResult {
+    double estimate{0.0};
+    size_t draws{0};
+    bool exact{false};  // The draws outnumbered the points, so the rest were scanned and the sum is exact
+    double lower{0.0};
+    double upper{0.0};
+};
+
+// The certified one-stage designs: draws in proportion to `weights`, each a distance from its point to a real target
+// point, in batches whose exact scans start from those weights. The ratios v_a / weight_a, in (0, 1], feed a
+// confidence sequence until it certifies the sample mean within relative error epsilon; the estimate is total_weight
+// times that mean, so Pr(|estimate - S| > epsilon S) <= delta at the random stopping time. Once the draws outnumber
+// the points of positive weight, the remaining points are scanned and the exact sum is returned instead.
+SequentialResult RunSequentialDesign(const std::vector<double>& weights, double total_weight,
+                                     const PoolStageInputs& inputs, DistanceCache& cache, std::mt19937& gen,
+                                     double epsilon, double delta, unsigned int batch_size, PoolRunStats& stats) {
+    using Clock = std::chrono::steady_clock;
+    const auto begin = Clock::now();
+    const DoubleWeightedSampler sampler(weights);
+    PoolPlan::ConfidenceSequence sequence(delta);
+    const auto num_positive = static_cast<size_t>(std::ranges::count_if(weights, [](double weight) {
+        return weight > 0.0;
+    }));
+    SequentialResult result;
+    std::vector<unsigned int> batch;
+    std::vector<unsigned int> distinct;
+    std::vector<Distance> bounds;
+    bool certified = false;
+    while (!certified && sequence.Count() < num_positive) {
+        batch.clear();
+        for (unsigned int draw = 0; draw < batch_size; ++draw) {
+            batch.push_back(sampler.Sample(gen));
+        }
+        distinct = batch;
+        std::ranges::sort(distinct);
+        distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+        bounds.resize(distinct.size());
+        std::ranges::transform(distinct, bounds.begin(),
+                               [&weights](unsigned int point_id) { return static_cast<Distance>(weights[point_id]); });
+        ScanExactDistances(distinct, bounds, inputs, cache);
+        for (const unsigned int point_id : batch) {
+            sequence.Add(std::min(1.0, static_cast<double>(cache.exact.at(point_id)) / weights[point_id]));
+            if (sequence.CertifiesMean(epsilon)) {
+                certified = true;
+                break;
+            }
+        }
+    }
+    result.draws = sequence.Count();
+    result.lower = sequence.Lower();
+    result.upper = sequence.Upper();
+    if (certified) {
+        result.estimate = total_weight * sequence.Mean();
+    } else {
+        std::vector<unsigned int> remaining;
+        std::vector<Distance> remaining_bounds;
+        for (unsigned int point_id = 0; point_id < weights.size(); ++point_id) {
+            if (weights[point_id] > 0.0) {
+                remaining.push_back(point_id);
+                remaining_bounds.push_back(static_cast<Distance>(weights[point_id]));
+            }
+        }
+        ScanExactDistances(remaining, remaining_bounds, inputs, cache);
+        for (const unsigned int point_id : remaining) {
+            result.estimate += static_cast<double>(cache.exact.at(point_id));
+        }
+        result.exact = true;
+    }
+    stats.exact_distinct = cache.exact.size();
+    stats.exact_ms = ElapsedMilliseconds(begin, Clock::now());
+    return result;
+}
+
+void LogSequential(const SequentialResult& result, double epsilon, double delta) {
+    Log::info("Sequential certification: epsilon={:.4g} delta={:.4g} draws={} lower={:.6g} upper={:.6g} "
+              "exact_fallback={}",
+              epsilon, delta, result.draws, result.lower, result.upper, result.exact);
+}
+
 // Uniform sample, without replacement, of the source points with a positive bound whose Modified QALSH times price
 // querying every source point.
 constexpr unsigned int kFullCostProbeSize = 64;
@@ -2250,7 +2334,35 @@ float PoolSamplingEstimator::EstimateDistance(const PointSetMetadata& from, cons
                                         .pilot_size = pilot_size_,
                                         .pilot_relative_error = pilot_relative_error_,
                                         .num_strata = num_strata_};
-        if (num_strata_ != 0) {
+        if (plan_mode_ == PoolPlanMode::kCertified && (design == PoolDesign::kDirect || design == PoolDesign::kFull)) {
+            // One-stage designs certify sequentially, without a pilot: the full design first queries every source
+            // point for its crude distance, and both then draw in proportion to their weights.
+            std::vector<double> weights = upper_bounds;
+            double total_weight = total_upper_bound;
+            if (design == PoolDesign::kFull) {
+                const auto query_begin = Clock::now();
+                std::vector<unsigned int> pool_ids;
+                for (unsigned int point_id = 0; point_id < upper_bounds.size(); ++point_id) {
+                    if (upper_bounds[point_id] > 0.0) {
+                        pool_ids.push_back(point_id);
+                    }
+                }
+                QueryCrudeDistances(pool_ids, inputs, cache);
+                total_weight = 0.0;
+                for (const unsigned int point_id : pool_ids) {
+                    weights[point_id] = static_cast<double>(cache.crude.at(point_id));
+                    total_weight += weights[point_id];
+                }
+                stats.pool_distinct = pool_ids.size();
+                stats.qalsh_ms = ElapsedMilliseconds(query_begin, Clock::now());
+                stats.crude_total = total_weight;
+            }
+            const SequentialResult sequential = RunSequentialDesign(
+                weights, total_weight, inputs, cache, gen, target_error_, delta_, kSequentialMemoryBatch, stats);
+            LogSequential(sequential, target_error_, delta_);
+            run_num_samples = static_cast<unsigned int>(sequential.draws);
+            estimate = sequential.estimate;
+        } else if (num_strata_ != 0) {
             const StratifiedPlan plan = PlanStratifiedDesign(settings, inputs, cache, gen);
             if (plan.pooled) {
                 design = plan.pooled->design;
@@ -2405,7 +2517,7 @@ float PoolSamplingEstimator::EstimateDiskBased(const PointSetMetadata& from, con
         std::vector<unsigned int> pilot_ids;
         std::vector<Coordinate> pilot_points;
         std::unique_ptr<ExactScan> pilot_scan;
-        if (planned) {
+        if (planned && plan_mode_ == PoolPlanMode::kModel) {
             std::mt19937 pilot_gen = plan_gen;
             const DoubleWeightedSampler sampler(upper_bounds);
             for (unsigned int draw = 0; draw < pilot_size_; ++draw) {
@@ -2502,7 +2614,16 @@ float PoolSamplingEstimator::EstimateDiskBased(const PointSetMetadata& from, con
         PoolRunStats stats;
         PoolPlanChoice choice{};
         double estimate = 0.0;
-        if (!static_options_) {
+        if (plan_mode_ == PoolPlanMode::kCertified) {
+            // Certified runs draw in proportion to their bounds and certify sequentially, one pass over B per query
+            // batch, without a pilot.
+            const SequentialResult sequential = RunSequentialDesign(draw_bounds, total_draw_bound, inputs, cache,
+                                                                    plan_gen, target_error_, delta_,
+                                                                    disk_query_batch_size_, stats);
+            LogSequential(sequential, target_error_, delta_);
+            choice.num_samples = static_cast<unsigned int>(sequential.draws);
+            estimate = sequential.estimate;
+        } else if (!static_options_) {
             choice = PlanPoolDesign(settings, inputs, cache, plan_gen);
             estimate = RunPoolDesign(choice.design, choice.pool_size, choice.num_samples, inputs, cache, &plan_gen,
                                      stats);

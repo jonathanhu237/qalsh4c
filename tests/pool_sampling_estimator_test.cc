@@ -127,6 +127,16 @@ int main() {
             }
         }
 
+        // A certified one-stage design on this small set draws more often than there are source points before its
+        // confidence sequence could certify 5%, so it scans the rest and returns the exact sum.
+        PoolSamplingEstimator certified_direct(0, 0, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
+                                               Global::kDefaultDiskQueryBatchSize, std::nullopt, {}, true, false, true,
+                                               PoolPlanMode::kCertified, 0.05F, 64);
+        if (!RelativelyClose(certified_direct.EstimateDistance(source_metadata, target_metadata, norm_order), truth,
+                             1e-4)) {
+            status = 12;
+        }
+
         // With loose bounds, plans for a 2% RMS error land near the truth for the pooled, direct and uniform designs.
         for (const bool direct_request : {false, true}) {
             PoolSamplingEstimator planned(0, 0, 5, 2.0F, 1.0F, 0.1F, 0, false, Global::kDefaultDiskBlockSize,
