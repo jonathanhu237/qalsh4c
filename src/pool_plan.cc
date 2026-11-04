@@ -152,6 +152,7 @@ void ConfidenceSequence::Add(double value) {
     sum_bets_ += bet;
     sum_weighted_values_ += bet * value;
     sum_ += value;
+    sum_squares_ += value * value;
     const double mean = (0.5 + sum_) / (t + 1.0);
     sum_squared_deviations_ += (value - mean) * (value - mean);
     previous_mean_ = mean;
@@ -167,6 +168,17 @@ double ConfidenceSequence::Mean() const { return count_ == 0 ? 0.0 : sum_ / stat
 bool ConfidenceSequence::CertifiesMean(double epsilon) const {
     const double mean = Mean();
     return lower_ > 0.0 && mean - lower_ <= epsilon * lower_ && upper_ - mean <= epsilon * upper_;
+}
+
+double ConfidenceSequence::BernsteinBudget(double epsilon, double delta) const {
+    if (count_ < 2) {
+        throw std::invalid_argument("A Bernstein budget needs at least two values.");
+    }
+    const auto n = static_cast<double>(count_);
+    const double mean = Mean();
+    const double variance = std::max(0.0, (sum_squares_ - n * mean * mean) / (n - 1.0));
+    return (2.0 * variance / (epsilon * epsilon * mean * mean) + 2.0 / (3.0 * epsilon * mean)) *
+           std::log(2.0 / delta);
 }
 
 StratumMoments EstimateStratumMoments(const std::vector<PilotDraw>& draws) {

@@ -75,6 +75,10 @@ class ConfidenceSequence {
     // True when every mean in [Lower, Upper] lies within relative error epsilon of Mean(): then, with the sequence
     // holding the true mean, Mean() is within relative error epsilon of it.
     [[nodiscard]] bool CertifiesMean(double epsilon) const;
+    // Values a fixed-size sample would need for relative error epsilon at failure probability delta by Bernstein's
+    // inequality, (2 s^2 / (epsilon^2 m^2) + 2 / (3 epsilon m)) log(2 / delta), with the sample mean m and variance s^2
+    // standing in for the true ones. Needs at least two values.
+    [[nodiscard]] double BernsteinBudget(double epsilon, double delta) const;
 
    private:
     // Bets never exceed this, as the authors recommend; it keeps -log(1 - lambda) finite and the sequence stable.
@@ -83,6 +87,7 @@ class ConfidenceSequence {
     double log_term_;  // log(2 / delta)
     size_t count_{0};
     double sum_{0.0};
+    double sum_squares_{0.0};
     double sum_squared_deviations_{0.0};  // Sum of (x_i - mu_hat_i)^2
     double previous_mean_{0.5};           // mu_hat_{t-1}, with the prior pseudo-observation 1/2
     double previous_variance_{0.25};      // sigma_hat^2_{t-1}, with the prior pseudo-observation 1/4

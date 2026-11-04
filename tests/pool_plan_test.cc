@@ -279,6 +279,13 @@ int main() {
             CheckClose(sequence.Lower(), 0.7834565550492422, 1e-12, "lower bound after 200 values");
             CheckClose(sequence.Upper(), 0.8552291020634225, 1e-12, "upper bound after 200 values");
             CheckClose(sequence.Mean(), 0.81875, 1e-12, "sample mean after 200 values");
+
+            // Bernstein's fixed-size budget from the sample mean and variance of the first eight values.
+            PoolPlan::ConfidenceSequence first_round(0.1);
+            for (const double value : pattern) {
+                first_round.Add(value);
+            }
+            CheckClose(first_round.BernsteinBudget(0.01, 0.1), 1835.9719654094658, 1e-9, "Bernstein budget");
         }
 
         // Constant values certify their own mean, which is then exact.

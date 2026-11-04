@@ -289,3 +289,18 @@ run_certified_estimate("pool --static --plan certified"
 run_certified_estimate("disk pool --static --static-index --plan certified"
     --disk-based -p 2 -d "${dataset_dir}" --direction ab
     pool --static --static-index --static-repetitions 2 -s 20 --plan certified --target-error 0.05 --delta 0.1)
+
+# Two subsampled targets give loose bounds: certifying 1% would need far more draws than there are source points, so
+# the run switches early to scanning them all and returns the exact distance.
+execute_process(
+    COMMAND "${QALSH4C_BIN}" --use-fixed-seed estimate -p 2 -d "${dataset_dir}" --direction ab
+        pool --direct -s 2 --plan certified --target-error 0.01 --delta 0.1
+    RESULT_VARIABLE early_result
+    OUTPUT_VARIABLE early_stdout
+    ERROR_VARIABLE early_stderr
+)
+if(NOT early_result EQUAL 0)
+    message(FATAL_ERROR "Certified direct run failed:\n${early_stdout}\n${early_stderr}")
+endif()
+check_contains("${early_stderr}" "exact_fallback=true early_switch=true" "certified direct with loose bounds")
+check_contains("${early_stdout}" "Relative Error: 0.00%" "certified direct with loose bounds")

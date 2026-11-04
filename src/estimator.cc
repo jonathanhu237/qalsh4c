@@ -1093,11 +1093,15 @@ double RunPoolDesign(PoolDesign design, unsigned int pool_size, unsigned int num
 // a batch only needs to fill the batched exact scan. On disk every batch costs a pass over B, so the query batch size
 // is used instead.
 constexpr unsigned int kSequentialMemoryBatch = 256;
+// A confidence sequence certifies within about 1.3 to 2.6 times the draws a fixed-size sample would need by Bernstein's
+// inequality (replays of the static C2LSH workloads at 1%); this factor predicts its stopping draw.
+constexpr double kSequentialBudgetFactor = 2.0;
 
 struct SequentialResult {
     double estimate{0.0};
     size_t draws{0};
-    bool exact{false};  // The draws outnumbered the points, so the rest were scanned and the sum is exact
+    bool exact{false};          // The remaining points were scanned, so the sum is exact
+    bool switched_early{false};  // The predicted draws reached the unscanned points before the draws did
     double lower{0.0};
     double upper{0.0};
 };
@@ -1105,8 +1109,10 @@ struct SequentialResult {
 // The certified one-stage designs: draws in proportion to `weights`, each a distance from its point to a real target
 // point, in batches whose exact scans start from those weights. The ratios v_a / weight_a, in (0, 1], feed a
 // confidence sequence until it certifies the sample mean within relative error epsilon; the estimate is total_weight
-// times that mean, so Pr(|estimate - S| > epsilon S) <= delta at the random stopping time. Once the draws outnumber
-// the points of positive weight, the remaining points are scanned and the exact sum is returned instead.
+// times that mean, so Pr(|estimate - S| > epsilon S) <= delta at the random stopping time. When the draws it still
+// needs, predicted after every batch, reach the points of positive weight not scanned yet, or the draws outnumber all
+// points of positive weight, finishing exactly costs no more: the remaining points are scanned and the exact sum is
+// returned instead.
 SequentialResult RunSequentialDesign(const std::vector<double>& weights, double total_weight,
                                      const PoolStageInputs& inputs, DistanceCache& cache, std::mt19937& gen,
                                      double epsilon, double delta, unsigned int batch_size, PoolRunStats& stats) {
@@ -1122,7 +1128,8 @@ SequentialResult RunSequentialDesign(const std::vector<double>& weights, double 
     std::vector<unsigned int> distinct;
     std::vector<Distance> bounds;
     bool certified = false;
-    while (!certified && sequence.Count() < num_positive) {
+    bool switched_early = false;
+    while (!certified && !switched_early && sequence.Count() < num_positive) {
         batch.clear();
         for (unsigned int draw = 0; draw < batch_size; ++draw) {
             batch.push_back(sampler.Sample(gen));
@@ -1140,6 +1147,12 @@ SequentialResult RunSequentialDesign(const std::vector<double>& weights, double 
                 certified = true;
                 break;
             }
+        }
+        if (!certified && sequence.Count() >= 2) {
+            const double remaining_draws = kSequentialBudgetFactor * sequence.BernsteinBudget(epsilon, delta) -
+                                           static_cast<double>(sequence.Count());
+            const auto unscanned = static_cast<double>(num_positive - std::min(num_positive, cache.exact.size()));
+            switched_early = remaining_draws >= unscanned;
         }
     }
     result.draws = sequence.Count();
@@ -1161,6 +1174,7 @@ SequentialResult RunSequentialDesign(const std::vector<double>& weights, double 
             result.estimate += static_cast<double>(cache.exact.at(point_id));
         }
         result.exact = true;
+        result.switched_early = switched_early;
     }
     stats.exact_distinct = cache.exact.size();
     stats.exact_ms = ElapsedMilliseconds(begin, Clock::now());
@@ -1169,8 +1183,8 @@ SequentialResult RunSequentialDesign(const std::vector<double>& weights, double 
 
 void LogSequential(const SequentialResult& result, double epsilon, double delta) {
     Log::info("Sequential certification: epsilon={:.4g} delta={:.4g} draws={} lower={:.6g} upper={:.6g} "
-              "exact_fallback={}",
-              epsilon, delta, result.draws, result.lower, result.upper, result.exact);
+              "exact_fallback={} early_switch={}",
+              epsilon, delta, result.draws, result.lower, result.upper, result.exact, result.switched_early);
 }
 
 // Uniform sample, without replacement, of the source points with a positive bound whose Modified QALSH times price
