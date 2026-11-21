@@ -44,6 +44,21 @@ int main(int argc, char** argv) {
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
         ->default_str(Global::kUseFixedSeed ? "True" : "False");
+    app.add_flag("--scalar-exact-scan", Global::kUseScalarExactScan,
+                 "Ablation: find exact nearest neighbors with the scalar kernel instead of the batched L1/L2 kernels")
+        ->default_str(Global::kUseScalarExactScan ? "True" : "False");
+    app.add_option("--initial-radius", Global::kInitialRadius,
+                   "Starting search radius R_0 of QALSH queries (2^-149 is valid for any float32 data and any c > 1)")
+        ->default_val(Global::kInitialRadius)
+        ->check(CLI::PositiveNumber);
+    app.add_flag("--qalsh-stop-within-round{false}", Global::kQalshStopAtRoundBoundary,
+                 "Check QALSH's stopping condition after every candidate instead of after each complete radius round "
+                 "(legacy behaviour; the sample-size constant then uses c^2 instead of c)");
+    app.add_option("--qalsh-mid-round-ratio", Global::kQalshMidRoundRatio,
+                   "With round-end checks, also stop inside a round once a candidate lies within this multiple of the "
+                   "radius (1 keeps the constant c; 0 waits for the end of every round)")
+        ->default_val(Global::kQalshMidRoundRatio)
+        ->check(CLI::NonNegativeNumber);
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);

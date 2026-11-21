@@ -56,6 +56,7 @@ add_subdirectory(src/qalsh)
 
 add_executable(qalsh4c 
     src/ann_searcher.cc
+    src/exact_scan.cc
     src/command.cc
     src/config.cc
     src/dataset.cc
@@ -96,6 +97,7 @@ if(BUILD_TESTING)
         ann_searcher_clone_test
         tests/ann_searcher_clone_test.cc
         src/ann_searcher.cc
+        src/exact_scan.cc
         src/config.cc
         src/disk_qalsh_index.cc
         src/global.cc
@@ -107,9 +109,29 @@ if(BUILD_TESTING)
     add_test(NAME ann_searcher_clone_test COMMAND ann_searcher_clone_test)
 
     add_executable(
+        exact_scan_test
+        tests/exact_scan_test.cc
+        src/ann_searcher.cc
+        src/exact_scan.cc
+        src/config.cc
+        src/disk_qalsh_index.cc
+        src/global.cc
+        src/point_set.cc
+        src/utils.cc
+    )
+    target_include_directories(exact_scan_test PRIVATE src)
+    target_link_libraries(exact_scan_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json qalsh4c_qalsh)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(exact_scan_test PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(exact_scan_test PRIVATE QALSH4C_USE_OPENMP)
+    endif()
+    add_test(NAME exact_scan_test COMMAND exact_scan_test)
+
+    add_executable(
         disk_linear_scan_test
         tests/disk_linear_scan_test.cc
         src/ann_searcher.cc
+        src/exact_scan.cc
         src/config.cc
         src/disk_qalsh_index.cc
         src/estimator.cc
@@ -130,6 +152,7 @@ if(BUILD_TESTING)
         quadtree_weights_generator_test
         tests/quadtree_weights_generator_test.cc
         src/ann_searcher.cc
+        src/exact_scan.cc
         src/config.cc
         src/disk_qalsh_index.cc
         src/global.cc

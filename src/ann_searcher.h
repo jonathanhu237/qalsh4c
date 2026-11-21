@@ -46,6 +46,12 @@ class LinearScanAnnSearcher : public AnnSearcher {
     AnnResult SearchWithUpperBound(const Point& query_point, Distance initial_upper_bound);
     std::vector<AnnResult> SearchBatchWithUpperBounds(const std::vector<Point>& query_points,
                                                       const std::vector<Distance>& initial_upper_bounds);
+    // True when exact batch searches go through ExactScan: L1 and L2, unless --scalar-exact-scan is set.
+    [[nodiscard]] bool UsesBatchedScan() const;
+    // Same results as SearchBatchWithUpperBounds for all queries at once, through ExactScan. It runs in parallel over
+    // target blocks, so call it outside parallel regions.
+    [[nodiscard]] std::vector<AnnResult> SearchBatched(const std::vector<Point>& query_points,
+                                                       const std::vector<Distance>& initial_upper_bounds) const;
 
    private:
     float norm_order_{0.0F};

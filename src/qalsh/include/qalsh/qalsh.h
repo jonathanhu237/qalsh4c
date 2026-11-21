@@ -501,6 +501,8 @@ class DefaultQalshStrategy final : public SearchStrategy {
     void set_candidate_budget(std::optional<std::size_t> budget);
     void set_check_after_evaluation(bool enabled);
     void set_check_at_round_boundary(bool enabled);
+    /** Stop inside a round once a candidate lies within ratio * radius (0 disables). */
+    void set_mid_round_ratio(float ratio);
 
     void start(const QueryStart& query) override;
     [[nodiscard]] StrategyAction next(const QuerySnapshot& state) override;
@@ -517,6 +519,14 @@ class DefaultQalshStrategy final : public SearchStrategy {
     HitDecision accept_hit(const ProjectionHit& hit) {
         if (finish_requested_) {
             return {};
+        }
+        if constexpr (!CustomRule) {
+            if (!compact_state_.empty()) {
+                if (hit.point_id >= compact_state_.size()) {
+                    throw std::invalid_argument("projection hit point id is out of range");
+                }
+                return accept_builtin_id(hit.point_id);
+            }
         }
         if (hit.point_id >= collision_state_.size()) {
             throw std::invalid_argument("projection hit point id is out of range");
@@ -545,18 +555,27 @@ class DefaultQalshStrategy final : public SearchStrategy {
     // unused projection fields. Built-in indexes validate IDs at Build/Open;
     // the engine validates external hits before entering this private handler.
     HitDecision accept_builtin_id(PointId point_id) {
-        auto& count = collision_state_[point_id];
         // Remaining collisions: zero marks an already accepted point.
         // Counting down avoids reloading a threshold after every store.
-        if (count == 0) return {};
-        --count;
-        if (count != 0) return {};
-        return {.candidate = point_id};
+        const auto count_down = [point_id](auto& count) -> HitDecision {
+            if (count == 0) return {};
+            --count;
+            if (count != 0) return {};
+            return {.candidate = point_id};
+        };
+        // The branch is fixed for a whole query, so it predicts perfectly.
+        return compact_state_.empty() ? count_down(collision_state_[point_id])
+                                      : count_down(compact_state_[point_id]);
     }
 
    public:
     void on_evaluation(const EvaluationEvent&, const QuerySnapshot& state) override {
         if (check_after_evaluation_ && should_terminate(state)) {
+            finish_requested_ = true;
+        } else if (mid_round_ratio_ > 0.0F && state.neighbors.size() >= state.k &&
+                   state.neighbors.back().distance <= mid_round_ratio_ * state.radius) {
+            // A candidate within mid_round_ratio_ * R ends the search inside the round. With a ratio of at most one this
+            // keeps the round-end bound: the returned distance is at most the current radius.
             finish_requested_ = true;
         }
     }
@@ -594,10 +613,14 @@ class DefaultQalshStrategy final : public SearchStrategy {
     bool candidate_budget_override_set_{false};
     std::optional<std::size_t> active_candidate_budget_;
     bool check_after_evaluation_{true};
+    float mid_round_ratio_{0.0F};
     bool check_at_round_boundary_{true};
     QueryStart query_{};
     // Standard mode: remaining hits. Custom mode: observed hits/sentinel.
     std::vector<std::uint32_t> collision_state_;
+    // Standard mode with a threshold below 256 counts in one byte per point instead, which keeps the counters of
+    // concurrent queries in cache on large target sets.
+    std::vector<std::uint8_t> compact_state_;
     TableScanSchedule table_schedule_;
     bool radius_advanced_{false};
     bool finish_requested_{false};

@@ -1382,7 +1382,9 @@ void BPlusTreeIndex::Build(const std::string& path, IndexConfig config,
                                      std::strerror(errno));
         }
 
-        DiskFileHeader header{};
+        // The whole struct, padding included, is written to the file, so zero it to keep index files deterministic.
+        DiskFileHeader header;
+        std::memset(static_cast<void*>(&header), 0, sizeof(header));
         std::copy(kBPlusMagic.begin(), kBPlusMagic.end(), std::begin(header.magic));
         header.version = kVersion;
         header.endian = kEndianMarker;
@@ -1525,7 +1527,9 @@ void SortedArrayIndex::Build(const std::string& path, IndexConfig config,
                                      std::strerror(errno));
         }
 
-        DiskFileHeader header{};
+        // The whole struct, padding included, is written to the file, so zero it to keep index files deterministic.
+        DiskFileHeader header;
+        std::memset(static_cast<void*>(&header), 0, sizeof(header));
         std::copy(kSortedArrayMagic.begin(), kSortedArrayMagic.end(), std::begin(header.magic));
         header.version = kVersion;
         header.endian = kEndianMarker;
@@ -1628,6 +1632,9 @@ std::shared_ptr<BPlusTreeIndex> BPlusTreeIndex::Open(const std::string& path) {
         }
         index->mapping_ = static_cast<const std::byte*>(mapping);
         index->load_header();
+        // Validation above walks the pages in order with readahead. Searches jump between short windows of many
+        // tables, so further readahead only evicts pages that are still needed once the index outgrows memory.
+        (void)::madvise(mapping, static_cast<std::size_t>(index->mapping_size_), MADV_RANDOM);
         return index;
     } catch (...) {
         if (fd >= 0) {
@@ -2388,6 +2395,9 @@ std::shared_ptr<SortedArrayIndex> SortedArrayIndex::Open(const std::string& path
         }
         index->mapping_ = static_cast<const std::byte*>(mapping);
         index->load_header();
+        // Validation above walks the pages in order with readahead. Searches jump between short windows of many
+        // tables, so further readahead only evicts pages that are still needed once the index outgrows memory.
+        (void)::madvise(mapping, static_cast<std::size_t>(index->mapping_size_), MADV_RANDOM);
         return index;
     } catch (...) {
         if (fd >= 0) {
@@ -2805,6 +2815,10 @@ void DefaultQalshStrategy::set_check_after_evaluation(bool enabled) {
     check_after_evaluation_ = enabled;
 }
 
+void DefaultQalshStrategy::set_mid_round_ratio(float ratio) {
+    mid_round_ratio_ = ratio;
+}
+
 void DefaultQalshStrategy::set_check_at_round_boundary(bool enabled) {
     check_at_round_boundary_ = enabled;
 }
@@ -2846,7 +2860,19 @@ void DefaultQalshStrategy::start(const QueryStart& query) {
                     active_collision_threshold_ <= query.num_hash_tables,
                 "default QALSH strategy has an invalid collision threshold");
     }
-    collision_state_.assign(query.num_points, candidate_rule_ ? 0U : active_collision_threshold_);
+#ifdef QALSH_WIDE_COLLISION_COUNTERS
+    constexpr bool kCompactCounters = false;
+#else
+    constexpr bool kCompactCounters = true;
+#endif
+    if (kCompactCounters && !candidate_rule_ &&
+        active_collision_threshold_ <= std::numeric_limits<std::uint8_t>::max()) {
+        compact_state_.assign(query.num_points, static_cast<std::uint8_t>(active_collision_threshold_));
+        collision_state_.clear();
+    } else {
+        compact_state_.clear();
+        collision_state_.assign(query.num_points, candidate_rule_ ? 0U : active_collision_threshold_);
+    }
     table_schedule_.start(query.num_hash_tables);
 
     if (candidate_budget_override_set_) {

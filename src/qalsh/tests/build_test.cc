@@ -5,14 +5,15 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
 namespace {
-void Check(bool value) {
-    if (!value) throw std::runtime_error("parallel build invariant failed");
+void Check(bool value, std::source_location where = std::source_location::current()) {
+    if (!value) throw std::runtime_error("parallel build invariant failed at line " + std::to_string(where.line()));
 }
 
 std::vector<char> Bytes(const std::string& path) {

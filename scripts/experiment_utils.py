@@ -230,6 +230,11 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="Approximation ratio passed to QALSH ANN and QALSH sampling.",
     )
     parser.add_argument(
+        "--initial-radius",
+        default=None,
+        help="Starting QALSH search radius R_0 passed to qalsh4c (for example 2.8025969286496341e-45 = 2^-148).",
+    )
+    parser.add_argument(
         "--exact-batch-size",
         type=int,
         default=0,
@@ -420,6 +425,8 @@ def qalsh_prefix(args: argparse.Namespace, use_fixed_seed: bool = False) -> list
         command.extend(["-T", str(args.threads)])
     if use_fixed_seed:
         command.append("--use-fixed-seed")
+    if getattr(args, "initial_radius", None) is not None:
+        command.extend(["--initial-radius", str(args.initial_radius)])
     return command
 
 
