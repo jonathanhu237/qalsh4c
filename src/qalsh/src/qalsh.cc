@@ -958,7 +958,9 @@ void EvaluateCandidate(SearchHitContext<Strategy>& context, PointId point_id) {
 
     runtime.seen[point_id] = runtime.seen_epoch;
     const PointView point = (*context.accessor)(point_id);
-    ValidatePoint(point, metadata.num_dimensions, point_id);
+    if (context.options->validate_points) {
+        ValidatePoint(point, metadata.num_dimensions, point_id);
+    }
     Distance upper_bound = std::numeric_limits<float>::infinity();
     if (context.options->bounded_distance && runtime.neighbors.size() == context.k) {
         upper_bound = runtime.neighbors.back().distance;
@@ -1099,6 +1101,10 @@ std::shared_ptr<InMemoryIndex> InMemoryIndex::Build(IndexConfig config, const Po
     BuildProjectionTables(index->tables_, config, accessor, index->projection_vectors_,
                             [](auto& table) -> auto& { return table.entries; });
     SortTables(index->tables_, config.build_threads, [](auto& table) -> auto& { return table.entries; });
+    for (auto& table : index->tables_) {
+        table.ids.resize(table.entries.size());
+        for (std::size_t i = 0; i < table.entries.size(); ++i) table.ids[i] = table.entries[i].point_id;
+    }
     return index;
 }
 
@@ -1173,6 +1179,8 @@ ScanReport InMemoryIndex::scan_impl(Cursor& base_cursor, float bound, std::size_
     } commit{cursor, position};
     cursor = &position;
     const auto& entries = tables_[cursor->table_id].entries;
+    const auto& ids = tables_[cursor->table_id].ids;
+    const bool has_ids = ids.size() == entries.size();
     static_assert(sizeof(Entry) == 8 && offsetof(Entry, point_id) == 4);
     const auto entry_bytes = std::as_bytes(std::span<const Entry>(entries));
     ResetBoundedSides(bound, cursor->last_bound, cursor->left_blocked, cursor->right_blocked);
@@ -1195,6 +1203,7 @@ ScanReport InMemoryIndex::scan_impl(Cursor& base_cursor, float bound, std::size_
             const auto available = std::min(left_limit - scanned, index + 1);
             detail::HitRange range{entry_bytes.data() + index * sizeof(Entry),
                                    available, true, cursor->table_id, cursor->query_value};
+            if (has_ids) range.ids = ids.data() + index;
             window_detail::ClampToWindow(range, bound);
             cursor->left_blocked = range.count < available;
             if (range.count != 0) visitor(range);
@@ -1212,6 +1221,7 @@ ScanReport InMemoryIndex::scan_impl(Cursor& base_cursor, float bound, std::size_
             const auto available = std::min(right_limit - scanned, entries.size() - index);
             detail::HitRange range{entry_bytes.data() + index * sizeof(Entry),
                                    available, false, cursor->table_id, cursor->query_value};
+            if (has_ids) range.ids = ids.data() + index;
             window_detail::ClampToWindow(range, bound);
             cursor->right_blocked = range.count < available;
             if (range.count != 0) visitor(range);
@@ -2986,6 +2996,30 @@ SearchResult SearchEngine::search_impl_typed(PointView query, std::uint32_t k,
             cursors[table_id] = index_->make_cursor(table_id, query_projection);
         } else {
             index_->reset_cursor(*cursors[table_id], table_id, query_projection);
+        }
+    }
+
+    // A round whose window holds no entry in any table scans nothing and cannot end the search, since no point has
+    // collided yet. An in-memory query therefore starts at the first radius of the same grid R0 * growth^j whose
+    // window reaches the nearest entry of some table; stepping through the skipped rounds gives the same result.
+    if (const auto* memory_tables = dynamic_cast<const InMemoryIndex*>(index_.get()); memory_tables != nullptr) {
+        float gap = std::numeric_limits<float>::infinity();
+        for (std::uint32_t table_id = 0; table_id < table_count; ++table_id) {
+            const auto& cursor = static_cast<const MemoryCursor&>(*cursors[table_id]);
+            const auto& entries = memory_tables->tables_[table_id].entries;
+            // The same float expression as the window test in ClampToWindow.
+            if (cursor.left != MemoryCursor::kNoIndex) {
+                gap = std::min(gap, std::abs(cursor.query_value - entries[cursor.left].value));
+            }
+            if (cursor.right != MemoryCursor::kNoIndex) {
+                gap = std::min(gap, std::abs(cursor.query_value - entries[cursor.right].value));
+            }
+        }
+        while (runtime.bound < gap) {
+            const float next_radius = runtime.radius * metadata.qalsh.radius_growth;
+            if (!IsFinite(next_radius) || !(next_radius > runtime.radius)) break;
+            runtime.radius = next_radius;
+            runtime.bound = WindowBound(metadata.qalsh.bucket_width, runtime.radius);
         }
     }
 
