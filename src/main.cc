@@ -54,6 +54,25 @@ int main(int argc, char** argv) {
     app.add_flag("--qalsh-stop-within-round{false}", Global::kQalshStopAtRoundBoundary,
                  "Check QALSH's stopping condition after every candidate instead of after each complete radius round "
                  "(legacy behaviour; the sample-size constant then uses c^2 instead of c)");
+    app.add_option("--qalsh-beta", Global::kQalshBeta,
+                   "Fraction beta in QALSH's table rule (1 = no candidate budget, the QALSH4C default; 0 = QALSH's "
+                   "min(100 / n, 1))")
+        ->default_val(Global::kQalshBeta)
+        ->check(CLI::Range(0.0F, 1.0F));
+    app.add_option("--qalsh-tables", Global::kQalshTables,
+                   "Number m of QALSH hash tables (0 = QALSH's rule with --qalsh-beta)")
+        ->default_val(Global::kQalshTables);
+    app.add_option("--qalsh-threshold", Global::kQalshThreshold,
+                   "QALSH collision threshold l (0 = QALSH's rule)")
+        ->default_val(Global::kQalshThreshold);
+    app.add_option("--qalsh-bucket-width", Global::kQalshBucketWidth,
+                   "QALSH bucket width w (0 = QALSH's width, which maximizes p1 - p2)")
+        ->default_val(Global::kQalshBucketWidth)
+        ->check(CLI::NonNegativeNumber);
+    app.add_option("--qalsh-scan-quantum", Global::kQalshScanQuantum,
+                   "Entries an in-memory QALSH query scans in one table before moving to the next table")
+        ->default_val(Global::kQalshScanQuantum)
+        ->check(CLI::PositiveNumber);
     app.add_option("--qalsh-mid-round-ratio", Global::kQalshMidRoundRatio,
                    "With round-end checks, also stop inside a round once a candidate lies within this multiple of the "
                    "radius (1 keeps the constant c; 0 waits for the end of every round)")

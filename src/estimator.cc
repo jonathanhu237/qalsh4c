@@ -1,6 +1,7 @@
 #include "estimator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -894,7 +895,11 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
 
     // Generate weights.
     Log::info("Generating weights...");
+    const auto weights_start = std::chrono::steady_clock::now();
     std::vector<Weight> weights = weights_generator_->Generate(from, to, norm_order, use_cache_);
+    const auto weights_end = std::chrono::steady_clock::now();
+    Log::info("Stage time: weights_ms={:.3f}",
+              std::chrono::duration<double, std::milli>(weights_end - weights_start).count());
 
     // Check the size of weights.
     if (weights.size() != from.num_points) {
