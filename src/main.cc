@@ -4,7 +4,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <string>
 #include <thread>
 
 #include "ann_searcher.h"
@@ -48,10 +47,37 @@ int main(int argc, char** argv) {
     app.add_flag("--scalar-exact-scan", Global::kUseScalarExactScan,
                  "Ablation: find exact nearest neighbors with the scalar kernel instead of the batched L1/L2 kernels")
         ->default_str(Global::kUseScalarExactScan ? "True" : "False");
-    app.add_flag("--qalsh-round-boundary-stop", Global::kQalshStopAtRoundBoundary,
-                 "Check QALSH's stopping condition only when a radius round is complete, as the per-point "
-                 "overestimation bound max(1, cJ) assumes (default: also after every evaluated candidate)")
-        ->default_str(Global::kQalshStopAtRoundBoundary ? "True" : "False");
+    app.add_option("--initial-radius", Global::kInitialRadius,
+                   "Starting search radius R_0 of QALSH queries (2^-149 is valid for any float32 data and any c > 1)")
+        ->default_val(Global::kInitialRadius)
+        ->check(CLI::PositiveNumber);
+    app.add_flag("--qalsh-stop-within-round{false}", Global::kQalshStopAtRoundBoundary,
+                 "Check QALSH's stopping condition after every candidate instead of after each complete radius round "
+                 "(legacy behaviour; the sample-size constant then uses c^2 instead of c)");
+    app.add_option("--qalsh-beta", Global::kQalshBeta,
+                   "Fraction beta in QALSH's table rule (1 = no candidate budget, the QALSH4C default; 0 = QALSH's "
+                   "min(100 / n, 1))")
+        ->default_val(Global::kQalshBeta)
+        ->check(CLI::Range(0.0F, 1.0F));
+    app.add_option("--qalsh-tables", Global::kQalshTables,
+                   "Number m of QALSH hash tables (0 = QALSH's rule with --qalsh-beta)")
+        ->default_val(Global::kQalshTables);
+    app.add_option("--qalsh-threshold", Global::kQalshThreshold,
+                   "QALSH collision threshold l (0 = QALSH's rule)")
+        ->default_val(Global::kQalshThreshold);
+    app.add_option("--qalsh-bucket-width", Global::kQalshBucketWidth,
+                   "QALSH bucket width w (0 = QALSH's width, which maximizes p1 - p2)")
+        ->default_val(Global::kQalshBucketWidth)
+        ->check(CLI::NonNegativeNumber);
+    app.add_option("--qalsh-scan-quantum", Global::kQalshScanQuantum,
+                   "Entries an in-memory QALSH query scans in one table before moving to the next table")
+        ->default_val(Global::kQalshScanQuantum)
+        ->check(CLI::PositiveNumber);
+    app.add_option("--qalsh-mid-round-ratio", Global::kQalshMidRoundRatio,
+                   "With round-end checks, also stop inside a round once a candidate lies within this multiple of the "
+                   "radius (1 keeps the constant c; 0 waits for the end of every round)")
+        ->default_val(Global::kQalshMidRoundRatio)
+        ->check(CLI::NonNegativeNumber);
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
@@ -112,35 +138,6 @@ int main(int argc, char** argv) {
                                     .approximation_ratio = qalsh_index_approximation_ratio,
                                     .overwrite = qalsh_index_overwrite,
                                     .layout = DiskQalsh::ParseIndexLayout(qalsh_index_layout)});
-    });
-
-    CLI::App* static_index = index->add_subcommand(
-        "static", "Build a persistent static C2LSH index: projection vectors and the point set's projections.");
-    StaticIndexRequest static_index_request;
-    std::string static_index_target{"b"};
-    static_index->add_option("-p,--norm-order", static_index_request.norm_order, "Norm order")
-        ->required()
-        ->check(CLI::IsMember({1.0, 2.0}));  // NOLINT(readability-magic-numbers)
-    static_index->add_option("-d,--dataset-directory", static_index_request.dataset_directory,
-                             "Directory for the dataset")
-        ->required();
-    static_index->add_option("--target", static_index_target, "Point set to index: a, b, or both")
-        ->default_val("b")
-        ->check(CLI::IsMember({"a", "b", "both"}));
-    static_index->add_option("--projections", static_index_request.num_projections,
-                             "Projections m of each structure (0: the smallest m with n m (2 pi)^(-(m-1)/2) <= 1 "
-                             "for the indexed set's size n)")
-        ->default_val(0);
-    static_index->add_option("--repetitions", static_index_request.num_repetitions,
-                             "Structures the index holds; estimates may use fewer")
-        ->default_val(4)
-        ->check(CLI::PositiveNumber);
-    static_index->add_option("--seed", static_index_request.seed, "Seed for the projection vectors")
-        ->default_val(Global::kDefaultSeed);
-    static_index->add_flag("--overwrite", static_index_request.overwrite, "Overwrite an existing selected index");
-    static_index->callback([&]() {
-        static_index_request.target_selection = DiskQalsh::ParseTargetSelection(static_index_target);
-        command = std::make_unique<StaticIndexCommand>(static_index_request);
     });
 
     // ------------------------------
@@ -333,132 +330,6 @@ int main(int argc, char** argv) {
         ->check(CLI::Range(0, std::numeric_limits<int>::max()));
     quadtree_sampling->callback([&]() {
         weights_generator = std::make_unique<QuadtreeWeightsGenerator>(quadtree_max_levels);
-    });
-
-    // ------------------------------
-    // pool estimate
-    // ------------------------------
-    CLI::App* pool = estimate->add_subcommand(
-        "pool", "Estimate Chamfer distance with two-stage sampling that runs QALSH only on pooled points.");
-    unsigned int pool_size{0};
-    unsigned int pool_num_samples{0};
-    unsigned int pool_subsample_size{100};
-    float pool_approximation_ratio{Global::kDefaultApproximationRatio};
-    float pool_epsilon{Global::kQalsh4cEpsilon};
-    float pool_delta{Global::kQalsh4cDelta};
-    unsigned int pool_exact_batch_size{0};
-    pool->add_option("-K,--pool-size", pool_size,
-                     "Number of first-stage draws in proportion to the upper bounds (0: five times the "
-                     "second-stage sample count)")
-        ->default_val(0);
-    pool->add_option("-n,--num-samples", pool_num_samples,
-                     "Number of second-stage draws (0: the QALSH4C automatic sample count, used as a reference "
-                     "budget)")
-        ->default_val(0);
-    pool->add_option("-s,--subsample-size", pool_subsample_size,
-                     "Size of the uniform target subsample that gives every source point an upper bound")
-        ->default_val(pool_subsample_size)
-        ->check(CLI::PositiveNumber);
-    pool->add_option("-c,--approximation-ratio", pool_approximation_ratio, "Approximation ratio for QALSH")
-        ->default_val(Global::kDefaultApproximationRatio);
-    pool->add_option("-e,--epsilon", pool_epsilon, "Epsilon for the automatic second-stage sample count")
-        ->default_val(Global::kQalsh4cEpsilon);
-    pool->add_option("--delta", pool_delta,
-                     "Failure probability for the automatic second-stage sample count and for --plan certified")
-        ->default_val(Global::kQalsh4cDelta);
-    std::string pool_plan{"fixed"};
-    pool->add_option("--plan", pool_plan,
-                     "How to choose K and T: fixed (as given), model (a pilot estimates the variance coefficients and "
-                     "costs, and K and T target an RMS relative error of --target-error), or certified (the relative "
-                     "error exceeds --target-error with probability at most --delta: the one-stage designs --direct, "
-                     "--full and --static draw without a pilot until a time-uniform empirical Bernstein confidence "
-                     "sequence certifies their estimate, and the pooled design certifies its coefficients with a "
-                     "pilot). A pooled plan switches to querying every source point when that is predicted to be "
-                     "cheaper. With --disk-based, a plan needs --direct or --static.")
-        ->check(CLI::IsMember({"fixed", "model", "certified"}))
-        ->default_val("fixed");
-    float pool_target_error{0.0F};
-    pool->add_option("--target-error", pool_target_error, "Relative error target for --plan model or certified")
-        ->default_val(0.0F);
-    unsigned int pool_pilot_size{PoolSamplingEstimator::kDefaultPilotSize};
-    pool->add_option("--pilot-size", pool_pilot_size,
-                     "Pilot draws in proportion to the upper bounds for --plan: the fixed size for certified pooled "
-                     "plans and the starting size for model plans")
-        ->default_val(PoolSamplingEstimator::kDefaultPilotSize);
-    float pool_pilot_relative_error{PoolSamplingEstimator::kDefaultPilotRelativeError};
-    pool->add_option("--pilot-relative-error", pool_pilot_relative_error,
-                     "Model plans double the pilot until both variance coefficients reach this relative standard "
-                     "error, up to 4096 draws (0: keep --pilot-size)")
-        ->default_val(PoolSamplingEstimator::kDefaultPilotRelativeError);
-    unsigned int pool_num_strata{0};
-    pool->add_option("--strata", pool_num_strata,
-                     "Split the source points into this many equal-count strata by their upper bounds; the plan's "
-                     "pilot then decides per stratum whether to run QALSH on all of its points, the strata's draws "
-                     "follow the Neyman allocation, and a model plan switches to the unstratified pool when that is "
-                     "predicted to be cheaper (0: off; --pilot-size is split across the strata)")
-        ->default_val(0);
-    pool->add_option("--pilot-dump", Global::kPilotDumpPath,
-                     "Diagnostic: write every pilot draw of --plan (point id, U_a, D_a, v_a and the QALSH target id) "
-                     "to this CSV file");
-    pool->add_option("--exact-batch-size", pool_exact_batch_size, "Batch size for exact linear scans (0: auto)")
-        ->default_val(0);
-    bool pool_direct{false};
-    pool->add_flag("--direct", pool_direct,
-                   "Baseline: skip QALSH and draw the exact scans in proportion to the subsample upper bounds");
-    bool pool_uniform{false};
-    pool->add_flag("--uniform", pool_uniform,
-                   "Baseline: skip the upper bounds and QALSH and scan uniformly drawn source points");
-    bool pool_full{false};
-    pool->add_flag("--full", pool_full, "Ablation: run QALSH for every source point instead of a sampled pool");
-    bool pool_no_fuse{false};
-    pool->add_flag("--no-fuse", pool_no_fuse,
-                   "Ablation: keep raw QALSH distances instead of clipping them with the subsample upper bounds");
-    bool pool_static{false};
-    pool->add_flag("--static", pool_static,
-                   "Skip QALSH: tighten every subsample upper bound with the Morton neighbors of a static C2LSH "
-                   "structure over A and B (collision threshold m - 1, c = 2), then draw the exact scans in proportion "
-                   "to the tightened bounds");
-    StaticC2lshOptions static_options;
-    pool->add_option("--static-projections", static_options.num_projections,
-                     "Projections m of each static structure (0: the smallest m with |B| m (2 pi)^(-(m-1)/2) <= 1)")
-        ->default_val(0);
-    pool->add_option("--static-repetitions", static_options.num_repetitions,
-                     "Independent static structures; every source point keeps its nearest neighbor over all of them")
-        ->default_val(static_options.num_repetitions)
-        ->check(CLI::PositiveNumber);
-    pool->add_option("--static-window", static_options.window,
-                     "Targets checked on each side of a source point in every Morton order")
-        ->default_val(static_options.window)
-        ->check(CLI::PositiveNumber);
-    pool->add_option("--static-bucket-width", static_options.bucket_width,
-                     "Finest bucket width w of the static structures (0: the smallest positive upper bound)")
-        ->default_val(0.0)
-        ->check(CLI::NonNegativeNumber);
-    pool->add_flag("--static-index", static_options.disk_index,
-                   "With --disk-based: read B's projections from its persistent static index (`index static`) "
-                   "instead of reading B's coordinates");
-    pool->add_option("--static-chunk-size", static_options.disk_chunk_size,
-                     "With --disk-based: source points held in memory while their static neighbors are verified; B is "
-                     "read once per chunk (0: as many as 256 MiB holds)")
-        ->default_val(0);
-    pool->add_option("--bounds-dump", Global::kBoundsDumpPath,
-                     "Diagnostic: write every source point's final upper bound, the one its exact-scan draws follow, "
-                     "to this file as float64 values");
-    const CLI::Option* pool_approximation_ratio_option = (*pool)["--approximation-ratio"];
-    pool->callback([&]() {
-        // With --disk-based, -c must match the persistent index; without it the index's own ratio is used.
-        const std::optional<float> expected_approximation_ratio =
-            pool_approximation_ratio_option->count() > 0 ? std::optional<float>(pool_approximation_ratio)
-                                                         : std::nullopt;
-        const PoolPlanMode plan_mode = pool_plan == "model"       ? PoolPlanMode::kModel
-                                       : pool_plan == "certified" ? PoolPlanMode::kCertified
-                                                                  : PoolPlanMode::kFixed;
-        estimator = std::make_unique<PoolSamplingEstimator>(
-            pool_size, pool_num_samples, pool_subsample_size, pool_approximation_ratio, pool_epsilon, pool_delta,
-            pool_exact_batch_size, disk_based, disk_block_size, disk_query_batch_size, expected_approximation_ratio,
-            disk_qalsh_options, pool_direct, pool_full, !pool_no_fuse, plan_mode, pool_target_error,
-            pool_pilot_size, pool_uniform, pool_pilot_relative_error, pool_num_strata,
-            pool_static ? std::optional<StaticC2lshOptions>(static_options) : std::nullopt);
     });
 
     // ------------------------------

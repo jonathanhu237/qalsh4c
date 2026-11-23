@@ -188,6 +188,8 @@ class InMemoryIndex final : public ProjectionIndex {
     };
     struct Table {
         std::vector<Entry> entries;
+        // entries[i].point_id for every i, so that collision counting reads only ids.
+        std::vector<PointId> ids;
     };
     IndexMetadata metadata_{};
     std::vector<Coordinate> projection_vectors_;
@@ -479,6 +481,9 @@ struct SearchOptions {
     std::uint32_t scan_quantum{0};
     std::size_t max_steps{0};
     bool bounded_distance{true};
+    /** Check every evaluated candidate for the right size and finite coordinates. A caller whose accessor returns
+     * the immutable vectors the index was built from (and checked) may switch this off. */
+    bool validate_points{true};
 };
 
 struct CollisionObservation {
@@ -501,6 +506,8 @@ class DefaultQalshStrategy final : public SearchStrategy {
     void set_candidate_budget(std::optional<std::size_t> budget);
     void set_check_after_evaluation(bool enabled);
     void set_check_at_round_boundary(bool enabled);
+    /** Stop inside a round once a candidate lies within ratio * radius (0 disables). */
+    void set_mid_round_ratio(float ratio);
 
     void start(const QueryStart& query) override;
     [[nodiscard]] StrategyAction next(const QuerySnapshot& state) override;
@@ -570,6 +577,11 @@ class DefaultQalshStrategy final : public SearchStrategy {
     void on_evaluation(const EvaluationEvent&, const QuerySnapshot& state) override {
         if (check_after_evaluation_ && should_terminate(state)) {
             finish_requested_ = true;
+        } else if (mid_round_ratio_ > 0.0F && state.neighbors.size() >= state.k &&
+                   state.neighbors.back().distance <= mid_round_ratio_ * state.radius) {
+            // A candidate within mid_round_ratio_ * R ends the search inside the round. With a ratio of at most one this
+            // keeps the round-end bound: the returned distance is at most the current radius.
+            finish_requested_ = true;
         }
     }
     void on_scan_boundary(const ScanBoundaryEvent& event, const QuerySnapshot& state) override {
@@ -606,6 +618,7 @@ class DefaultQalshStrategy final : public SearchStrategy {
     bool candidate_budget_override_set_{false};
     std::optional<std::size_t> active_candidate_budget_;
     bool check_after_evaluation_{true};
+    float mid_round_ratio_{0.0F};
     bool check_at_round_boundary_{true};
     QueryStart query_{};
     // Standard mode: remaining hits. Custom mode: observed hits/sentinel.
@@ -628,6 +641,9 @@ struct HitRange {
     bool reverse{false};
     std::uint32_t table_id{0};
     Projection query_value{0};
+    // Optional copy of the range's point ids in storage order: ids[0] belongs to the first logical entry and the next
+    // logical entries follow at ids[-1], ids[-2], ... for a reverse range. Counting then streams 4 bytes per entry.
+    const PointId* ids{nullptr};
 };
 struct RangeExecution {
     void* strategy;
@@ -729,6 +745,50 @@ void DeliverRange(RangeExecution& execution, const HitRange& range) {
             // the per-hit callback while retaining full range consumption so
             // projection hit accounting and cursor boundaries stay intact.
             auto state = execution.state.projection_hits;
+            if (!strategy.compact_state_.empty()) {
+                // One-byte countdown counters: keep the counter base, the entry pointer and the stride in locals so
+                // the byte stores, which may alias anything, do not force reloads of strategy or range members.
+                // The countdown is the one of accept_builtin_id: 0 marks an accepted point, 1 means this hit makes
+                // the point a candidate. Stopping at a finish request leaves the remaining hits unused, as before.
+                if (!strategy.finish_requested_) {
+                    std::uint8_t* const counters = strategy.compact_state_.data();
+                    const std::size_t count = range.count;
+                    const auto count_down = [&](auto load_id) {
+                        for (std::size_t position = 0; position < count; ++position) {
+                            const PointId point_id = load_id(position);
+                            const std::uint8_t remaining = counters[point_id];
+                            if (remaining > 1U) {
+                                counters[point_id] = static_cast<std::uint8_t>(remaining - 1U);
+                                continue;
+                            }
+                            if (remaining == 0U) continue;
+                            counters[point_id] = 0;
+                            execution.state.projection_hits = state + position + 1;
+                            execution.evaluate(execution, point_id);
+                            if (strategy.finish_requested_) break;
+                        }
+                    };
+                    if (range.ids != nullptr) {
+                        const PointId* const ids = range.ids;
+                        if (range.reverse) {
+                            count_down([ids](std::size_t position) { return *(ids - position); });
+                        } else {
+                            count_down([ids](std::size_t position) { return ids[position]; });
+                        }
+                    } else {
+                        const std::byte* const id_bytes = range.first + sizeof(Projection);
+                        const std::ptrdiff_t stride = range.reverse ? -8 : 8;
+                        count_down([id_bytes, stride](std::size_t position) {
+                            PointId point_id;
+                            std::memcpy(&point_id, id_bytes + static_cast<std::ptrdiff_t>(position) * stride,
+                                        sizeof(point_id));
+                            return point_id;
+                        });
+                    }
+                }
+                execution.state.projection_hits = state + range.count;
+                return;
+            }
             bool accepting = !strategy.finish_requested_;
             ForEachHitId(range, [&](PointId point_id, std::size_t position) {
                 if (!accepting) return;

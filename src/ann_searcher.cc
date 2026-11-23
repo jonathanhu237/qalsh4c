@@ -1,5 +1,8 @@
 #include "ann_searcher.h"
 
+#include <atomic>
+#include <cstdio>
+
 #ifdef QALSH4C_USE_OPENMP
 #include <omp.h>
 #endif
@@ -59,11 +62,11 @@ qalsh::IndexConfig MakeLibraryConfig(const QalshConfig& config, float norm_order
                                                                .num_hash_tables = config.num_hash_tables,
                                                                .collision_threshold = config.collision_threshold,
                                                                .candidate_budget = Global::kNumCandidates,
-                                                               .initial_radius = 1.0F,
+                                                               .initial_radius = Global::kInitialRadius,
                                                                .radius_growth = config.approximation_ratio,
                                                                // The legacy scan budget applies independently to both sides;
                                                                // the library's quantum is the combined logical budget.
-                                                               .scan_quantum = Global::kScanSize * 2},
+                                                               .scan_quantum = Global::kQalshScanQuantum},
                               .seed = seed,
                               .projection_vectors = {},
                               .build_threads = build_threads};
@@ -288,6 +291,8 @@ std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
     clone->index_data_ = index_data_;
     if (clone->index_data_) {
         qalsh::SearchOptions search_options;
+        // Build checked every target point, and the accessor returns those same immutable vectors.
+        search_options.validate_points = false;
         clone->engine_ = std::make_unique<qalsh::SearchEngine>(
             clone->index_data_->index,
             [points = clone->index_data_->base_points](qalsh::PointId point_id) -> qalsh::PointView {
@@ -297,6 +302,24 @@ std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
     }
     return clone;
 }
+
+namespace {
+// Projection hits and evaluated candidates summed over all in-memory QALSH queries, printed to stderr at exit.
+struct QalshHitCounter {
+    std::atomic<unsigned long long> queries{0}, hits{0}, evaluated{0};
+    std::atomic<unsigned long long> tables{0}, points{0};
+    ~QalshHitCounter() {
+        const unsigned long long q = queries.load();
+        if (q == 0) return;
+        const double per_query = static_cast<double>(hits.load()) / static_cast<double>(q);
+        const double entries = static_cast<double>(tables.load()) * static_cast<double>(points.load());
+        std::fprintf(stderr, "QALSH stats: queries=%llu m=%llu n=%llu hits_per_query=%.0f fraction_of_entries=%.4f "
+                     "evaluated_per_query=%.1f\n", q, tables.load(), points.load(), per_query, per_query / entries,
+                     static_cast<double>(evaluated.load()) / static_cast<double>(q));
+    }
+};
+QalshHitCounter g_qalsh_hit_counter;
+}  // namespace
 
 std::shared_ptr<const std::vector<Point>> QalshAnnSearcher::TargetPoints() const {
     return index_data_ ? index_data_->base_points : std::shared_ptr<const std::vector<Point>>{};
@@ -326,6 +349,8 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) 
     data->index = qalsh::InMemoryIndex::Build(config, accessor);
     index_data_ = std::move(data);
     qalsh::SearchOptions search_options;
+    // Build checked every target point, and the accessor returns those same immutable vectors.
+    search_options.validate_points = false;
     engine_ = std::make_unique<qalsh::SearchEngine>(
         index_data_->index,
         [points = index_data_->base_points](qalsh::PointId point_id) -> qalsh::PointView {
@@ -344,7 +369,13 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     qalsh::DefaultQalshStrategy strategy(index_data_->qalsh_config.collision_threshold);
     strategy.set_candidate_budget(std::nullopt);
     strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
+    strategy.set_mid_round_ratio(Global::kQalshStopAtRoundBoundary ? Global::kQalshMidRoundRatio : 0.0F);
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
+    g_qalsh_hit_counter.queries += 1;
+    g_qalsh_hit_counter.hits += result.projection_hits;
+    g_qalsh_hit_counter.evaluated += result.evaluated_candidates;
+    g_qalsh_hit_counter.tables = index_data_->index->metadata().num_hash_tables;
+    g_qalsh_hit_counter.points = index_data_->num_points;
     return ToAnnResult(result);
 }
 
@@ -500,6 +531,7 @@ AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
     qalsh::DefaultQalshStrategy strategy(index_data_->qalsh_config.collision_threshold);
     strategy.set_candidate_budget(std::nullopt);
     strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
+    strategy.set_mid_round_ratio(Global::kQalshStopAtRoundBoundary ? Global::kQalshMidRoundRatio : 0.0F);
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
     if (options_.profile) {
         const auto search_end = std::chrono::steady_clock::now();

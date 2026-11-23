@@ -5,7 +5,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include <qalsh/qalsh.h>
 
@@ -63,8 +62,6 @@ struct BuildRequest {
 // format stores vectors in the index file rather than in a flat sidecar.
 [[nodiscard]] std::filesystem::path DotVectorsPath(const std::filesystem::path& index_directory);
 [[nodiscard]] std::filesystem::path TablesPath(const std::filesystem::path& index_directory);
-// Fingerprints of the indexed points in id order, so exact-match detection does not rescan the target set.
-[[nodiscard]] std::filesystem::path FingerprintsPath(const std::filesystem::path& index_directory);
 [[nodiscard]] PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_directory,
                                                     const DatasetMetadata& dataset_metadata, Target target);
 
@@ -81,8 +78,5 @@ void ValidateLibraryMetadata(const qalsh::IndexMetadata& library_metadata,
                              const std::filesystem::path& index_directory);
 
 void BuildIndexes(const BuildRequest& request);
-// Returns the stored fingerprints of the target set's index, or nothing when the index predates them.
-[[nodiscard]] std::optional<std::vector<std::uint64_t>> ReadFingerprints(const PointSetMetadata& target_metadata,
-                                                                         float norm_order);
 
 }  // namespace DiskQalsh

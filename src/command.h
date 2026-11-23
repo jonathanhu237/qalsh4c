@@ -36,25 +36,6 @@ class QalshIndexCommand : public Command {
     DiskQalsh::BuildRequest request_;
 };
 
-struct StaticIndexRequest {
-    std::filesystem::path dataset_directory;
-    float norm_order{0.0F};
-    DiskQalsh::TargetSelection target_selection{DiskQalsh::TargetSelection::kB};
-    unsigned int num_projections{0};  // 0 selects the default m for the indexed set's size
-    unsigned int num_repetitions{0};
-    unsigned int seed{0};
-    bool overwrite{false};
-};
-
-class StaticIndexCommand : public Command {
-   public:
-    explicit StaticIndexCommand(StaticIndexRequest request);
-    void Execute() override;
-
-   private:
-    StaticIndexRequest request_;
-};
-
 class DatasetGenerateGmmCommand : public Command {
    public:
     explicit DatasetGenerateGmmCommand(DatasetPrep::GmmOptions options);

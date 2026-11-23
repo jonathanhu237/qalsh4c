@@ -1,6 +1,7 @@
 #include "weights_generator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -611,7 +612,9 @@ std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     // Generate weights based on QALSH algorithm.
     Log::info("Generating weights using QALSH...");
 
+    const auto init_start = std::chrono::steady_clock::now();
     ann_searcher_->Init(to_metadata, norm_order);
+    const auto init_end = std::chrono::steady_clock::now();
 
     if (disk_based_) {
         GenerateWeightsFromSearcherStreaming(*ann_searcher_, from_metadata, disk_query_batch_size_, weights);
@@ -639,6 +642,10 @@ std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from
             weights[point_id] = local_searcher->Search(query_points[point_id]).distance;
         }
     }
+    const auto query_end = std::chrono::steady_clock::now();
+    Log::info("QALSH stage times: index_ms={:.3f} queries_ms={:.3f}",
+              std::chrono::duration<double, std::milli>(init_end - init_start).count(),
+              std::chrono::duration<double, std::milli>(query_end - init_end).count());
 #else
     std::vector<Point> query_points =
         PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);

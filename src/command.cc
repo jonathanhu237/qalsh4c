@@ -10,13 +10,11 @@
 #include <optional>
 #include <ratio>
 #include <utility>
-#include <vector>
 
 #include "estimator.h"
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
-#include "static_c2lsh.h"
 #include "utils.h"
 
 namespace {
@@ -118,29 +116,6 @@ QalshIndexCommand::QalshIndexCommand(DiskQalsh::BuildRequest request) : request_
 
 void QalshIndexCommand::Execute() {
     DiskQalsh::BuildIndexes(request_);
-    std::cout << std::format("Dataset Directory: {}\n", request_.dataset_directory.string());
-}
-
-// --------------------------------------------------
-// StaticIndexCommand Implementation
-// --------------------------------------------------
-StaticIndexCommand::StaticIndexCommand(StaticIndexRequest request) : request_(std::move(request)) {}
-
-void StaticIndexCommand::Execute() {
-    DatasetMetadata dataset_metadata;
-    dataset_metadata.Load(request_.dataset_directory / "metadata.json");
-    std::vector<DiskQalsh::Target> targets;
-    if (request_.target_selection != DiskQalsh::TargetSelection::kB) {
-        targets.push_back(DiskQalsh::Target::kA);
-    }
-    if (request_.target_selection != DiskQalsh::TargetSelection::kA) {
-        targets.push_back(DiskQalsh::Target::kB);
-    }
-    for (const DiskQalsh::Target target : targets) {
-        StaticC2lsh::BuildIndex(DiskQalsh::MakePointSetMetadata(request_.dataset_directory, dataset_metadata, target),
-                                request_.norm_order, request_.num_projections, request_.num_repetitions,
-                                request_.seed, Global::kDefaultDiskBlockSize, request_.overwrite);
-    }
     std::cout << std::format("Dataset Directory: {}\n", request_.dataset_directory.string());
 }
 

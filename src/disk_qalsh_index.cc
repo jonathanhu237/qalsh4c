@@ -27,7 +27,6 @@
 namespace {
 
 constexpr float kMetadataFloatTolerance = 1e-5F;
-constexpr unsigned int kFingerprintSpotChecks = 16;
 
 bool NearlyEqual(float lhs, float rhs) {
     const float scale = std::max({1.0F, std::abs(lhs), std::abs(rhs)});
@@ -73,76 +72,6 @@ qalsh::Metric ToMetric(float norm_order) {
     Log::error("Unsupported norm order: {}", norm_order);
 }
 
-// Writes a file through a flushed temporary sibling and renames it into place, so readers never see a partial file.
-void InstallFileAtomically(const std::filesystem::path& destination, const char* data, std::size_t size,
-                           const std::string& description) {
-    std::string temporary_template = destination.string() + ".tmp-XXXXXX";
-    std::vector<char> temporary_name(temporary_template.begin(), temporary_template.end());
-    temporary_name.push_back('\0');
-    int fd = ::mkstemp(temporary_name.data());
-    if (fd < 0) {
-        Log::error("Failed to create disk QALSH {} temporary file: {} ({})", description, destination.string(),
-                   std::strerror(errno));
-    }
-    const std::string temporary_path(temporary_name.data());
-    bool installed = false;
-    try {
-        std::size_t written = 0;
-        while (written < size) {
-            const ssize_t count = ::write(fd, data + written, size - written);
-            if (count < 0 && errno == EINTR) {
-                continue;
-            }
-            if (count <= 0) {
-                throw std::runtime_error("failed to write disk QALSH " + description);
-            }
-            written += static_cast<std::size_t>(count);
-        }
-        if (::fsync(fd) != 0) {
-            throw std::runtime_error("failed to flush disk QALSH " + description);
-        }
-        if (::close(fd) != 0) {
-            fd = -1;
-            throw std::runtime_error("failed to close disk QALSH " + description);
-        }
-        fd = -1;
-        if (::rename(temporary_path.c_str(), destination.c_str()) != 0) {
-            throw std::runtime_error("failed to atomically install disk QALSH " + description);
-        }
-        installed = true;
-    } catch (const std::exception& error) {
-        if (fd >= 0) {
-            (void)::close(fd);
-        }
-        (void)::unlink(temporary_path.c_str());
-        Log::error("Failed to write disk QALSH {} {}: {}", description, destination.string(), error.what());
-    }
-    if (!installed) {
-        Log::error("Failed to install disk QALSH {}: {}", description, destination.string());
-    }
-}
-
-void WriteFingerprints(const std::filesystem::path& index_directory, const std::vector<std::uint64_t>& fingerprints) {
-    InstallFileAtomically(DiskQalsh::FingerprintsPath(index_directory),
-                          reinterpret_cast<const char*>(fingerprints.data()),
-                          fingerprints.size() * sizeof(std::uint64_t), "fingerprints");
-}
-
-// One sequential pass over the target set, for indexes built before fingerprints were stored.
-std::vector<std::uint64_t> ComputeFingerprints(const PointSetMetadata& target_metadata) {
-    PointSet points;
-    points.Init(target_metadata);
-    Point buffer(target_metadata.num_dimensions);
-    std::vector<std::uint64_t> fingerprints(target_metadata.num_points);
-    for (unsigned int point_id = 0; point_id < target_metadata.num_points; ++point_id) {
-        if (!points.ReadNextPointInto(buffer)) {
-            Log::error("Failed to read target point {} from {}.", point_id, target_metadata.file_path.string());
-        }
-        fingerprints[point_id] = Fingerprint::Of(buffer.data(), buffer.size());
-    }
-    return fingerprints;
-}
-
 void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target target,
                    const DatasetMetadata& dataset_metadata) {
     const PointSetMetadata target_metadata =
@@ -160,10 +89,6 @@ void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target tar
             if (MetadataMatches(existing, expected)) {
                 (void)DiskQalsh::ValidateIndex(target_metadata, request.norm_order, request.approximation_ratio);
                 Log::info("Disk QALSH library index already exists at {}.", index_directory.string());
-                if (!std::filesystem::exists(DiskQalsh::FingerprintsPath(index_directory))) {
-                    WriteFingerprints(index_directory, ComputeFingerprints(target_metadata));
-                    Log::info("Added target fingerprints to {}.", index_directory.string());
-                }
                 return;
             }
             Log::error("Disk QALSH index already exists at {} but does not match requested parameters. Use --overwrite "
@@ -181,14 +106,12 @@ void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target tar
     PointSet points;
     points.Init(target_metadata);
     Point buffer(target_metadata.num_dimensions);
-    std::vector<std::uint64_t> fingerprints(target_metadata.num_points);
     const qalsh::PointAccessor accessor = [&](qalsh::PointId point_id) -> qalsh::PointView {
         // Builders call the accessor once per point, in ascending order on
         // this thread, so preserve the input stream's sequential buffering.
         if (!points.ReadNextPointInto(buffer)) {
             Log::error("Failed to read target point {} from {}.", point_id, target_metadata.file_path.string());
         }
-        fingerprints[point_id] = Fingerprint::Of(buffer.data(), buffer.size());
         return buffer;
     };
     unsigned int build_threads = 1;
@@ -215,7 +138,6 @@ void BuildOneIndex(const DiskQalsh::BuildRequest& request, DiskQalsh::Target tar
         qalsh::PersistentBuildOptions{.layout = request.layout,
                                       .page_size = qalsh::BPlusTreeIndex::kDefaultPageSize,
                                       .overwrite = true});
-    WriteFingerprints(index_directory, fingerprints);
     DiskQalsh::WriteMetadata(index_directory, expected);
     Log::info("Built disk QALSH {} index at {}.", DiskQalsh::IndexLayoutName(request.layout),
               index_directory.string());
@@ -346,10 +268,6 @@ std::filesystem::path TablesPath(const std::filesystem::path& index_directory) {
     return index_directory / "index.qalsh";
 }
 
-std::filesystem::path FingerprintsPath(const std::filesystem::path& index_directory) {
-    return index_directory / "fingerprints.bin";
-}
-
 PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_directory,
                                       const DatasetMetadata& dataset_metadata, Target target) {
     const bool is_a = target == Target::kA;
@@ -395,8 +313,52 @@ void WriteMetadata(const std::filesystem::path& index_directory, const IndexMeta
     value["bucket_width"] = metadata.bucket_width;
     value["layout"] = metadata.layout == qalsh::IndexLayout::sorted_array ? "sorted-array" : "b-plus-tree";
 
+    const std::filesystem::path destination = MetadataPath(index_directory);
+    std::string temporary_template = destination.string() + ".tmp-XXXXXX";
+    std::vector<char> temporary_name(temporary_template.begin(), temporary_template.end());
+    temporary_name.push_back('\0');
+    int fd = ::mkstemp(temporary_name.data());
+    if (fd < 0) {
+        Log::error("Failed to create disk QALSH metadata temporary file: {} ({})",
+                   destination.string(), std::strerror(errno));
+    }
+    const std::string temporary_path(temporary_name.data());
     const std::string serialized = value.dump(4);
-    InstallFileAtomically(MetadataPath(index_directory), serialized.data(), serialized.size(), "metadata");
+    bool installed = false;
+    try {
+        std::size_t written = 0;
+        while (written < serialized.size()) {
+            const ssize_t count = ::write(fd, serialized.data() + written, serialized.size() - written);
+            if (count < 0 && errno == EINTR) {
+                continue;
+            }
+            if (count <= 0) {
+                throw std::runtime_error("failed to write disk QALSH metadata");
+            }
+            written += static_cast<std::size_t>(count);
+        }
+        if (::fsync(fd) != 0) {
+            throw std::runtime_error("failed to flush disk QALSH metadata");
+        }
+        if (::close(fd) != 0) {
+            fd = -1;
+            throw std::runtime_error("failed to close disk QALSH metadata");
+        }
+        fd = -1;
+        if (::rename(temporary_path.c_str(), destination.c_str()) != 0) {
+            throw std::runtime_error("failed to atomically install disk QALSH metadata");
+        }
+        installed = true;
+    } catch (const std::exception& error) {
+        if (fd >= 0) {
+            (void)::close(fd);
+        }
+        (void)::unlink(temporary_path.c_str());
+        Log::error("Failed to write disk QALSH metadata {}: {}", destination.string(), error.what());
+    }
+    if (!installed) {
+        Log::error("Failed to install disk QALSH metadata: {}", destination.string());
+    }
 }
 
 IndexMetadata ExpectedMetadata(const PointSetMetadata& target_metadata, float norm_order, float approximation_ratio,
@@ -463,47 +425,6 @@ IndexMetadata ValidateIndex(const PointSetMetadata& target_metadata, float norm_
         Log::error("Failed to open library QALSH index at {}: {}", index_path.string(), error.what());
     }
     return metadata;
-}
-
-std::optional<std::vector<std::uint64_t>> ReadFingerprints(const PointSetMetadata& target_metadata,
-                                                           float norm_order) {
-    const std::filesystem::path index_directory =
-        IndexDirectory(target_metadata.file_path.parent_path(), norm_order,
-                       ParseTargetFromPointSetPath(target_metadata.file_path));
-    const std::filesystem::path path = FingerprintsPath(index_directory);
-    if (!std::filesystem::exists(path)) {
-        return std::nullopt;
-    }
-    const std::uintmax_t expected_bytes = static_cast<std::uintmax_t>(target_metadata.num_points) *
-                                          sizeof(std::uint64_t);
-    if (std::filesystem::file_size(path) != expected_bytes) {
-        Log::warn("Ignoring {}: expected {} bytes for {} points.", path.string(), expected_bytes,
-                  target_metadata.num_points);
-        return std::nullopt;
-    }
-    std::vector<std::uint64_t> fingerprints(target_metadata.num_points);
-    std::ifstream input(path, std::ios::binary);
-    input.read(reinterpret_cast<char*>(fingerprints.data()), static_cast<std::streamsize>(expected_bytes));
-    if (!input) {
-        Log::error("Failed to read target fingerprints from {}.", path.string());
-    }
-
-    // A matching length does not prove the file belongs to the current target set, so rehash evenly spaced points.
-    PointSet points;
-    points.Init(target_metadata);
-    Point point(target_metadata.num_dimensions);
-    const unsigned int num_checks = std::min(kFingerprintSpotChecks, target_metadata.num_points);
-    for (unsigned int check = 0; check < num_checks; ++check) {
-        const auto point_id = static_cast<unsigned int>(static_cast<std::uint64_t>(check) *
-                                                        target_metadata.num_points / num_checks);
-        points.ReadPointInto(point_id, point);
-        if (Fingerprint::Of(point.data(), point.size()) != fingerprints[point_id]) {
-            Log::warn("Ignoring {}: fingerprint of target point {} does not match {}.", path.string(), point_id,
-                      target_metadata.file_path.string());
-            return std::nullopt;
-        }
-    }
-    return fingerprints;
 }
 
 void BuildIndexes(const BuildRequest& request) {

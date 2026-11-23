@@ -181,58 +181,6 @@ The implementation computes `Delta_j` as the stable miss-probability tail
 
 Pass `--use-cache` to reuse generated quadtree weights. Quadtree cache filenames include the norm order, method, max-levels value, and source point set, for example `l1_quadtree_l3_weights_A.bin`, and cache contents are raw float32 weights.
 
-`estimate pool` avoids running QALSH for every source point. Each source point first gets a cheap upper bound,
-its distance to a uniform subsample of `-s/--subsample-size` target points, and source points that coincide with
-a target point are dropped because they contribute zero. The estimator then draws `-K/--pool-size` points in
-proportion to these bounds, runs Modified QALSH only on the distinct pooled points, and resamples
-`-n/--num-samples` pool draws in proportion to `D/U` for exact scans. `-n 0` reuses the QALSH4C automatic sample
-count as a reference budget; it does not by itself carry the QALSH4C `(epsilon, delta)` guarantee over to the
-pooled estimator. `-K 0` (the default) draws five times as many pool points as exact samples, and `--direct`
-skips QALSH entirely and scans points drawn in proportion to the upper bounds, which serves as a baseline;
-`--uniform` also skips the upper bounds and scans uniformly drawn source points from scratch. The estimate stays
-unbiased because each stage divides by its own sampling probability. With `--disk-based`, the estimator streams
-`A` once, probes the persistent QALSH index only for pooled points, and scans `B` sequentially for the exact
-stage. Logs report the pool size, the number of distinct QALSH queries, and the time spent in each stage:
-
-```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool -K 300 -n 100 -s 100
-```
-
-`--plan model` and `--plan certified` choose `K` and `T` themselves, so they reject `-K` and `-n`. A pilot of draws in
-proportion to the upper bounds runs Modified QALSH and an exact scan at every distinct drawn point. A model plan starts
-with `--pilot-size` draws (128 by default) and doubles them, up to 4096, until both coefficient estimates have an
-estimated relative standard error (delta method) of at most `--pilot-relative-error` (0.25 by default). This keeps
-the plan stable; it is not an accuracy guarantee. A certified plan keeps `--pilot-size` fixed. Disjoint pairs of pilot draws give the two variance coefficients of the pooled estimate, whose
-relative variance is `lambda0 / K + (1 - 1/K) lambda1 / T`, and the pilot's timings price one QALSH query and one
-exact scan. The plan starts from the square-root rule for `K`, tries a few sizes around it using the expected number
-of distinct pooled points, and pairs each with the smallest `T` that meets the target. `model` plugs in point
-estimates and aims at an RMS relative error of `--target-error` without guaranteeing it. `certified` plugs in
-empirical Bernstein upper bounds instead, which bound `P(|estimate / truth - 1| > --target-error)` by `--delta`, half
-of it spent on the pilot. A pooled plan switches to querying every source point when that is predicted to finish
-sooner, while `--full`, `--direct` and `--uniform` keep their design and only size `T` (`--uniform` with
-`--plan model` only). Later stages reuse the pilot's QALSH and
-exact results but not its draws, so the estimate stays unbiased. Plans run in memory only, and the log reports the
-coefficients, costs and choice:
-
-```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool --plan model --target-error 0.01
-```
-
-`--strata N` stratifies a plan. The source points are split into `N` equal-count strata by their upper bounds, at
-most 8. The pilot draws `--pilot-size / N` points in proportion to the bounds within each stratum, so `--strata 4`
-pairs with `--pilot-size 128` or more. Each stratum either draws in proportion to its upper bounds without QALSH, or
-runs Modified QALSH on every one of its points and draws in proportion to the fused distances.
-
-The strata are estimated independently. The estimate stays unbiased, and its variance is exactly the sum of the
-strata's one-stage variances. The pilot estimates every stratum's variance both ways and the plan tries every set of
-queried strata. Each set's draws follow the Neyman allocation, and the plan keeps the set with the lowest predicted
-QALSH and exact cost. A model plan also prices the unstratified pool from the same pilot and switches to it when that
-is cheaper. A certified plan stays stratified, with empirical Bernstein bounds for every stratum.
-
-```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab pool --plan model --target-error 0.01 --strata 4 --pilot-size 128
-```
-
 The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
 
 ```bash
@@ -269,11 +217,7 @@ B+ tree; pass `--layout sorted-array` to choose the persistent sorted-array
 layout. The file stores the actual projection vectors and layout metadata, so
 query processes do not regenerate projections. Existing matching indexes are
 reused; pass `--overwrite` to rebuild a selected target index. Historical flat
-`dot_vectors.bin`/`tables.bin` indexes must be rebuilt. The build also writes
-`fingerprints.bin`, one 64-bit hash per target point, which `estimate --disk-based pool` uses to detect source
-points that coincide with a target point without reading `B` again; hash hits are still confirmed by comparing the
-points. Running the build again on an existing index adds the file if it is missing, and estimates rehash `B` when
-the file is absent or no longer matches the target points.
+`dot_vectors.bin`/`tables.bin` indexes must be rebuilt.
 
 ```bash
 ./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist
