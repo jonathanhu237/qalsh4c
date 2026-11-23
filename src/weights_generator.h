@@ -1,7 +1,7 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "ann_searcher.h"
@@ -34,27 +34,32 @@ class UniformWeightsGenerator : public WeightsGenerator {
 // --------------------------------------------------
 // QalshWeightsGenerator Definition
 // --------------------------------------------------
+// Weights read from a file of float32 values, one per source point: the crude distances of an earlier run or of
+// another CrudeNN (for example HNSW), for experiments that repeat the estimator on fixed weights.
+class PrecomputedWeightsGenerator : public WeightsGenerator {
+   public:
+    explicit PrecomputedWeightsGenerator(std::filesystem::path path);
+    [[nodiscard]] bool RequiresIndex() const override;
+    std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
+                                 float norm_order, bool use_cache) override;
+
+   private:
+    std::filesystem::path path_;
+};
+
 class QalshWeightsGenerator : public WeightsGenerator {
    public:
     explicit QalshWeightsGenerator(float approximation_ratio = Global::kDefaultApproximationRatio);
-    QalshWeightsGenerator(std::optional<float> expected_approximation_ratio, unsigned int disk_query_batch_size,
-                          DiskQalshSearchOptions disk_qalsh_options = {});
     [[nodiscard]] bool RequiresIndex() const override;
     [[nodiscard]] QalshConfig BuildConfig(const PointSetMetadata& from_metadata,
                                           const PointSetMetadata& to_metadata, float norm_order,
                                           bool use_cache) const;
     [[nodiscard]] std::shared_ptr<const std::vector<Point>> TargetPoints() const;
-    void PreflightGenerate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
-                           float norm_order, bool use_cache) const;
     std::vector<Weight> Generate(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata,
                                  float norm_order, bool use_cache) override;
 
    private:
     float approximation_ratio_{Global::kDefaultApproximationRatio};
-    bool disk_based_{false};
-    unsigned int disk_query_batch_size_{Global::kDefaultDiskQueryBatchSize};
-    DiskQalshSearchOptions disk_qalsh_options_{};
-    std::optional<float> expected_approximation_ratio_;
     std::unique_ptr<AnnSearcher> ann_searcher_;
 };
 

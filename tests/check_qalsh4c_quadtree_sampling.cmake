@@ -77,25 +77,6 @@ if(NOT both_result EQUAL 0)
 endif()
 check_contains("${both_stdout}" "Direction: A <-> B" "bidirectional quadtree")
 
-execute_process(
-    COMMAND "${QALSH4C_BIN}" estimate
-        --disk-based
-        -p 1
-        -d "${dataset_dir}"
-        --direction ab
-        sampling
-        -n 5
-        quadtree
-    RESULT_VARIABLE disk_result
-    OUTPUT_VARIABLE disk_stdout
-    ERROR_VARIABLE disk_stderr
-)
-if(disk_result EQUAL 0)
-    message(FATAL_ERROR "disk-based quadtree sampling unexpectedly succeeded:\n${disk_stdout}\n${disk_stderr}")
-endif()
-string(CONCAT disk_output "${disk_stdout}" "${disk_stderr}")
-check_contains("${disk_output}" "Disk-based mode is currently implemented only for uniform and QALSH sampling estimators" "disk quadtree rejection")
-
 set(bad_cache_path "${dataset_dir}/l1_quadtree_l3_weights_A.bin")
 file(WRITE "${bad_cache_path}" "bad-cache")
 execute_process(

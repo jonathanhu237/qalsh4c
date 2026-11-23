@@ -1,7 +1,0 @@
-Test project /home/jonathanhu237/code/qalsh4c/build/perf-tsan
-    Start 28: qalsh_build_test
-1/1 Test #28: qalsh_build_test .................   Passed    2.90 sec
-
-100% tests passed, 0 tests failed out of 1
-
-Total Test time (real) =   2.90 sec

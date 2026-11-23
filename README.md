@@ -1,245 +1,80 @@
-# QALSH for Chamfer Distance
+# QALSH4C: Chamfer Distance with a Certified Sample Size
 
-Fast Chamfer Distance Approximation via Query-Aware Locality-Sensitive Hashing (QALSH).
+This repository holds the code of QALSH4C, which estimates the directed Chamfer distance
+CH(A -> B) = sum over a in A of d(a, B) by the importance-sampling estimator of Bakshi et al.:
 
-## Build Instructions
+1. **Crude distances.** QALSH-CrudeNN answers one query per source vector a and returns a crude distance
+   D_a >= d(a, B). It scans the projection entries of all m QALSH lines in non-decreasing distance from the query's
+   projection (the incremental scan of I-LSH, a "continuous front"), has no candidate budget, and returns as soon as
+   the best distance is at most c times the radius of the front.
+2. **Sample size.** E[D_a] <= kappa d(a, B), where kappa = 1 + c * int_{1/c}^inf F(x) dx and F is a binomial tail of
+   the QALSH collision probability. The program computes a certified upper bound on kappa from the QALSH parameters
+   alone (interval arithmetic, `src/kappa.cc`) and the sample size T = ceil((kappa - 1) / (delta epsilon^2)).
+3. **Sampling.** T source vectors are drawn with probability D_a / D, their exact nearest-neighbor distances are
+   computed, and eta = (1/T) sum D d(x, B) / D_x is returned.
 
-To build the project, you need to have the following dependencies installed:
+Everything that the estimator does runs in C++. The Python and shell files under `scripts/dasfaa` only run the
+binary, the FAISS and HNSW baselines, and summarize results.
 
-- [CMake](https://cmake.org/): version 3.28.3 or higher
-- [Ninja](https://ninja-build.org/): version 1.11.1 or higher
-- [GCC](https://gcc.gnu.org/): version 13.3.0 or higher
+## Build
 
-Pinned header-only copies of CLI11, Eigen, and nlohmann-json are vendored under
-`third_party`, so configure/build does not need network access for project
-dependencies. OpenMP is optional and enabled automatically when CMake can find a
-compatible local runtime.
-
-QALSH is maintained as an internal module in [`src/qalsh`](src/qalsh/README.md).
-No separate qalsh-lib checkout or installed QALSH package is required. Edit and
-commit QALSH search/index changes together with the QALSH4C consumers in this
-repository. The module's regression tests run with the normal CTest suite when
-`BUILD_TESTING=ON`; it has no separate installation or release process.
-
-CUDA ground-truth acceleration is optional. `QALSH4C_ENABLE_CUDA` accepts
-`AUTO`, `ON`, or `OFF` and defaults to `AUTO`; `AUTO` builds CUDA support when a
-CUDA compiler is available and otherwise builds a CPU-only binary. Use `ON` to
-require CUDA at configure time:
+Requirements: CMake 3.28.3 or newer, Ninja, and GCC 13 or newer. CLI11, Eigen and nlohmann-json are vendored under
+`third_party`. OpenMP is used when CMake finds it.
 
 ```bash
-cmake --preset release -DQALSH4C_ENABLE_CUDA=ON
-cmake --build --preset release
-```
-
-Use the `dev` preset for day-to-day development. It builds
-`./build/dev/qalsh4c` with debug symbols, warnings, ASan/UBSan, tests enabled,
-and `compile_commands.json`:
-
-```bash
-cmake --workflow --preset dev
-```
-
-Run the dev test suite separately:
-
-```bash
+cmake --workflow --preset release   # build/release/qalsh4c, -O3 -DNDEBUG -march=native
+cmake --workflow --preset dev       # build/dev/qalsh4c with ASan/UBSan and the tests
 ctest --preset dev
 ```
 
-Use the `release` preset for performance experiments and production runs. It
-builds `./build/release/qalsh4c` with tests disabled and
-`-O3 -DNDEBUG -march=native`; the resulting binary is optimized for the local
-CPU and may not be portable to other machines:
+The QALSH index and search live in [`src/qalsh`](src/qalsh/README.md) and are built and tested with the rest.
 
-```bash
-cmake --workflow --preset release
-```
+## Data layout
 
-The [runtime optimization report](docs/performance/2026-10-22-runtime.md) includes
-paired before/after measurements, raw results, correctness checks, and commands
-for reproducing the experiments on Centaurus.
-The [follow-up query experiments](docs/performance/2026-10-22-query.md) document
-additional candidates, their measured regressions, and why none were retained.
-
-## Sample Datasets
-
-The repository includes one committed canonical sample dataset:
-
-- `data/federalist`: 300-dimensional Federalist sample with 1880 points in A and 1178 points in B, with all directed $\ell_1$/$\ell_2$ ground-truth fields populated.
-
-## Dataset Preparation
-
-Datasets are prepared through the C++ CLI. A dataset directory contains `A.bin`, `B.bin`, and `metadata.json`; point files store row-major float32 values, and metadata stores point counts plus optional directed ground truth fields. This is a breaking data-format fork: older double-encoded point files must be regenerated or reconverted.
+A dataset directory holds `A.bin` and `B.bin` (row-major float32 vectors) and `metadata.json`:
 
 ```json
-{
-  "num_dimensions": 2,
-  "num_points": {
-    "a": 2,
-    "b": 2
-  },
-  "chamfer_distances": {
-    "l1": {
-      "ab": null,
-      "ba": null
-    },
-    "l2": {
-      "ab": 2.0,
-      "ba": null
-    }
-  }
-}
+{"num_dimensions": 300, "num_points": {"a": 1880, "b": 1178},
+ "chamfer_distances": {"l1": {"ab": 37563.8, "ba": 22028.1}, "l2": {"ab": 2719.1, "ba": 1597.5}}}
 ```
 
-Ground truth is not computed unless requested. Use a single comma-separated `--ground-truth` value with selectors from `l1:ab`, `l1:ba`, `l2:ab`, and `l2:ba`:
+The ground-truth fields are optional; when present, the program prints the relative error. `data/federalist` is a
+small example used by the tests.
+
+## Usage
 
 ```bash
-./build/dev/qalsh4c dataset generate gmm \
-  --num-points-a 1000 \
-  --num-points-b 1000 \
-  --num-dimensions 256 \
-  --outlier-fraction 0.1 \
-  --outlier-scale 4096 \
-  --seed 42 \
-  --ground-truth l2:ab,l2:ba \
-  -o data/generated
+# Certified kappa and T for l1 at c = 2 (the default continuous front).
+qalsh4c kappa -p 1 -c 2 -e 0.3 0.1
+
+# QALSH4C: T chosen from epsilon and delta (defaults 0.1 and 0.1), or given with -n.
+qalsh4c -T 24 estimate -p 2 -d data/federalist --direction ab sampling qalsh -c 2
+qalsh4c -T 24 estimate -p 2 -d data/federalist --direction ab sampling -n 469 qalsh -c 2
+
+# Exact Chamfer distance by the blocked linear scan; optionally save d(a, B) of every source vector.
+qalsh4c -T 24 estimate -p 2 -d data/federalist --direction ab ann --save-distances exact_l2.bin linear_scan
+
+# Baselines of the paper: uniform sampling and the quadtree weights of Bakshi et al.'s code.
+qalsh4c estimate -p 2 -d data/federalist sampling -n 469 uniform
+qalsh4c estimate -p 2 -d data/federalist sampling -n 469 quadtree --max-levels 3
 ```
 
-Existing datasets can be backfilled later:
+Options of `estimate ... sampling`:
 
-```bash
-./build/dev/qalsh4c dataset ground-truth \
-  -d data/generated \
-  --ground-truth l1:ab,l1:ba
-```
+| Option | Meaning |
+|---|---|
+| `-n` | Sample size T (otherwise QALSH weights take T from the certified kappa, `-e` and `--delta`) |
+| `--use-cache` | Reuse or write the crude distances in the dataset directory (`l<p>_qalsh_weights_A.bin`) |
+| `--repeats R` | Draw R independent samples from the same weights; each estimate is logged |
+| `--exact-distances FILE` | Look up d(a, B) of the sampled vectors in a float64 file (from `--save-distances`) instead of computing them; the estimates are the same. Used by the accuracy experiments, which repeat the estimator many times |
+| `precomputed -f FILE` | Weights from a float32 file, for example saved crude distances or HNSW distances |
 
-Ground-truth computation supports `--ground-truth-device auto|cpu|cuda` on
-generation, conversion, and backfill commands. The default `auto` mode uses the
-optional CUDA backend when the binary was built with CUDA and the default CUDA
-device can start the computation; otherwise it falls back to CPU before CUDA
-work begins. Use `cpu` to force the existing CPU/OpenMP path, or `cuda` to
-require CUDA and fail if CUDA support or device memory is unavailable. CUDA
-acceleration only applies to exact directed Chamfer ground-truth calculation;
-raw dataset parsing, shuffling, and writing remain CPU-side. The CUDA backend
-uses float32 precision and batches source points from runtime free-memory
-information while keeping target points resident on the default CUDA device.
-Use `--cuda-batch-size N` to explicitly cap CUDA source batch size for
-ground-truth computation; the default `0` keeps the automatic maximum batch.
-Smaller batches can make progress updates more granular on large datasets, but
-may add kernel-launch and transfer overhead.
+Global options of the QALSH search: `-T` threads, `--use-fixed-seed`, and, for the stopping-rule comparison of the
+paper, `--qalsh-stop-rule round --qalsh-scan-order quanta --qalsh-advance-check false` (rounds R_t = R_0 c^t with
+end-of-round tests, gamma = c) plus `--qalsh-stop-within-round` (QALSH's test on every new candidate, gamma = c^2) and
+`--initial-radius 1.4e-45` (R_0 = 2^-149, valid for any float32 data). `kappa` takes the same options and certifies
+the constant of the selected rule.
 
-Generation and conversion refuse to replace `A.bin`, `B.bin`, or `metadata.json` unless `--overwrite` is provided. Overwriting a dataset removes any stale `index/` directory. Ground-truth backfill also refuses to replace existing numeric values unless `--overwrite` is provided.
+## Experiments
 
-Known raw datasets can be converted with:
-
-```bash
-./build/dev/qalsh4c dataset convert mnist --raw-dir raw/mnist -o data/mnist
-./build/dev/qalsh4c dataset convert p53 --raw-dir raw/p53 -o data/p53
-./build/dev/qalsh4c dataset convert sift --raw-dir raw/sift -o data/sift
-./build/dev/qalsh4c dataset convert gist --raw-dir raw/gist -o data/gist
-./build/dev/qalsh4c dataset convert trevi --raw-dir raw/trevi -o data/trevi
-```
-
-Conversion defaults to shuffling points before a 50/50 A/B split. Use `--seed` for reproducible shuffling, `--no-shuffle` to preserve source order, and `--num-points-a` to choose the A split size. SIFT and GIST conversion read only `sift_base.fvecs` and `gist_base.fvecs`; `learn` and `query` files are kept as raw inputs but are not mixed into the prepared dataset. MNIST conversion reads `train-images-idx3-ubyte` and `t10k-images-idx3-ubyte` from the raw directory and does not download data. Trevi conversion uses an internal BMP reader for uncompressed 8-bit grayscale palette and 24-bit BGR BMP files, then extracts non-overlapping 64x64 grayscale patches.
-
-## Estimate
-
-We provide five methods for estimating the Chamfer distance:
-
-- Linear Scan ANN
-- QALSH ANN
-- Uniform Sampling
-- QALSH Sampling
-- Quadtree Sampling
-
-Non-disk QALSH uses an in-memory index. QALSH ANN and QALSH sampling build the
-needed target-side hash tables inside the current process from `A.bin` and
-`B.bin`. Configure the approximation ratio on the QALSH subcommand:
-
-```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab ann qalsh -c 2
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 100 qalsh -c 2
-```
-
-For QALSH sampling, omit `--num-samples` to let the implementation choose the sample count automatically. The automatic count uses the revised QALSH4C bound
-`ceil((kappa_exp - 1) / (delta * epsilon^2))`, where
-`kappa_exp = c^2 * (1 + (c - 1) * S_bound)`,
-`S_bound = sum_{j=0}^J c^j * Delta_j + B_J`, and `B_J < 1e-10`.
-The implementation computes `Delta_j` as the stable miss-probability tail
-`Pr[Binomial(m, q_j) >= m - l + 1]`; for L1,
-`q_j = 2/pi * atan(2 / (w * c^j))`, and for L2,
-`q_j = erfc(w * c^j / (2 * sqrt(2)))`. Tune the estimator with
-`--epsilon`, `--delta`, and the QALSH subcommand's `-c/--approximation-ratio`.
-
-`sampling qalsh --use-cache` stores and reads raw float32 weight files such as `l2_qalsh_weights_A.bin`. Cache filenames are unchanged from earlier releases, but stale double-encoded caches are rejected by file-size validation and should be deleted.
-
-`sampling quadtree` is an in-memory benchmark implementation of the deterministic quadtree/DFS importance weights from the Bakshi4C supplementary notebook. It supports L1 and L2 crude-distance weights, uses `--max-levels 3` by default, and preserves the notebook's stack-based DFS sibling order. Quadtree sampling works with `--direction ab`, `ba`, or `both`, but it does not support `--disk-based`:
-
-```bash
-./build/dev/qalsh4c estimate -p 1 -d ./data/federalist --direction ab sampling -n 20 quadtree
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab sampling -n 20 quadtree --max-levels 3
-```
-
-Pass `--use-cache` to reuse generated quadtree weights. Quadtree cache filenames include the norm order, method, max-levels value, and source point set, for example `l1_quadtree_l3_weights_A.bin`, and cache contents are raw float32 weights.
-
-The `estimate` command also accepts `--direction ab|ba|both` and defaults to `ab`. You can use linear scan on the Federalist sample dataset to check exact directed distances without building an index:
-
-```bash
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ab ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction ba ann linear_scan
-./build/dev/qalsh4c estimate -p 2 -d ./data/federalist --direction both ann linear_scan
-```
-
-Exact nearest neighbors, in linear scan and in the exact stage of every sampling estimator (in memory and
-disk-based), are found in batches. A fast pass computes approximate distances for blocks of targets: blocked matrix
-products through `||x - y||^2 = ||x||^2 + ||y||^2 - 2 <x, y>` for L2, and vectorized sums of absolute differences
-shared by groups of queries for L1. A rounding-error bound decides which targets can still win, and every one of them
-is rescored with the scalar kernel, so the distances are the same as a scalar scan's. Pass `--scalar-exact-scan`
-before the subcommand to use the scalar kernel throughout, as an ablation.
-
-Pass `--disk-based` at the `estimate` level to use an external-memory
-implementation where available. Disk-based exact linear scan streams query
-points from disk in batches and scans target points in blocks instead of loading
-either point set in full. Disk-based uniform sampling samples query point ids
-without materializing a full weight vector, then uses the same disk-based exact
-scan for sampled points. Tune the target block size with `--disk-block-size` and
-the query batch size with `--disk-query-batch-size`:
-
-```bash
-./build/dev/qalsh4c estimate --disk-based --disk-block-size 4096 --disk-query-batch-size 64 -p 2 -d ./data/federalist --direction ab ann linear_scan
-```
-
-Disk-based QALSH requires an explicit target-side index. The default target is
-`b`, matching the default `--direction ab`; use `--target a` for `ba`, or
-`--target both` before bidirectional estimates. Indexes are written under
-`<dataset>/index/qalsh/<l1|l2>/<a|b>/` as a sidecar `meta.json` plus the
-internal module’s immutable `index.qalsh` persistent file. The default layout is a
-B+ tree; pass `--layout sorted-array` to choose the persistent sorted-array
-layout. The file stores the actual projection vectors and layout metadata, so
-query processes do not regenerate projections. Existing matching indexes are
-reused; pass `--overwrite` to rebuild a selected target index. Historical flat
-`dot_vectors.bin`/`tables.bin` indexes must be rebuilt.
-
-```bash
-./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist
-./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist --layout sorted-array --overwrite
-./build/dev/qalsh4c index qalsh -p 2 -d ./data/federalist --target both --seed 42 --overwrite
-./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab ann qalsh
-./build/dev/qalsh4c estimate --disk-based -p 2 -d ./data/federalist --direction ab sampling --use-cache -n 100 qalsh
-```
-
-Disk QALSH estimates do not build indexes automatically and do not fall back to
-linear scan when an index is missing or mismatched. If `-c/--approximation-ratio`
-is omitted, disk QALSH uses the value stored in `meta.json`; if it is provided,
-it must match the index metadata.
-
-Disk QALSH opens the recorded index layout read-only and uses the shared
-search engine for both B+ tree pages and sorted-array regions. The internal QALSH module owns
-the persistent format and shares immutable metadata across searcher clones;
-candidate vectors remain caller-owned and are read by point ID. The legacy `--disk-qalsh-table-block-size` and
-`--disk-qalsh-table-cache-blocks` options remain accepted for workflow
-compatibility, but traversal behavior is controlled by the index's stored
-layout and page/region size. Pass `--disk-qalsh-profile` to print query,
-logical projection-hit, candidate-read, and search-time counters; software
-traversal counters are reported separately from physical I/O.
-
-The top-level `-T, --threads` option controls OpenMP parallelism and defaults to the detected system processor count. Pass `-T N` before the subcommand to run with `N` threads, for example `./build/dev/qalsh4c -T 8 estimate ...`.
+`scripts/dasfaa/runs/README.md` describes the pipeline that produced the numbers of the DASFAA 2027 paper.

@@ -263,8 +263,6 @@ void TestEmptyAndExactTail() {
 }  // namespace
 
 int main() {
-    std::cout << "window clamp mode: "
-              << (qalsh::window_detail::UsesSse2() ? "sse2" : "scalar") << '\n';
     TestExhaustiveSmallRanges();
     TestRandomizedBoundaryLengths();
     TestFloatingPointBoundaries();

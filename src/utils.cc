@@ -199,45 +199,32 @@ float Memory::Usage() {
     return static_cast<float>(memory_usage) / 1024.0F;  // NOLINT: readability-magic-numbers
 }
 
-unsigned int Sample::FromWeights(const std::vector<Weight> &weights) {
-    Weight total_sum = std::accumulate(weights.begin(), weights.end(), 0.0F);
-    if (total_sum <= 0) {
-        throw std::runtime_error("Total sum of weights must be positive.");
-    }
-
-    std::vector<Weight> cumulative_weights;
-    cumulative_weights.reserve(weights.size());
-    std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights));
-
-    static std::mt19937 gen = Random::SeededGenerator();
-    std::uniform_real_distribution<Weight> dis(0.0F, total_sum);
-    Weight random_value = dis(gen);
-
-    auto it = std::ranges::upper_bound(cumulative_weights, random_value);
-
-    return static_cast<unsigned int>(std::distance(cumulative_weights.begin(), it));
-}
-
 WeightedSampler::WeightedSampler(const std::vector<Weight> &weights) : gen_(Random::SeededGenerator()) {
-    total_ = std::accumulate(weights.begin(), weights.end(), 0.0F);
-    if (total_ <= 0) {
+    cumulative_weights_.reserve(weights.size());
+    double running_total = 0.0;
+    for (const Weight weight : weights) {
+        if (!(weight >= 0.0F) || !std::isfinite(weight)) {
+            throw std::runtime_error("Weights must be finite and non-negative.");
+        }
+        running_total += static_cast<double>(weight);
+        cumulative_weights_.push_back(running_total);
+    }
+    total_ = running_total;
+    if (!(total_ > 0.0)) {
         throw std::runtime_error("Total sum of weights must be positive.");
     }
-
-    cumulative_weights_.reserve(weights.size());
-    std::partial_sum(weights.begin(), weights.end(), std::back_inserter(cumulative_weights_));
 }
 
 unsigned int WeightedSampler::Sample() {
-    std::uniform_real_distribution<Weight> dis(0.0F, total_);
-    const Weight random_value = dis(gen_);
-    auto it = std::ranges::upper_bound(cumulative_weights_, random_value);
-    if (it == cumulative_weights_.end()) {
-        return static_cast<unsigned int>(cumulative_weights_.size() - 1);
+    std::uniform_real_distribution<double> dis(0.0, total_);
+    double random_value = dis(gen_);
+    // uniform_real_distribution may return its upper end after rounding; draw again in that case.
+    while (random_value >= total_) {
+        random_value = dis(gen_);
     }
+    // The first index whose cumulative weight exceeds the draw; zero weights are never chosen.
+    const auto it = std::ranges::upper_bound(cumulative_weights_, random_value);
     return static_cast<unsigned int>(std::distance(cumulative_weights_.begin(), it));
 }
 
-Weight WeightedSampler::Total() const {
-    return total_;
-}
+double WeightedSampler::Total() const { return total_; }

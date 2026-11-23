@@ -1,107 +1,69 @@
 #include <qalsh/qalsh.h>
-#include <cmath>
+#include <cstdint>
 #include <limits>
-#include <random>
 #include <source_location>
 #include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
 void Check(bool b, std::source_location location = std::source_location::current()) {
     if (!b) throw std::runtime_error("distance regression failed at line " + std::to_string(location.line()));
 }
-void CheckProjectionGrouping() {
-    std::mt19937 generator(7);
-    std::uniform_real_distribution<float> random(-1,1);
-    for (unsigned dimension : {1U,3U,4U,5U,63U,64U,65U,300U,784U,960U}) {
-        std::vector<std::vector<float>> points(12,std::vector<float>(dimension));
-        for(auto& p:points) for(auto& x:p) x=random(generator);
-        qalsh::PointAccessor accessor=[&](qalsh::PointId id)->qalsh::PointView{return points.at(id);};
-        qalsh::IndexConfig config;
-        config.num_points=12;config.num_dimensions=dimension;
-        config.qalsh.num_hash_tables=5;config.qalsh.collision_threshold=1;config.qalsh.bucket_width=2;
-        config.projection_vectors.resize(5*dimension);
-        for(auto& x:config.projection_vectors)x=random(generator);
-        const auto grouped=qalsh::InMemoryIndex::Build(config,accessor);
-        auto read=[](const qalsh::ProjectionIndex& index,unsigned table){
-            std::vector<float> values(12);
-            auto cursor=index.make_cursor(table,0);
-            const auto report=index.scan(*cursor,std::numeric_limits<float>::max(),100,&values,
-                [](void* p,const qalsh::ProjectionHit& h){(*static_cast<std::vector<float>*>(p)).at(h.point_id)=h.projected_value;});
-            Check(report.table_exhausted);
-            return values;
-        };
-        for(unsigned table=0;table<5;++table){
-            auto single=config;single.qalsh.num_hash_tables=1;
-            single.projection_vectors.assign(config.projection_vectors.begin()+table*dimension,
-                                               config.projection_vectors.begin()+(table+1)*dimension);
-            const auto separate=qalsh::InMemoryIndex::Build(single,accessor);
-            const auto grouped_values=read(*grouped,table), separate_values=read(*separate,0);
-            // OpenMP SIMD may choose different reduction trees for one and
-            // four simultaneous dot products, especially with -march=native.
-            // Check both against exact float products accumulated in extended
-            // precision, using the standard gamma_(2*n) forward error bound.
-            const long double u=std::numeric_limits<float>::epsilon()/2.0L;
-            const long double gamma=(2*dimension*u)/(1-2*dimension*u);
-            const long double reference_u=std::numeric_limits<long double>::epsilon()/2.0L;
-            const long double reference_gamma=(dimension*reference_u)/(1-dimension*reference_u);
-            for(unsigned point=0;point<points.size();++point){
-                long double reference=0, magnitude=0;
-                for(unsigned coordinate=0;coordinate<dimension;++coordinate){
-                    const long double product=static_cast<long double>(points[point][coordinate])*
-                                              single.projection_vectors[coordinate];
-                    reference+=product;
-                    magnitude+=std::abs(product);
-                }
-                const long double allowed_error=(gamma+reference_gamma)*magnitude/(1-reference_gamma);
-                for(const float value : {grouped_values[point],separate_values[point]}) {
-                    Check(std::isfinite(value) && std::abs(value-reference)<=allowed_error);
-                }
-            }
-        }
-    }
+
+// A search engine over the given points and a one-table index with the given projection vector.
+qalsh::SearchEngine Engine(const std::vector<std::vector<float>>& points, std::vector<float> projection_vector,
+                           qalsh::Metric metric = qalsh::Metric::l2) {
+    qalsh::IndexConfig config;
+    config.metric = metric;
+    config.num_points = static_cast<std::uint32_t>(points.size());
+    config.num_dimensions = static_cast<std::uint32_t>(projection_vector.size());
+    config.qalsh.num_hash_tables = 1;
+    config.qalsh.collision_threshold = 1;
+    config.qalsh.bucket_width = 2.5F;
+    config.projection_vectors = std::move(projection_vector);
+    const qalsh::PointAccessor accessor = [&points](qalsh::PointId id) -> qalsh::PointView { return points.at(id); };
+    return qalsh::SearchEngine(qalsh::InMemoryIndex::Build(config, accessor), accessor);
 }
+
 int main() {
-    CheckProjectionGrouping();
-    std::mt19937 generator(42);
-    std::uniform_real_distribution<float> distribution(-1,1);
-    for (unsigned dimension : {1U,2U,63U,64U,65U,784U,4096U}) {
-        std::vector<float> a(dimension),b(dimension);
-        for (auto& x:a) x=distribution(generator);
-        for (auto& x:b) x=distribution(generator);
-        for (auto norm : {qalsh::Metric::l1,qalsh::Metric::l2}) {
-            const float d=qalsh::DistanceValue(a,b,norm);
-            const auto unbounded=qalsh::BoundedDistanceValue(a,b,norm,std::numeric_limits<float>::infinity());
-            const auto bounded=qalsh::BoundedDistanceValue(a,b,norm,d);
-            Check(unbounded.exact && bounded.exact && d==unbounded.distance && d==bounded.distance);
-            const auto too_small=qalsh::BoundedDistanceValue(a,b,norm,std::nextafter(d,0.0F));
-            Check(!too_small.exact && std::isinf(too_small.distance));
-        }
-    }
-    const float zero=0;
-    for (float value : {1e-30F,1e-22F,1e20F}) {
-        const qalsh::PointView a(&value,1),b(&zero,1);
-        Check(qalsh::L2Distance(a,b)==value);
-        const auto bounded=qalsh::BoundedDistanceValue(a,b,qalsh::Metric::l2,value);
-        Check(bounded.exact && bounded.distance==value);
+    const qalsh::DefaultQalshStrategy strategy;
+    // Distances whose squares do not fit in float32 are still exact.
+    for (float value : {1e-30F, 1e-22F, 1e20F}) {
+        const std::vector<std::vector<float>> points{{value}};
+        const auto result = Engine(points, {1}).search(std::vector<float>{0}, 1, strategy);
+        Check(result.complete && result.neighbors.size() == 1 && result.neighbors[0].distance == value);
     }
     // width*radius may overflow float even when width*radius/2 fits.
-    const float far=2e38F;
-    qalsh::IndexConfig config;config.num_points=1;config.num_dimensions=1;
-    config.qalsh.num_hash_tables=1;config.qalsh.collision_threshold=1;config.qalsh.bucket_width=2.5F;
-    config.projection_vectors={1};
-    qalsh::PointAccessor accessor=[&](qalsh::PointId)->qalsh::PointView{return {&far,1};};
-    qalsh::SearchEngine engine(qalsh::InMemoryIndex::Build(config,accessor),accessor);
-    qalsh::DefaultQalshStrategy strategy;
-    const auto result=engine.search({&zero,1},1,strategy);
-    Check(result.complete && result.neighbors.size()==1 && result.neighbors[0].distance==far);
+    const float far = 2e38F;
+    {
+        const std::vector<std::vector<float>> points{{far}};
+        const auto result = Engine(points, {1}).search(std::vector<float>{0}, 1, strategy);
+        Check(result.complete && result.neighbors.size() == 1 && result.neighbors[0].distance == far);
+    }
 
-    const float maximum=std::numeric_limits<float>::max();
-    const std::vector<float> a{maximum,maximum},b{0,0};
-    for (auto norm : {qalsh::Metric::l1,qalsh::Metric::l2}) {
-        bool threw=false;
-        try { (void)qalsh::DistanceValue(a,b,norm); }
-        catch(const std::overflow_error&) { threw=true; }
-        Check(threw);
-        Check(!qalsh::BoundedDistanceValue(a,b,norm,maximum).exact);
+    // All points project to zero, so every point is a candidate in the first round, in increasing id.
+    const float maximum = std::numeric_limits<float>::max();
+    const std::vector<float> query{-maximum, 0};
+    for (auto norm : {qalsh::Metric::l1, qalsh::Metric::l2}) {
+        // Without a bound, a distance above the float32 range is an error.
+        {
+            const std::vector<std::vector<float>> points{{maximum, 0}};
+            const auto engine = Engine(points, {0, 1}, norm);
+            bool threw = false;
+            try {
+                (void)engine.search(query, 1, strategy);
+            } catch (const std::overflow_error&) {
+                threw = true;
+            }
+            Check(threw);
+        }
+        // With the bound of the first neighbor, at distance maximum, the same candidate is rejected instead.
+        {
+            const std::vector<std::vector<float>> points{{0, 0}, {maximum, 0}};
+            const auto result = Engine(points, {0, 1}, norm).search(query, 1, strategy);
+            Check(result.neighbors.size() == 1 && result.neighbors[0].point_id == 0 &&
+                  result.neighbors[0].distance == maximum && result.evaluated_candidates == 2);
+        }
     }
 }

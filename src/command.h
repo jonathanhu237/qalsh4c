@@ -2,10 +2,9 @@
 
 #include <filesystem>
 #include <memory>
+#include <vector>
 
 #include "config.h"
-#include "dataset.h"
-#include "disk_qalsh_index.h"
 #include "estimator.h"
 
 class Command {
@@ -27,38 +26,16 @@ class EstimateCommand : public Command {
     ChamferDirection direction_;
 };
 
-class QalshIndexCommand : public Command {
+// Prints the certified bound on kappa and the sample sizes T it gives (Theorems 1 and 2) for the QALSH parameters that
+// a norm and an approximation ratio determine, under the current stopping rule.
+class KappaCommand : public Command {
    public:
-    explicit QalshIndexCommand(DiskQalsh::BuildRequest request);
+    KappaCommand(float norm_order, float approximation_ratio, std::vector<double> epsilons, double delta);
     void Execute() override;
 
    private:
-    DiskQalsh::BuildRequest request_;
-};
-
-class DatasetGenerateGmmCommand : public Command {
-   public:
-    explicit DatasetGenerateGmmCommand(DatasetPrep::GmmOptions options);
-    void Execute() override;
-
-   private:
-    DatasetPrep::GmmOptions options_;
-};
-
-class DatasetConvertCommand : public Command {
-   public:
-    explicit DatasetConvertCommand(DatasetPrep::ConvertOptions options);
-    void Execute() override;
-
-   private:
-    DatasetPrep::ConvertOptions options_;
-};
-
-class DatasetGroundTruthCommand : public Command {
-   public:
-    explicit DatasetGroundTruthCommand(DatasetPrep::GroundTruthOptions options);
-    void Execute() override;
-
-   private:
-    DatasetPrep::GroundTruthOptions options_;
+    float norm_order_;
+    float approximation_ratio_;
+    std::vector<double> epsilons_;
+    double delta_;
 };

@@ -28,19 +28,16 @@ class Memory {
     static float Usage();
 };
 
-class Sample {
-   public:
-    static unsigned int FromWeights(const std::vector<Weight> &weights);
-};
-
+// Draws index i with probability weights[i] / Total(). The cumulative sums and the uniform draws are kept in double
+// precision, so small weights keep their probabilities even when the total is many orders of magnitude larger.
 class WeightedSampler {
    public:
     explicit WeightedSampler(const std::vector<Weight> &weights);
     unsigned int Sample();
-    Weight Total() const;
+    double Total() const;
 
    private:
-    std::vector<Weight> cumulative_weights_;
-    Weight total_{0.0};
+    std::vector<double> cumulative_weights_;
+    double total_{0.0};
     std::mt19937 gen_;
 };

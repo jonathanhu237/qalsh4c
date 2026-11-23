@@ -19,7 +19,6 @@
 
 #include "ann_searcher.h"
 #include "config.h"
-#include "disk_qalsh_index.h"
 #include "global.h"
 #include "log.h"
 #include "point_set.h"
@@ -322,85 +321,6 @@ void MakeWeightsPositive(std::vector<Weight>& weights) {
     }
 }
 
-void ReadContiguousPointBatch(std::ifstream& input, const PointSetMetadata& metadata, unsigned int batch_begin,
-                              unsigned int point_count, std::vector<Coordinate>& buffer) {
-    const size_t coordinate_count = static_cast<size_t>(point_count) * metadata.num_dimensions;
-    buffer.resize(coordinate_count);
-    const auto bytes_to_read =
-        static_cast<std::streamsize>(coordinate_count * static_cast<size_t>(sizeof(Coordinate)));
-    input.read(reinterpret_cast<char*>(buffer.data()), bytes_to_read);
-    if (input.gcount() != bytes_to_read) {
-        Log::error("Failed to read query batch starting at point {} from {}.", batch_begin,
-                   metadata.file_path.string());
-    }
-}
-
-void GenerateWeightsFromSearcherStreaming(AnnSearcher& ann_searcher, const PointSetMetadata& from_metadata,
-                                          unsigned int query_batch_size, std::vector<Weight>& weights) {
-    if (query_batch_size == 0) {
-        Log::error("Disk query batch size must be positive.");
-    }
-
-    auto* root_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(&ann_searcher);
-    if (root_disk_qalsh_searcher != nullptr) {
-        root_disk_qalsh_searcher->ResetProfile();
-    }
-
-    std::ifstream query_input(from_metadata.file_path, std::ios::binary);
-    if (!query_input.is_open()) {
-        Log::error("Could not open query point set file: {}", from_metadata.file_path.string());
-    }
-
-    std::vector<Coordinate> query_batch;
-    query_batch.reserve(static_cast<size_t>(query_batch_size) * from_metadata.num_dimensions);
-
-#ifdef QALSH4C_USE_OPENMP
-#pragma omp parallel
-    {
-        std::unique_ptr<AnnSearcher> local_searcher = ann_searcher.Clone();
-        Point query_point(from_metadata.num_dimensions);
-
-        for (unsigned int batch_begin = 0; batch_begin < from_metadata.num_points; batch_begin += query_batch_size) {
-            const unsigned int query_count = std::min(query_batch_size, from_metadata.num_points - batch_begin);
-
-#pragma omp single
-            ReadContiguousPointBatch(query_input, from_metadata, batch_begin, query_count, query_batch);
-
-#pragma omp for schedule(dynamic)
-            for (long long query_index = 0; query_index < static_cast<long long>(query_count); ++query_index) {
-                const auto local_query_index = static_cast<unsigned int>(query_index);
-                const Coordinate* query_data =
-                    query_batch.data() + static_cast<size_t>(local_query_index) * from_metadata.num_dimensions;
-                std::copy_n(query_data, from_metadata.num_dimensions, query_point.begin());
-                weights[batch_begin + local_query_index] = local_searcher->Search(query_point).distance;
-            }
-        }
-
-        if (root_disk_qalsh_searcher != nullptr) {
-            auto* local_disk_qalsh_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(local_searcher.get());
-            if (local_disk_qalsh_searcher != nullptr) {
-                const DiskQalshProfileSnapshot snapshot = local_disk_qalsh_searcher->ProfileSnapshot();
-#pragma omp critical(disk_qalsh_profile_merge)
-                root_disk_qalsh_searcher->MergeProfile(snapshot);
-            }
-        }
-    }
-#else
-    for (unsigned int batch_begin = 0; batch_begin < from_metadata.num_points; batch_begin += query_batch_size) {
-        const unsigned int query_count = std::min(query_batch_size, from_metadata.num_points - batch_begin);
-        ReadContiguousPointBatch(query_input, from_metadata, batch_begin, query_count, query_batch);
-
-        Point query_point(from_metadata.num_dimensions);
-        for (unsigned int local_query_index = 0; local_query_index < query_count; ++local_query_index) {
-            const Coordinate* query_data =
-                query_batch.data() + static_cast<size_t>(local_query_index) * from_metadata.num_dimensions;
-            std::copy_n(query_data, from_metadata.num_dimensions, query_point.begin());
-            weights[batch_begin + local_query_index] = ann_searcher.Search(query_point).distance;
-        }
-    }
-#endif
-}
-
 }  // namespace
 
 // --------------------------------------------------
@@ -415,6 +335,35 @@ std::vector<Weight> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
                                                       [[maybe_unused]] float norm_order,
                                                       [[maybe_unused]] bool use_cache) {
     std::vector<Weight> weights(from_metadata.num_points, 1.0);
+    return weights;
+}
+
+// --------------------------------------------------
+// PrecomputedWeightsGenerator Implementation
+// --------------------------------------------------
+PrecomputedWeightsGenerator::PrecomputedWeightsGenerator(std::filesystem::path path) : path_(std::move(path)) {}
+
+bool PrecomputedWeightsGenerator::RequiresIndex() const { return false; }
+
+std::vector<Weight> PrecomputedWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
+                                                          [[maybe_unused]] const PointSetMetadata& to_metadata,
+                                                          [[maybe_unused]] float norm_order,
+                                                          [[maybe_unused]] bool use_cache) {
+    std::ifstream input(path_, std::ios::binary | std::ios::ate);
+    if (!input.is_open()) {
+        Log::error("Failed to open the weights file: {}", path_.string());
+    }
+    const auto expected_bytes =
+        static_cast<std::streamoff>(from_metadata.num_points) * static_cast<std::streamoff>(sizeof(Weight));
+    if (input.tellg() != expected_bytes) {
+        Log::error("The weights file {} should hold {} float32 values.", path_.string(), from_metadata.num_points);
+    }
+    input.seekg(0);
+    std::vector<Weight> weights(from_metadata.num_points);
+    input.read(reinterpret_cast<char*>(weights.data()), expected_bytes);
+    if (!input) {
+        Log::error("Failed to read the weights file: {}", path_.string());
+    }
     return weights;
 }
 
@@ -530,41 +479,13 @@ QalshWeightsGenerator::QalshWeightsGenerator(float approximation_ratio)
     : approximation_ratio_(approximation_ratio),
       ann_searcher_(std::make_unique<QalshAnnSearcher>(approximation_ratio_)) {}
 
-QalshWeightsGenerator::QalshWeightsGenerator(std::optional<float> expected_approximation_ratio,
-                                             unsigned int disk_query_batch_size,
-                                             DiskQalshSearchOptions disk_qalsh_options)
-    : approximation_ratio_(expected_approximation_ratio.value_or(Global::kDefaultApproximationRatio)),
-      disk_based_(true),
-      disk_query_batch_size_(disk_query_batch_size),
-      disk_qalsh_options_(disk_qalsh_options),
-      expected_approximation_ratio_(expected_approximation_ratio),
-      ann_searcher_(std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_,
-                                                                 disk_qalsh_options_)) {}
-
 bool QalshWeightsGenerator::RequiresIndex() const {
     return false;
 }
 
-QalshConfig QalshWeightsGenerator::BuildConfig(const PointSetMetadata& from_metadata,
+QalshConfig QalshWeightsGenerator::BuildConfig([[maybe_unused]] const PointSetMetadata& from_metadata,
                                                const PointSetMetadata& to_metadata, float norm_order,
-                                               bool use_cache) const {
-    if (disk_based_) {
-        if (use_cache && HasValidQalshWeightsCache(from_metadata, norm_order)) {
-            const DiskQalsh::Target target = DiskQalsh::ParseTargetFromPointSetPath(to_metadata.file_path);
-            const std::filesystem::path index_directory =
-                DiskQalsh::IndexDirectory(to_metadata.file_path.parent_path(), norm_order, target);
-            if (std::filesystem::exists(index_directory)) {
-                return DiskQalsh::ValidateIndex(to_metadata, norm_order, expected_approximation_ratio_).ToConfig();
-            }
-
-            QalshConfig config{.approximation_ratio = approximation_ratio_};
-            config.Regularize(to_metadata.num_points, norm_order);
-            return config;
-        }
-
-        return DiskQalsh::ValidateIndex(to_metadata, norm_order, expected_approximation_ratio_).ToConfig();
-    }
-
+                                               [[maybe_unused]] bool use_cache) const {
     QalshConfig config{.approximation_ratio = approximation_ratio_};
     config.Regularize(to_metadata.num_points, norm_order);
     return config;
@@ -576,24 +497,6 @@ std::shared_ptr<const std::vector<Point>> QalshWeightsGenerator::TargetPoints() 
         return {};
     }
     return qalsh_searcher->TargetPoints();
-}
-
-void QalshWeightsGenerator::PreflightGenerate(const PointSetMetadata& from_metadata,
-                                              const PointSetMetadata& to_metadata, float norm_order,
-                                              bool use_cache) const {
-    if (!disk_based_) {
-        return;
-    }
-
-    if (use_cache && HasValidQalshWeightsCache(from_metadata, norm_order)) {
-        return;
-    }
-
-    const auto* disk_searcher = dynamic_cast<const DiskBasedQalshAnnSearcher*>(ann_searcher_.get());
-    if (disk_searcher == nullptr) {
-        Log::error("Disk QALSH weights generator is not configured with a disk QALSH searcher.");
-    }
-    disk_searcher->PreflightIndex(to_metadata, norm_order);
 }
 
 std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from_metadata,
@@ -615,18 +518,6 @@ std::vector<Weight> QalshWeightsGenerator::Generate(const PointSetMetadata& from
     const auto init_start = std::chrono::steady_clock::now();
     ann_searcher_->Init(to_metadata, norm_order);
     const auto init_end = std::chrono::steady_clock::now();
-
-    if (disk_based_) {
-        GenerateWeightsFromSearcherStreaming(*ann_searcher_, from_metadata, disk_query_batch_size_, weights);
-        auto* disk_searcher = dynamic_cast<DiskBasedQalshAnnSearcher*>(ann_searcher_.get());
-        if (disk_searcher != nullptr) {
-            disk_searcher->PrintProfile();
-        }
-        if (use_cache) {
-            WriteQalshWeightsCache(from_metadata, norm_order, weights);
-        }
-        return weights;
-    }
 
 #ifdef QALSH4C_USE_OPENMP
     std::vector<Point> query_points =

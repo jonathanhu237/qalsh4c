@@ -1,3 +1,0 @@
-71c4adaf8989a5762a7545566e911fc7a0cac3e219c5fc43ee77f1e95be7544e  build/perf-round2/baseline-source/src/qalsh/include/qalsh/qalsh.h
-f6d6cf8c9a3b6b95028821557c59d583d1c95fd1c8ce84667ae5fd4b88f0deb3  build/perf-round2/baseline-source/src/qalsh/src/qalsh.cc
-b5a61b485327762454e4de82623b7f6fa8d6e69fa6f7ef2d9805248b804d7057  build/perf-round2/baseline-source/src/qalsh/src/window_clamp.h

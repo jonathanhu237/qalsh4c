@@ -11,19 +11,16 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <fstream>
 #include <limits>
 #include <memory>
 #include <queue>
 #include <string>
 #include <stdexcept>
-#include <sys/types.h>
-#include <unistd.h>
 #include <vector>
 
-#include "disk_qalsh_index.h"
 #include "exact_scan.h"
 #include "global.h"
 #include "log.h"
@@ -44,6 +41,12 @@ qalsh::Metric ToLibraryMetric(float norm_order) {
         return qalsh::Metric::l2;
     }
     throw std::invalid_argument("unsupported norm order");
+}
+
+// The bfloat16 candidate filter leaves results unchanged; QALSH4C_COMPRESSED_FILTER=0 switches it off for checks.
+bool UseCompressedFilter() {
+    const char* value = std::getenv("QALSH4C_COMPRESSED_FILTER");
+    return value == nullptr || std::string(value) != "0";
 }
 
 qalsh::IndexConfig MakeLibraryConfig(const QalshConfig& config, float norm_order, unsigned int num_points,
@@ -69,25 +72,18 @@ qalsh::IndexConfig MakeLibraryConfig(const QalshConfig& config, float norm_order
                                                                .scan_quantum = Global::kQalshScanQuantum},
                               .seed = seed,
                               .projection_vectors = {},
-                              .build_threads = build_threads};
+                              .build_threads = build_threads,
+                              // The in-memory searcher's accessor returns views of immutable loaded vectors.
+                              .concurrent_accessor = true,
+                              .compressed_filter = UseCompressedFilter(),
+                              .point_projections = Global::kQalshScanOrder != "quanta"};
 }
 
-void ReadPointAt(int fd, Point& buffer, unsigned int point_id, unsigned int dimensions) {
-    const std::uint64_t offset = static_cast<std::uint64_t>(point_id) * dimensions * sizeof(Coordinate);
-    auto* destination = reinterpret_cast<char*>(buffer.data());
-    std::size_t total = 0;
-    const std::size_t bytes = static_cast<std::size_t>(dimensions) * sizeof(Coordinate);
-    while (total < bytes) {
-        const ssize_t count = ::pread(fd, destination + total, bytes - total,
-                                      static_cast<off_t>(offset + total));
-        if (count < 0 && errno == EINTR) {
-            continue;
-        }
-        if (count <= 0) {
-            throw std::runtime_error("failed to read target point");
-        }
-        total += static_cast<std::size_t>(count);
-    }
+
+qalsh::SearchOptions::ScanOrder ToScanOrder(const std::string& order) {
+    if (order == "distance") return qalsh::SearchOptions::ScanOrder::projection_distance;
+    if (order == "distance-reference") return qalsh::SearchOptions::ScanOrder::projection_distance_reference;
+    return qalsh::SearchOptions::ScanOrder::quanta;
 }
 
 AnnResult ToAnnResult(const qalsh::SearchResult& result) {
@@ -203,79 +199,6 @@ std::vector<AnnResult> LinearScanAnnSearcher::SearchBatched(
 }
 
 // ---------------------------------------------
-// DiskBasedLinearScanAnnSearcher Implementation
-// ---------------------------------------------
-DiskBasedLinearScanAnnSearcher::DiskBasedLinearScanAnnSearcher(unsigned int block_size) : block_size_(block_size) {
-    if (block_size_ == 0) {
-        Log::error("Disk block size must be positive.");
-    }
-}
-
-bool DiskBasedLinearScanAnnSearcher::RequiresIndex() const { return false; }
-
-std::unique_ptr<AnnSearcher> DiskBasedLinearScanAnnSearcher::Clone() const {
-    auto clone = std::make_unique<DiskBasedLinearScanAnnSearcher>(block_size_);
-    if (initialized_) {
-        clone->Init(metadata_, norm_order_);
-    }
-    return clone;
-}
-
-void DiskBasedLinearScanAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
-    if (metadata.num_points == 0 || metadata.num_dimensions == 0) {
-        Log::error("Disk-based linear scan requires a non-empty point set with non-zero dimensions.");
-    }
-    metadata_ = metadata;
-    norm_order_ = norm_order;
-    initialized_ = true;
-    block_buffer_.clear();
-    block_buffer_.reserve(static_cast<std::size_t>(block_size_) * metadata_.num_dimensions);
-}
-
-AnnResult DiskBasedLinearScanAnnSearcher::Search(const Point& query_point) {
-    return SearchWithUpperBound(query_point, std::numeric_limits<float>::infinity());
-}
-
-AnnResult DiskBasedLinearScanAnnSearcher::SearchWithUpperBound(const Point& query_point,
-                                                               Distance initial_upper_bound) {
-    if (!initialized_) {
-        Log::error("Disk-based linear scan searcher is not initialized.");
-    }
-    if (query_point.size() != metadata_.num_dimensions) {
-        Log::error("Query point dimension {} does not match target dimension {}.", query_point.size(),
-                   metadata_.num_dimensions);
-    }
-    std::ifstream input(metadata_.file_path, std::ios::binary);
-    if (!input.is_open()) {
-        Log::error("Could not open point set file for disk-based linear scan: {}.", metadata_.file_path.string());
-    }
-    AnnResult best{.distance = initial_upper_bound, .point_id = 0};
-    for (unsigned int block_begin = 0; block_begin < metadata_.num_points; block_begin += block_size_) {
-        const unsigned int count = std::min(block_size_, metadata_.num_points - block_begin);
-        const std::size_t coordinates = static_cast<std::size_t>(count) * metadata_.num_dimensions;
-        block_buffer_.resize(coordinates);
-        input.read(reinterpret_cast<char*>(block_buffer_.data()),
-                   static_cast<std::streamsize>(coordinates * sizeof(Coordinate)));
-        if (input.gcount() != static_cast<std::streamsize>(coordinates * sizeof(Coordinate))) {
-            Log::error("Failed to read target block starting at point {} from {}.", block_begin,
-                       metadata_.file_path.string());
-        }
-        for (unsigned int local = 0; local < count; ++local) {
-            const qalsh::PointView point(block_buffer_.data() + static_cast<std::size_t>(local) * metadata_.num_dimensions,
-                                  metadata_.num_dimensions);
-            const float distance = qalsh::BoundedDistanceValue(point, query_point, ToLibraryMetric(norm_order_),
-                                                                best.distance)
-                                       .distance;
-            const AnnResult candidate{.distance = distance, .point_id = block_begin + local};
-            if (IsBetterAnnResult(candidate, best)) {
-                best = candidate;
-            }
-        }
-    }
-    return best;
-}
-
-// ---------------------------------------------
 // QalshAnnSearcher Implementation
 // ---------------------------------------------
 QalshAnnSearcher::QalshAnnSearcher(float approximation_ratio)
@@ -293,6 +216,8 @@ std::unique_ptr<AnnSearcher> QalshAnnSearcher::Clone() const {
         qalsh::SearchOptions search_options;
         // Build checked every target point, and the accessor returns those same immutable vectors.
         search_options.validate_points = false;
+        search_options.scan_order = ToScanOrder(Global::kQalshScanOrder);
+        search_options.slabs_per_round = Global::kQalshSlabsPerRound;
         clone->engine_ = std::make_unique<qalsh::SearchEngine>(
             clone->index_data_->index,
             [points = clone->index_data_->base_points](qalsh::PointId point_id) -> qalsh::PointView {
@@ -335,22 +260,29 @@ void QalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) 
     }
     data->qalsh_config = QalshConfig{.approximation_ratio = approximation_ratio_};
     data->qalsh_config.Regularize(data->num_points, norm_order);
+    const auto load_start = std::chrono::steady_clock::now();
     auto points = std::make_shared<std::vector<Point>>(
         PointSet::LoadPointsFromFile(metadata.file_path, data->num_points, data->num_dimensions));
     if (points->size() != data->num_points) {
         Log::error("Failed to load all target points for in-memory QALSH index.");
     }
     data->base_points = points;
+    const auto build_start = std::chrono::steady_clock::now();
     const qalsh::IndexConfig config = MakeLibraryConfig(data->qalsh_config, norm_order, data->num_points,
                                                          data->num_dimensions, random_seed_);
     const qalsh::PointAccessor accessor = [points](qalsh::PointId point_id) -> qalsh::PointView {
         return (*points)[point_id];
     };
     data->index = qalsh::InMemoryIndex::Build(config, accessor);
+    Log::info("QALSH index times: load_ms={:.3f} build_ms={:.3f}",
+              std::chrono::duration<double, std::milli>(build_start - load_start).count(),
+              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - build_start).count());
     index_data_ = std::move(data);
     qalsh::SearchOptions search_options;
     // Build checked every target point, and the accessor returns those same immutable vectors.
     search_options.validate_points = false;
+    search_options.scan_order = ToScanOrder(Global::kQalshScanOrder);
+    search_options.slabs_per_round = Global::kQalshSlabsPerRound;
     engine_ = std::make_unique<qalsh::SearchEngine>(
         index_data_->index,
         [points = index_data_->base_points](qalsh::PointId point_id) -> qalsh::PointView {
@@ -370,6 +302,8 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     strategy.set_candidate_budget(std::nullopt);
     strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
     strategy.set_mid_round_ratio(Global::kQalshStopAtRoundBoundary ? Global::kQalshMidRoundRatio : 0.0F);
+    strategy.set_check_after_radius_advance(Global::kQalshCheckAfterRadiusAdvance);
+    strategy.set_continuous_stop(Global::kQalshStopRule == "continuous");
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
     g_qalsh_hit_counter.queries += 1;
     g_qalsh_hit_counter.hits += result.projection_hits;
@@ -379,170 +313,30 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     return ToAnnResult(result);
 }
 
-// ---------------------------------------------
-// DiskBasedQalshAnnSearcher Implementation
-// ---------------------------------------------
-void DiskQalshProfileSnapshot::Merge(const DiskQalshProfileSnapshot& other) {
-    queries += other.queries;
-    table_entry_reads += other.table_entry_reads;
-    table_block_reads += other.table_block_reads;
-    table_cache_hits += other.table_cache_hits;
-    table_cache_misses += other.table_cache_misses;
-    candidate_point_reads += other.candidate_point_reads;
-    candidates_evaluated += other.candidates_evaluated;
-    total_search_time_ms += other.total_search_time_ms;
+double QalshStoppingFactor(float approximation_ratio) {
+    const double c = approximation_ratio;
+    if (Global::kQalshStopRule == "continuous") {
+        // The continuous front returns once the best distance is at most c times the radius of the front.
+        return c;
+    }
+    // Round rules with radii R_t = R_0 c^t. A test right after the radius grows, or on every new candidate, may accept a
+    // candidate within c R_t while only round t - 1, of radius R_t / c, is complete.
+    if (!Global::kQalshStopAtRoundBoundary || Global::kQalshCheckAfterRadiusAdvance) {
+        return c * c;
+    }
+    // A test at the end of round t accepts candidates within c R_t once round t is complete; a stop inside round t
+    // accepts a candidate within ratio * R_t while round t - 1 is complete.
+    return c * std::max(1.0, static_cast<double>(Global::kQalshMidRoundRatio));
 }
 
-DiskBasedQalshAnnSearcher::DiskBasedQalshAnnSearcher(std::optional<float> expected_approximation_ratio,
-                                                     DiskQalshSearchOptions options)
-    : expected_approximation_ratio_(expected_approximation_ratio), options_(options) {
-    if (options_.table_block_size == 0 || options_.table_cache_blocks == 0) {
-        Log::error("Disk QALSH table options must be positive.");
+kappa::Parameters MakeKappaParameters(const QalshConfig& config, float norm_order) {
+    if (Global::kQalshStopRule != "continuous" && !(Global::kInitialRadius <= 0x1p-149F)) {
+        // The round rules need R_0 at most every positive d(a, B); 2^-149 is at most any positive float32 distance.
+        Log::error("The kappa bound of the round rules needs --initial-radius at most 2^-149 (1.4e-45).");
     }
-    if (options_.table_block_size != Global::kDefaultDiskQalshTableBlockSize ||
-        options_.table_cache_blocks != Global::kDefaultDiskQalshTableCacheBlocks) {
-        Log::info("Disk QALSH table block/cache options are legacy flat-table settings; "
-                  "the selected library backend uses its own immutable layout and does not apply them.");
-    }
-}
-
-DiskBasedQalshAnnSearcher::~DiskBasedQalshAnnSearcher() {
-    if (target_fd_ >= 0) {
-        ::close(target_fd_);
-    }
-}
-
-bool DiskBasedQalshAnnSearcher::RequiresIndex() const { return true; }
-
-std::unique_ptr<AnnSearcher> DiskBasedQalshAnnSearcher::Clone() const {
-    auto clone = std::make_unique<DiskBasedQalshAnnSearcher>(expected_approximation_ratio_, options_);
-    if (index_data_) {
-        // The persistent index and its immutable projection vectors are shared. Only
-        // the caller-owned point file descriptor, scratch buffer, and query
-        // engine are per-clone state; reopening would repeat full validation
-        // and mapping for every worker.
-        clone->InitializeFromIndexData(index_data_);
-    }
-    return clone;
-}
-
-void DiskBasedQalshAnnSearcher::PreflightIndex(const PointSetMetadata& metadata, float norm_order) const {
-    // Metadata/preflight checks stay outside the measured query setup.  The
-    // immutable index is opened and structurally validated once by Init;
-    // doing a second full traversal here only duplicated work.
-    (void)DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_, false);
-}
-
-bool DiskBasedQalshAnnSearcher::ProfilingEnabled() const { return options_.profile; }
-void DiskBasedQalshAnnSearcher::ResetProfile() {
-    std::lock_guard lock(profile_mutex_);
-    profile_ = DiskQalshProfileSnapshot{};
-}
-void DiskBasedQalshAnnSearcher::MergeProfile(const DiskQalshProfileSnapshot& snapshot) {
-    std::lock_guard lock(profile_mutex_);
-    profile_.Merge(snapshot);
-}
-DiskQalshProfileSnapshot DiskBasedQalshAnnSearcher::ProfileSnapshot() const {
-    std::lock_guard lock(profile_mutex_);
-    return profile_;
-}
-
-void DiskBasedQalshAnnSearcher::PrintProfile() const {
-    if (!options_.profile) {
-        return;
-    }
-    const DiskQalshProfileSnapshot snapshot = ProfileSnapshot();
-    Log::info("Disk QALSH profile: queries={}, total_search_time_ms={:.3f}, table_entry_reads={}, "
-              "table_block_reads=0, table_cache_hits=0, table_cache_misses=0, "
-              "candidate_point_reads={}, candidates_evaluated={} (layout traversal is library-owned; "
-              "legacy flat-table block/cache counters are unsupported and intentionally not physical I/O).",
-              snapshot.queries, snapshot.total_search_time_ms, snapshot.table_entry_reads,
-              snapshot.candidate_point_reads, snapshot.candidates_evaluated);
-}
-
-void DiskBasedQalshAnnSearcher::InitializeFromIndexData(
-    std::shared_ptr<const DiskBasedQalshIndexData> data) {
-    if (!data || !data->index) {
-        throw std::invalid_argument("disk QALSH index data is not initialized");
-    }
-    if (target_fd_ >= 0) {
-        (void)::close(target_fd_);
-        target_fd_ = -1;
-    }
-    target_fd_ = ::open(data->target_metadata.file_path.c_str(), O_RDONLY);
-    if (target_fd_ < 0) {
-        Log::error("Failed to open target point set for disk QALSH: {} ({})",
-                   data->target_metadata.file_path.string(), std::strerror(errno));
-    }
-    index_data_ = std::move(data);
-
-    qalsh::SearchOptions search_options;
-    search_options.scan_quantum = index_data_->index->metadata().qalsh.scan_quantum;
-    engine_ = std::make_unique<qalsh::SearchEngine>(
-        index_data_->index,
-        [this](qalsh::PointId point_id) -> qalsh::PointView {
-            thread_local Point candidate_buffer;
-            candidate_buffer.resize(index_data_->target_metadata.num_dimensions);
-            ReadPointAt(target_fd_, candidate_buffer, point_id,
-                        index_data_->target_metadata.num_dimensions);
-            return candidate_buffer;
-        },
-        search_options);
-}
-
-void DiskBasedQalshAnnSearcher::Init(const PointSetMetadata& metadata, float norm_order) {
-    if (metadata.num_points == 0 || metadata.num_dimensions == 0) {
-        Log::error("Disk QALSH requires a non-empty target point set with non-zero dimensions.");
-    }
-    const DiskQalsh::IndexMetadata disk_metadata =
-        DiskQalsh::ValidateIndex(metadata, norm_order, expected_approximation_ratio_, false);
-    auto data = std::make_shared<DiskBasedQalshIndexData>();
-    data->norm_order = norm_order;
-    data->target_metadata = metadata;
-    data->metadata = disk_metadata;
-    data->qalsh_config = disk_metadata.ToConfig();
-    data->index_path = DiskQalsh::IndexPath(metadata.file_path.parent_path(), norm_order,
-                                             DiskQalsh::ParseTargetFromPointSetPath(metadata.file_path));
-    data->index = qalsh::PersistentIndex::Open(data->index_path.string());
-    if (data->index->metadata().num_points != metadata.num_points ||
-        data->index->metadata().num_dimensions != metadata.num_dimensions) {
-        throw std::runtime_error("library index metadata does not match the target point set");
-    }
-    // ValidateIndex(false) deliberately avoids opening the tree twice.  The
-    // one structural open above still needs the same metadata compatibility
-    // checks that the full preflight path performs.
-    DiskQalsh::ValidateLibraryMetadata(data->index->metadata(), disk_metadata, norm_order,
-                                       data->index_path.parent_path());
-    InitializeFromIndexData(std::move(data));
-}
-
-AnnResult DiskBasedQalshAnnSearcher::Search(const Point& query_point) {
-    if (!index_data_) {
-        Log::error("Disk QALSH searcher is not initialized.");
-    }
-    if (query_point.size() != index_data_->target_metadata.num_dimensions) {
-        Log::error("Query point dimension {} does not match disk QALSH target dimension {}.", query_point.size(),
-                   index_data_->target_metadata.num_dimensions);
-    }
-    const auto search_start = std::chrono::steady_clock::now();
-    if (!engine_) {
-        Log::error("Disk QALSH searcher is not initialized.");
-    }
-    qalsh::DefaultQalshStrategy strategy(index_data_->qalsh_config.collision_threshold);
-    strategy.set_candidate_budget(std::nullopt);
-    strategy.set_check_after_evaluation(!Global::kQalshStopAtRoundBoundary);
-    strategy.set_mid_round_ratio(Global::kQalshStopAtRoundBoundary ? Global::kQalshMidRoundRatio : 0.0F);
-    const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
-    if (options_.profile) {
-        const auto search_end = std::chrono::steady_clock::now();
-        const double elapsed_ms =
-            std::chrono::duration<double, std::milli>(search_end - search_start).count();
-        std::lock_guard lock(profile_mutex_);
-        ++profile_.queries;
-        profile_.table_entry_reads += result.projection_hits;
-        profile_.candidate_point_reads += result.evaluated_candidates;
-        profile_.candidates_evaluated += result.evaluated_candidates;
-        profile_.total_search_time_ms += elapsed_ms;
-    }
-    return ToAnnResult(result);
+    return kappa::Parameters{.norm = std::abs(norm_order - 1.0F) < Global::kEpsilon ? 1 : 2,
+                             .bucket_width = static_cast<double>(config.bucket_width),
+                             .num_hash_tables = config.num_hash_tables,
+                             .collision_threshold = config.collision_threshold,
+                             .gamma = QalshStoppingFactor(config.approximation_ratio)};
 }

@@ -11,8 +11,10 @@
 #include <ratio>
 #include <utility>
 
+#include "ann_searcher.h"
 #include "estimator.h"
 #include "global.h"
+#include "kappa.h"
 #include "log.h"
 #include "point_set.h"
 #include "utils.h"
@@ -58,10 +60,6 @@ void EstimateCommand::Execute() {
     // Construct point set metadata
     PointSetMetadata point_set_metadata_a = MakePointSetMetadata(dataset_directory_, dataset_metadata, "A");
     PointSetMetadata point_set_metadata_b = MakePointSetMetadata(dataset_directory_, dataset_metadata, "B");
-
-    if (direction_ == ChamferDirection::kBoth) {
-        estimator_->PreflightBothDirections(point_set_metadata_a, point_set_metadata_b, norm_order_);
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
     float memory_before = Memory::Usage();
@@ -109,38 +107,31 @@ void EstimateCommand::Execute() {
         ChamferDirectionLabel(direction_), estimation, elapsed_time, memory_usage);
 }
 
-// --------------------------------------------------
-// QalshIndexCommand Implementation
-// --------------------------------------------------
-QalshIndexCommand::QalshIndexCommand(DiskQalsh::BuildRequest request) : request_(std::move(request)) {}
+KappaCommand::KappaCommand(float norm_order, float approximation_ratio, std::vector<double> epsilons, double delta)
+    : norm_order_(norm_order), approximation_ratio_(approximation_ratio), epsilons_(std::move(epsilons)),
+      delta_(delta) {}
 
-void QalshIndexCommand::Execute() {
-    DiskQalsh::BuildIndexes(request_);
-    std::cout << std::format("Dataset Directory: {}\n", request_.dataset_directory.string());
-}
-
-// --------------------------------------------------
-// Dataset Commands Implementation
-// --------------------------------------------------
-DatasetGenerateGmmCommand::DatasetGenerateGmmCommand(DatasetPrep::GmmOptions options)
-    : options_(std::move(options)) {}
-
-void DatasetGenerateGmmCommand::Execute() {
-    DatasetPrep::GenerateGmmDataset(options_);
-    std::cout << std::format("Dataset Directory: {}\n", options_.output.output_directory.string());
-}
-
-DatasetConvertCommand::DatasetConvertCommand(DatasetPrep::ConvertOptions options) : options_(std::move(options)) {}
-
-void DatasetConvertCommand::Execute() {
-    DatasetPrep::ConvertDataset(options_);
-    std::cout << std::format("Dataset Directory: {}\n", options_.output.output_directory.string());
-}
-
-DatasetGroundTruthCommand::DatasetGroundTruthCommand(DatasetPrep::GroundTruthOptions options)
-    : options_(std::move(options)) {}
-
-void DatasetGroundTruthCommand::Execute() {
-    DatasetPrep::ComputeDatasetGroundTruth(options_);
-    std::cout << std::format("Dataset Directory: {}\n", options_.dataset_directory.string());
+void KappaCommand::Execute() {
+    QalshConfig config{.approximation_ratio = approximation_ratio_};
+    // With beta = 1, m and l do not depend on the number of target points.
+    config.Regularize(1, norm_order_);
+    const kappa::Parameters parameters = MakeKappaParameters(config, norm_order_);
+    try {
+        const auto start = std::chrono::steady_clock::now();
+        const kappa::Bound bound = kappa::CertifyKappa(parameters);
+        const double elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        std::cout << std::format(
+            "kappa norm=l{} c={} gamma={} w={:.9g} m={} l={} h={} lower={:.9f} upper={:.9f} kappa_up={}.{:06d} "
+            "grid_points={} grid_end={:.4f} ms={:.1f}\n",
+            parameters.norm, approximation_ratio_, parameters.gamma, parameters.bucket_width,
+            parameters.num_hash_tables, parameters.collision_threshold,
+            parameters.num_hash_tables - parameters.collision_threshold + 1, bound.lower, bound.upper,
+            bound.millionths / 1'000'000, bound.millionths % 1'000'000, bound.grid_points, bound.grid_end, elapsed);
+        for (const double epsilon : epsilons_) {
+            std::cout << std::format("T epsilon={} delta={} T={}\n", epsilon, delta_,
+                                     kappa::SampleSize(bound.millionths, epsilon, delta_));
+        }
+    } catch (const std::exception& error) {
+        Log::error("Certifying kappa failed: {}", error.what());
+    }
 }

@@ -15,22 +15,24 @@
 #define QALSH_WINDOW_HAS_SSE2 0
 #endif
 
+namespace qalsh::detail {
+
+// Borrowed range of a sorted projection table: `count` packed (value, id) entries of 8 bytes, starting at `first` and
+// going downward in memory when `reverse` is set.
+struct HitRange {
+    const std::byte* first{nullptr};
+    std::size_t count{0};
+    bool reverse{false};
+    std::uint32_t table_id{0};
+    Projection query_value{0};
+};
+
+}  // namespace qalsh::detail
+
 namespace qalsh::window_detail {
 
 inline constexpr std::size_t kEntryStride = sizeof(Projection) + sizeof(PointId);
 static_assert(kEntryStride == 8U);
-
-/**
- * Whether ClampToWindow is compiled with its conservative x86-64 SSE2 path.
- * This is intentionally a private-header seam for focused tests only.
- */
-[[nodiscard]] static inline constexpr bool UsesSse2() noexcept {
-#if QALSH_WINDOW_HAS_SSE2
-    return true;
-#else
-    return false;
-#endif
-}
 
 [[nodiscard]] static inline Projection ReadProjection(const std::byte* bytes) noexcept {
     Projection value{0.0F};

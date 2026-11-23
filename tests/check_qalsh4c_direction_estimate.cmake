@@ -71,27 +71,22 @@ run_estimate("ab" "ab" "A -> B" "${expected_l2_ab}")
 run_estimate("ba" "ba" "B -> A" "${expected_l2_ba}")
 run_estimate("both" "both" "A <-> B" "${expected_l2_both}")
 
+# A dataset with A = B has Chamfer distance zero.
 set(zero_data_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth")
-set(zero_raw_dir "${QALSH4C_BINARY_DIR}/direction_zero_ground_truth_raw")
 file(REMOVE_RECURSE "${zero_data_dir}")
-file(REMOVE_RECURSE "${zero_raw_dir}")
-file(MAKE_DIRECTORY "${zero_raw_dir}")
-file(WRITE "${zero_raw_dir}/K9.data" "0,0,1,2\n0,0,3,4\n")
-execute_process(
-    COMMAND "${QALSH4C_BIN}" dataset convert p53
-        --raw-dir "${zero_raw_dir}"
-        --num-points-a 1
-        --no-shuffle
-        --ground-truth l2:ab
-        --no-progress
-        -o "${zero_data_dir}"
-    RESULT_VARIABLE zero_data_result
-    OUTPUT_VARIABLE zero_data_stdout
-    ERROR_VARIABLE zero_data_stderr
-)
-if(NOT zero_data_result EQUAL 0)
-    message(FATAL_ERROR "Failed to create zero-ground-truth dataset\n${zero_data_stdout}\n${zero_data_stderr}")
-endif()
+file(MAKE_DIRECTORY "${zero_data_dir}")
+file(COPY_FILE "${source_data_dir}/B.bin" "${zero_data_dir}/A.bin")
+file(COPY_FILE "${source_data_dir}/B.bin" "${zero_data_dir}/B.bin")
+file(WRITE "${zero_data_dir}/metadata.json" [=[
+{
+    "chamfer_distances": {
+        "l1": {"ab": null, "ba": null},
+        "l2": {"ab": 0.0, "ba": 0.0}
+    },
+    "num_dimensions": 300,
+    "num_points": {"a": 1178, "b": 1178}
+}
+]=])
 
 execute_process(
     COMMAND "${QALSH4C_BIN}" estimate -p 2 -d "${zero_data_dir}" --direction ab ann linear_scan

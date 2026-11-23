@@ -140,10 +140,10 @@ std::optional<float> DatasetMetadata::GroundTruth(float norm_order, ChamferDirec
     Log::error("Unsupported Chamfer direction.");
 }
 
-void QalshConfig::Regularize(unsigned int num_points, float norm_order) {
-    // QALSH's candidate-budget fraction; QALSH-CrudeNN uses beta = 1 unless --qalsh-beta says otherwise.
-    float beta = Global::kQalshBeta > 0.0F ? std::min(Global::kQalshBeta, 1.0F)
-                                           : std::min(Global::kNumCandidates / static_cast<float>(num_points), 1.0F);
+void QalshConfig::Regularize([[maybe_unused]] unsigned int num_points, float norm_order) {
+    // QALSH's parameter rule with the candidate-budget fraction beta = 1 (no budget), so m and l do not depend on the
+    // number of target points.
+    const float beta = 1.0F;
     error_probability = Global::kQalshDefaultErrorProbability;
     float term1 = std::sqrt(std::log(2.0F / beta));
     float term2 = std::sqrt(std::log(1.0F / error_probability));
@@ -165,30 +165,12 @@ void QalshConfig::Regularize(unsigned int num_points, float norm_order) {
     } else {
         Log::error("Unsupported norm order: {}", norm_order);
     }
-    if (Global::kQalshBucketWidth > 0.0F) {
-        bucket_width = Global::kQalshBucketWidth;
-        if (std::abs(norm_order - 1.0F) < Global::kEpsilon) {
-            p1 = Calc::L1Probability(bucket_width / 2.0F);
-            p2 = Calc::L1Probability(bucket_width / (2.0F * approximation_ratio));
-        } else {
-            p1 = Calc::L2Probability(bucket_width / 2.0F);
-            p2 = Calc::L2Probability(bucket_width / (2.0F * approximation_ratio));
-        }
-    }
 
     float denominator = 2.0F * std::pow(p1 - p2, 2.0F);
     num_hash_tables = static_cast<unsigned int>(std::ceil(numerator / denominator));
 
     float alpha = (eta * p1 + p2) / (1.0F + eta);
     collision_threshold = static_cast<unsigned int>(std::ceil(alpha * static_cast<float>(num_hash_tables)));
-
-    if (Global::kQalshTables > 0) {
-        num_hash_tables = Global::kQalshTables;
-        collision_threshold = static_cast<unsigned int>(std::ceil(alpha * static_cast<float>(num_hash_tables)));
-    }
-    if (Global::kQalshThreshold > 0) {
-        collision_threshold = Global::kQalshThreshold;
-    }
     if (collision_threshold == 0 || collision_threshold > num_hash_tables) {
         Log::error("Invalid QALSH parameters: m = {}, l = {}", num_hash_tables, collision_threshold);
     }

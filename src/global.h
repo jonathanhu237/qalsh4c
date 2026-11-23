@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <string>
 
 class Global {
    public:
@@ -12,36 +13,32 @@ class Global {
     static constexpr unsigned int kScanSize = 128;
 
     static bool kUseFixedSeed;
-    // Find exact nearest neighbors with the scalar kernel instead of the batched ExactScan (ablation).
+    // Test hook: find exact nearest neighbors with the scalar kernel, the reference of the batched ExactScan.
     static bool kUseScalarExactScan;
-    // Starting search radius R_0 of QALSH queries; the analysis needs R_0 <= c * d(a, B) for every positive d(a, B).
+    // Starting radius R_0 of the round rules; their bound on kappa needs R_0 at most every positive d(a, B).
     static float kInitialRadius;
-    // Check the stopping condition T1 only after a whole radius round, as in the paper's Algorithm 1. This gives the
-    // expected-overestimation constant c (1 + (c - 1) S) instead of c^2 (1 + (c - 1) S).
+    // Round rule: test QALSH's stopping condition T1 at the end of a round (true) or on every new candidate (false,
+    // QALSH's own test, gamma = c^2).
     static bool kQalshStopAtRoundBoundary;
-    // With round-boundary checks, also stop inside a round once a candidate lies within this multiple of the radius.
-    // A value of at most one keeps the constant c (1 + (c - 1) S); zero gives the pure round-end rule.
-    static float kQalshMidRoundRatio;
-    // Fraction beta in QALSH's table rule m = ceil((sqrt(ln(2/beta)) + sqrt(ln(1/delta)))^2 / (2 (p1 - p2)^2)).
-    // QALSH sets beta = 100 / n so that at most 100 false candidates pass its candidate-budget rule; QALSH-CrudeNN
-    // has no candidate budget and its constant kappa depends only on the nearest neighbor's miss probabilities, so
-    // the default is beta = 1. Zero restores QALSH's beta = min(100 / n, 1).
-    static float kQalshBeta;
-    // Explicit table count m and collision threshold l (0 keeps QALSH's rule). The constant kappa is computable for
-    // any pair, so these only trade crude-stage cost against kappa.
-    static unsigned int kQalshTables;
-    static unsigned int kQalshThreshold;
-    // Explicit bucket width w (0 keeps QALSH's width, which maximizes p1 - p2).
-    static float kQalshBucketWidth;
-    // Entries an in-memory QALSH query scans in one table before it moves to the next table (both sides together).
-    static unsigned int kQalshScanQuantum;
+    // Round rule with end-of-round tests: also stop inside a round on a candidate within this multiple of the radius
+    // (1, so gamma stays c).
+    static constexpr float kQalshMidRoundRatio = 1.0F;
+    // Quanta order: entries one table visit scans before the next table (both sides together).
+    static constexpr unsigned int kQalshScanQuantum = 2 * kScanSize;
+    // Order of the window entries: "quanta" (the round rules), "distance" (all tables advance together in distance
+    // from the query's projection, the continuous front) or "distance-reference" (the same order, one entry at a time,
+    // for checks).
+    static std::string kQalshScanOrder;
+    // Slabs per round for the distance order; they only change how much work a stop wastes, not the results.
+    static constexpr unsigned int kQalshSlabsPerRound = 2;
+    // Round rule: also test the stopping condition right after the radius grows, against the new radius (gamma = c^2).
+    static bool kQalshCheckAfterRadiusAdvance;
+    // "continuous" (the paper's QALSH-CrudeNN: stop once the best distance is at most c times the radius of the scan
+    // front) or "round" (the round rules, compared in Sect. 4.2).
+    static std::string kQalshStopRule;
     static constexpr unsigned int kDefaultSeed = 42;
-    static constexpr unsigned int kDefaultDiskBlockSize = 4096;
-    static constexpr unsigned int kDefaultDiskQueryBatchSize = 64;
-    static constexpr unsigned int kDefaultDiskQalshTableBlockSize = 65536;
-    static constexpr unsigned int kDefaultDiskQalshTableCacheBlocks = 64;
 
-    // qalsh4c
-    static constexpr float kQalsh4cEpsilon = 1.0F;
+    // Default tolerance and failure probability of the automatic sample size.
+    static constexpr float kQalsh4cEpsilon = 0.1F;
     static constexpr float kQalsh4cDelta = 0.1F;
 };
