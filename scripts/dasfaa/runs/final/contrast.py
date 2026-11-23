@@ -36,7 +36,7 @@ def collide(p: int, w: float, u: np.ndarray) -> np.ndarray:
 
 
 def qalsh_params(p: int, n: int) -> tuple[float, int, int]:
-    """Bucket width w, table count m and collision threshold l, as in DeriveQalshParameters (delta = 1/e)."""
+    """Bucket width w, table count m and collision threshold l, as in QalshConfig::Regularize with beta = 1 (delta_Q = 1/e)."""
     beta = 1.0
     t1, t2 = math.sqrt(math.log(2.0 / beta)), 1.0
     eta = t1 / t2

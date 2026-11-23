@@ -2,7 +2,8 @@
 median index + crude-query time over the runs, the mean D/CH and the maximum relative error at eps = 0.1.
 
 Usage: python3 csweep_table.py FINAL_DIR ds1 ds2
-c = 2 comes from FINAL_DIR/randomness, c = 1.5 and 3 from FINAL_DIR/csweep.
+c = 2 comes from FINAL_DIR/randomness, c = 1.5 and 3 from FINAL_DIR/csweep; m, l, kappa_hat and T from the binary's
+`kappa` command, recorded in FINAL_DIR/kappa.txt.
 """
 
 from __future__ import annotations
@@ -13,11 +14,15 @@ import sys
 
 import numpy as np
 
-PARAMS = {  # (c, norm): (m, l, kappa_hat, T at eps = delta = 0.1), from certify_kappa.certify(c, ., norm, True, 1.0)
-    (1.5, 1): (103, 51, 1.549489, 550), (1.5, 2): (45, 31, 1.550916, 551),
-    (2.0, 1): (36, 18, 2.136466, 1137), (2.0, 2): (17, 12, 2.120719, 1121),
-    (3.0, 1): (16, 8, 3.300289, 2301), (3.0, 2): (8, 5, 3.051487, 2052),
-}
+def params(final: str) -> dict:
+    """(c, norm) -> (m, l, kappa_hat, T at eps = delta = 0.1) of the continuous front, from kappa.txt."""
+    table = {}
+    for line in open(f"{final}/kappa.txt"):
+        fields = dict(item.split("=", 1) for item in line.split()[1:] if "=" in item)
+        if line.startswith("main ") and fields["epsilon"] == "0.1":
+            table[(float(fields["c"]), int(fields["norm"]))] = (int(fields["m"]), int(fields["l"]),
+                                                                float(fields["kappa_up"]), int(fields["T"]))
+    return table
 
 
 def load(final: str, ds: str, p: int, c: float) -> list[dict]:
@@ -28,9 +33,10 @@ def load(final: str, ds: str, p: int, c: float) -> list[dict]:
 
 def main() -> None:
     final, datasets = sys.argv[1], sys.argv[2:]
+    table = params(final)
     for p in (1, 2):
         for c in (1.5, 2.0, 3.0):
-            m, l, kappa, t = PARAMS[(c, p)]
+            m, l, kappa, t = table[(c, p)]
             cells = [f"$\\\\ell_{p}$" if c == 1.5 else "", f"{c:g}", str(m), str(l), f"{kappa:.3f}", f"{t:,}".replace(",", "{,}")]
             for ds in datasets:
                 rows = load(final, ds, p, c)

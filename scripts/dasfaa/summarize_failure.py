@@ -3,7 +3,8 @@
 Usage: python3 summarize_failure.py runs/*.jsonl
 Each file name must look like <dataset>_l<norm>.jsonl. Prints, per dataset, norm and eps: T, failures, the one-sided
 95% exact (Clopper-Pearson) upper confidence bound on the failure probability, and the mean, 90th percentile and
-maximum relative error; and per dataset and norm the mean realized D/CH and conditional relative variance.
+maximum relative error; and per dataset and norm the mean realized D/CH against the certified kappa that
+failure_rate.py records from the binary, and the conditional relative variance.
 """
 
 from __future__ import annotations
@@ -14,15 +15,6 @@ import os
 import sys
 
 import numpy as np
-
-KAPPA_BETA1 = {1: 2.136466, 2: 2.120719}  # certified at c = 2, beta = 1 (the same for every dataset)
-KAPPA = {  # earlier certified upper bounds at c = 2, beta = min(100/n_B, 1), round-end stopping
-    ("federalist", 1): 2.180562, ("federalist", 2): 2.047861,
-    ("mnist", 1): 2.141171, ("mnist", 2): 2.060613,
-    ("trevi", 1): 2.166167, ("trevi", 2): 2.079964,
-    ("gist", 1): 2.156947, ("gist", 2): 2.088774,
-}
-
 
 def binomial_cdf(x: int, n: int, p: float) -> float:
     return sum(math.comb(n, k) * p ** k * (1 - p) ** (n - k) for k in range(x + 1))
@@ -51,7 +43,7 @@ def main() -> None:
         ratio = np.array([row["D_over_CH"] for row in rows])
         rel_var = np.array([row.get("cond_rel_var", float("nan")) for row in rows])
         print(f"{dataset} l{norm}: runs {n}, D/CH mean {ratio.mean():.4f} max {ratio.max():.4f} "
-              f"(kappa {KAPPA_BETA1[int(norm)]}), cond. rel. variance mean {np.nanmean(rel_var):.4f}, "
+              f"(kappa {rows[0]['kappa_up']}), cond. rel. variance mean {np.nanmean(rel_var):.4f}, "
               f"crude wall median {np.median([row['crude_wall_s'] for row in rows]):.2f} s")
         for eps in rows[0]["errors"]:
             errors = np.array([row["errors"][eps]["rel_error"] for row in rows])

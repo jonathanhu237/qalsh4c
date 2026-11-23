@@ -2,7 +2,7 @@
 
 Usage: python3 make_tables.py FINAL_DIR > tables.tex
 Reads cost_summary.json (summarize_cost.py), contrast.json (contrast.py), randomness/*.jsonl (failure_rate.py),
-time_accuracy.json (time_accuracy.py) and csweep/*.jsonl, and prints the dataset, cost, full-randomness and c tables.
+time_accuracy_timed.json (recalib.py) and csweep/*.jsonl, and prints the dataset, cost, full-randomness and c tables.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ import numpy as np
 NAMES = {"p53": "P53", "trevi": "Trevi", "notredame": "Notre Dame", "dbpedia": "DBpedia", "enron": "Enron",
          "gist": "GIST", "mnist": "MNIST", "federalist": "Federalist"}
 ORDER = ["p53", "trevi", "notredame", "dbpedia", "enron", "gist", "mnist", "federalist"]
-KAPPA = {1: 2.136466, 2: 2.120719}
 
 
 def fmt_s(x: float) -> str:
@@ -47,7 +46,8 @@ def upper_bound(failures: int, n: int, level: float = 0.95) -> float:
 def main() -> None:
     final = sys.argv[1]
     cost = {(r["dataset"], r["norm"]): r for r in json.load(open(f"{final}/cost_summary.json")) if r["threads"] == 24}
-    ta = json.load(open(f"{final}/time_accuracy.json")) if os.path.exists(f"{final}/time_accuracy.json") else {}
+    timed = f"{final}/time_accuracy_timed.json"
+    ta = json.load(open(timed)) if os.path.exists(timed) else {}
     contrast = {}
     if os.path.exists(f"{final}/contrast.json"):
         for r in json.load(open(f"{final}/contrast.json")):
@@ -66,9 +66,8 @@ def main() -> None:
                    f"{c['D_over_CH']:.2f}"]
             entry = ta.get(f"{ds}_l{p}")
             if entry:
-                at = min(entry["budgets"], key=lambda b: abs(b["budget_s"] - c["qalsh4c_s"]))
                 for method in ("qalsh4c", "uniform", "quadtree"):
-                    v = at.get(method)
+                    v = entry.get(method)
                     row.append(f"{100 * v['mean']:.2f}" if v else "--")
             print(" & ".join(row) + " \\\\")
     print("% ---- full randomness + equal time: dataset & norm & D/CH mean & max err eps=0.3 & mean err eps=0.1 & "
@@ -85,11 +84,9 @@ def main() -> None:
             cells = [NAMES[ds] if p == 1 else "", f"$\\ell_{p}$", f"{ratio.mean():.2f}", f"{100 * e3.max():.2f}",
                      f"{100 * e1.mean():.2f}", f"{100 * e1.max():.2f}"]
             entry = ta.get(f"{ds}_l{p}")
-            c = cost.get((ds, p))
-            if entry and c:
-                at = min(entry["budgets"], key=lambda b: abs(b["budget_s"] - c["qalsh4c_s"]))
+            if entry:
                 for method in ("qalsh4c", "uniform", "quadtree"):
-                    v = at.get(method)
+                    v = entry.get(method)
                     cells.append(f"{100 * v['mean']:.2f}" if v else "--")
             fails = (int((e3 > 0.3).sum()), int((e1 > 0.1).sum()))
             print(" & ".join(cells) + f" \\\\  % runs {len(rows)}, failures eps0.3/0.1 {fails}, "
