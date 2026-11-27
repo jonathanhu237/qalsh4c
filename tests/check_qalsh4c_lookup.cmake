@@ -30,15 +30,21 @@ function(estimate_of output_var output)
     set(${output_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
 endfunction()
 
-# Certified constants (Table 1 of the paper, c = 2, continuous front).
+# Certified constants (Table 2 of the paper, c = 2, continuous front with the default gamma = c^1.5).
 run(kappa_l1 kappa_l1_output kappa -p 1 -c 2 -e 0.3 0.1)
-if(NOT kappa_l1_output MATCHES "kappa_up=1\\.416132" OR NOT kappa_l1_output MATCHES "T epsilon=0\\.3 delta=0\\.1 T=47"
-   OR NOT kappa_l1_output MATCHES "T epsilon=0\\.1 delta=0\\.1 T=417")
+if(NOT kappa_l1_output MATCHES "kappa_up=1\\.982358" OR NOT kappa_l1_output MATCHES "T epsilon=0\\.3 delta=0\\.1 T=110"
+   OR NOT kappa_l1_output MATCHES "T epsilon=0\\.1 delta=0\\.1 T=983")
     message(FATAL_ERROR "Unexpected l1 kappa output:\n${kappa_l1_output}")
 endif()
 run(kappa_l2 kappa_l2_output kappa -p 2 -c 2 -e 0.3 0.1)
-if(NOT kappa_l2_output MATCHES "T epsilon=0\\.3 delta=0\\.1 T=53" OR NOT kappa_l2_output MATCHES "T epsilon=0\\.1 delta=0\\.1 T=469")
+if(NOT kappa_l2_output MATCHES "T epsilon=0\\.3 delta=0\\.1 T=119" OR NOT kappa_l2_output MATCHES "T epsilon=0\\.1 delta=0\\.1 T=1065")
     message(FATAL_ERROR "Unexpected l2 kappa output:\n${kappa_l2_output}")
+endif()
+# gamma = c gives the constants of the earlier default.
+run(kappa_c kappa_c_output --qalsh-continuous-ratio 2 kappa -p 1 -c 2 -e 0.3 0.1)
+if(NOT kappa_c_output MATCHES "kappa_up=1\\.416132" OR NOT kappa_c_output MATCHES "T epsilon=0\\.3 delta=0\\.1 T=47"
+   OR NOT kappa_c_output MATCHES "T epsilon=0\\.1 delta=0\\.1 T=417")
+    message(FATAL_ERROR "Unexpected kappa output at gamma = c:\n${kappa_c_output}")
 endif()
 
 # Exact distances from the exact scan.

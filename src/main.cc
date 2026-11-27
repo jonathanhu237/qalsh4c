@@ -1,5 +1,7 @@
 #include <CLI/CLI.hpp>
+#include <cmath>
 #include <cstddef>
+#include <exception>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -46,9 +48,13 @@ int main(int argc, char** argv) {
 
     app.add_flag("--use-fixed-seed", Global::kUseFixedSeed, "Use a fixed seed for randomness")
         ->default_str(Global::kUseFixedSeed ? "True" : "False");
+    app.add_option("--seed", Global::kSeed,
+                   "Seed of the projections and the sampler, for paired runs of different rules (default: drawn)")
+        ->check(CLI::NonNegativeNumber);
     app.add_option("--initial-radius", Global::kInitialRadius,
                    "Starting radius R_0 of the round rules (2^-149 is valid for any float32 data and any c > 1)")
-        ->default_val(Global::kInitialRadius)
+        // default_str, not default_val: CLI11 prints floats with std::to_string, which writes 2^-149 as 0.000000.
+        ->default_str("1.4e-45 (2^-149)")
         ->check(CLI::PositiveNumber);
     app.add_flag("--qalsh-stop-within-round{false}", Global::kQalshStopAtRoundBoundary,
                  "With the round rule, check QALSH's stopping condition after every new candidate instead of after each "
@@ -63,11 +69,32 @@ int main(int argc, char** argv) {
                    "With round-end checks, also check the stopping condition right after the radius grows, against the "
                    "new radius (true) or only at the end of each round (false)")
         ->default_val(Global::kQalshCheckAfterRadiusAdvance);
+    app.add_option("--qalsh-mid-round-ratio", Global::kQalshMidRoundRatio,
+                   "With round-end checks, also stop inside a round once the best distance is at most this multiple of "
+                   "the radius (1 keeps gamma = c; 0 stops only at the end of a round)")
+        ->default_val(Global::kQalshMidRoundRatio)
+        ->check(CLI::Range(0.0F, 1.0F));
+    app.add_option("--qalsh-slabs", Global::kQalshSlabsPerRound,
+                   "Slabs per round of the distance scan order; they change only the work a stop wastes, not the result")
+        ->default_val(Global::kQalshSlabsPerRound)
+        ->check(CLI::Range(1U, 1024U));
     app.add_option("--qalsh-stop-rule", Global::kQalshStopRule,
                    "Stopping rule of in-memory QALSH queries: round (the round rules) or continuous (with the distance "
                    "scan order, stop once the best distance is at most c times the radius of the scan front)")
         ->default_val(Global::kQalshStopRule)
         ->check(CLI::IsMember({"round", "continuous"}));
+    app.add_option("--qalsh-continuous-ratio", Global::kQalshContinuousRatio,
+                   "With the continuous rule, stop once the best distance is at most this multiple gamma of the front's "
+                   "radius (0 uses the default c^1.5; a larger multiple stops earlier and enlarges the sample size)")
+        ->default_val(Global::kQalshContinuousRatio)
+        ->check([](const std::string& text) -> std::string {
+            float ratio = -1.0F;
+            try {
+                ratio = std::stof(text);
+            } catch (const std::exception&) {
+            }
+            return ratio == 0.0F || (std::isfinite(ratio) && ratio > 1.0F) ? "" : "must be 0 or greater than one";
+        });
 
     std::unique_ptr<Command> command;
     app.require_subcommand(1);
@@ -240,8 +267,13 @@ int main(int argc, char** argv) {
     precomputed_sampling->add_option("-f,--file", precomputed_weights_path, "Weights file")
         ->required()
         ->check(CLI::ExistingFile);
+    bool precomputed_upper_bounds = false;
+    precomputed_sampling->add_flag("--upper-bounds", precomputed_upper_bounds,
+                                   "The weights are distances to actual target points (QALSH or ANN crude distances), "
+                                   "so the exact stage may use them to prune, as the live QALSH4C run does");
     precomputed_sampling->callback([&]() {
-        weights_generator = std::make_unique<PrecomputedWeightsGenerator>(precomputed_weights_path);
+        weights_generator =
+            std::make_unique<PrecomputedWeightsGenerator>(precomputed_weights_path, precomputed_upper_bounds);
     });
 
     // ------------------------------

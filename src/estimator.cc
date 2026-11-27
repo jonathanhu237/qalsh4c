@@ -16,6 +16,7 @@
 
 #include "ann_searcher.h"
 #include "config.h"
+#include "exact_scan.h"
 #include "global.h"
 #include "kappa.h"
 #include "log.h"
@@ -186,9 +187,8 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
     if (!weights_generator_) {
         Log::error("The weights generator is not set.");
     }
-    auto* qalsh_weights_generator = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get());
-    // QALSH crude distances are distances to target points, so they bound the exact scan of a sampled point.
-    const bool weights_are_upper_bounds = qalsh_weights_generator != nullptr;
+    // Crude distances that are distances to target points bound the exact scan of a sampled point.
+    const bool weights_are_upper_bounds = weights_generator_->WeightsAreUpperBounds();
 
     const unsigned int num_samples = SampleCount(from, to, norm_order);
 
@@ -202,6 +202,12 @@ float SamplingEstimator::EstimateDistance(const PointSetMetadata& from, const Po
         Log::error("Weights size does not match the number of query points in the dataset");
     }
 
+    // D = 0: every crude distance is a distance to a target point, so every source point lies on a target point and
+    // the Chamfer distance is zero (Algorithm 1, line 4).
+    if (weights_are_upper_bounds && std::ranges::all_of(weights, [](Weight weight) { return weight == 0.0F; })) {
+        Log::info("Total sum of weights: 0; every source point lies on a target point.");
+        return 0.0F;
+    }
     WeightedSampler sampler(weights);
     const double total = sampler.Total();
     Log::info("Total sum of weights: {:.17g}", total);
@@ -250,9 +256,7 @@ std::vector<double> SamplingEstimator::ExactDistancesOfSamples(
     const PointSetMetadata& from, const PointSetMetadata& to, float norm_order,
     const std::vector<std::pair<unsigned int, unsigned int>>& sample_counts, const std::vector<Weight>& weights,
     bool weights_are_upper_bounds) const {
-    auto* qalsh_weights_generator = dynamic_cast<QalshWeightsGenerator*>(weights_generator_.get());
-    const std::shared_ptr<const std::vector<Point>> loaded_target_points =
-        qalsh_weights_generator == nullptr ? nullptr : qalsh_weights_generator->TargetPoints();
+    const std::shared_ptr<const std::vector<Point>> loaded_target_points = weights_generator_->TargetPoints();
 
     const std::vector<Point> query_points = LoadSampledQueryPoints(from, sample_counts);
     LinearScanAnnSearcher shared_ann_searcher;
@@ -268,7 +272,27 @@ std::vector<double> SamplingEstimator::ExactDistancesOfSamples(
     if (!shared_ann_searcher.UsesBatchedScan()) {
         Log::error("The exact stage needs the batched linear scan.");
     }
-    const std::vector<AnnResult> results = shared_ann_searcher.SearchBatched(query_points, upper_bounds);
+    std::vector<AnnResult> results = shared_ann_searcher.SearchBatched(query_points, upper_bounds);
+    // A bound is only a hint: a point with no target within it is scanned again without one, so every distance is
+    // that of an actual target, computed by the same kernel as the exact baseline.
+    std::vector<Point> unresolved_points;
+    std::vector<size_t> unresolved;
+    for (size_t index = 0; index < results.size(); ++index) {
+        if (results[index].point_id == ExactScan::kNoTarget) {
+            unresolved.push_back(index);
+            unresolved_points.push_back(query_points[index]);
+        }
+    }
+    if (!unresolved.empty()) {
+        Log::warn("{} sampled points had no target within their crude distance; scanning them without a bound.",
+                  unresolved.size());
+        const std::vector<AnnResult> rescanned = shared_ann_searcher.SearchBatched(
+            unresolved_points,
+            std::vector<Distance>(unresolved_points.size(), std::numeric_limits<Distance>::infinity()));
+        for (size_t index = 0; index < unresolved.size(); ++index) {
+            results[unresolved[index]] = rescanned[index];
+        }
+    }
     std::vector<double> nearest(sample_counts.size());
     for (size_t index = 0; index < results.size(); ++index) {
         nearest[index] = static_cast<double>(results[index].distance);

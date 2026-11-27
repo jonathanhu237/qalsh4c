@@ -195,8 +195,24 @@ int main() {
                 }
                 ExactScan scan(rows, 17, norm_order, upper_bounds);
                 scan.ScanPoints(targets);
-                CheckResults("upper bounds L" + std::to_string(static_cast<int>(norm_order)), targets, queries,
-                             norm_order, upper_bounds, scan.Results());
+                // A bound is a hint: within it the result is the nearest target, beyond it no target.
+                const std::vector<AnnResult> results = scan.Results();
+                const std::string name = "upper bounds L" + std::to_string(static_cast<int>(norm_order));
+                for (size_t index = 0; index < queries.size(); ++index) {
+                    const AnnResult nearest = ScalarNearest(targets, queries[index], norm_order, kInfinity);
+                    const std::string where = name + ", query " + std::to_string(index);
+                    if (nearest.distance <= upper_bounds[index]) {
+                        Check(results[index].point_id != ExactScan::kNoTarget &&
+                                  results[index].distance == nearest.distance,
+                              where + ": the nearest target lies within the bound");
+                        Check(ExactDistance(targets[results[index].point_id], queries[index], norm_order) ==
+                                  results[index].distance,
+                              where + ": the reported target is not at the reported distance");
+                    } else {
+                        Check(results[index].point_id == ExactScan::kNoTarget,
+                              where + ": no target lies within the bound");
+                    }
+                }
             }
         }
 
@@ -207,7 +223,15 @@ int main() {
             CheckCase("many queries", targets, queries, Unbounded(queries.size()));
             const std::vector<Point> single(queries.begin(), queries.begin() + 1);
             CheckCase("single query", targets, single, Unbounded(1));
-            CheckCase("no targets", {}, single, std::vector<Distance>{5.0F});
+            // With no targets, a bound stays a hint: the result reaches no target.
+            {
+                std::vector<const Coordinate*> rows{single.front().data()};
+                for (const float norm_order : {1.0F, 2.0F}) {
+                    ExactScan scan(rows, 8, norm_order, std::vector<Distance>{5.0F});
+                    scan.ScanPoints({});
+                    Check(scan.Results().front().point_id == ExactScan::kNoTarget, "no targets: no target reached");
+                }
+            }
         }
 
         // LinearScanAnnSearcher uses the batched scan for L1 and L2 unless the scalar ablation is selected.

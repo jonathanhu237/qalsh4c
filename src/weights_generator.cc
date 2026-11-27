@@ -180,11 +180,21 @@ void WriteQuadtreeWeightsCache(const std::filesystem::path& weights_path, const 
     output.write(reinterpret_cast<const char*>(weights.data()), expected_bytes);
 }
 
-std::pair<Point, Point> ComputeBounds(const std::vector<Point>& points, unsigned int num_dimensions) {
+// The source points followed by the target points, without copying either: id i < |A| is source i, and id |A| + j is
+// target j.
+struct CombinedPoints {
+    const std::vector<Point>& from;
+    const std::vector<Point>& to;
+    [[nodiscard]] std::size_t size() const { return from.size() + to.size(); }
+    const Point& operator[](std::size_t id) const { return id < from.size() ? from[id] : to[id - from.size()]; }
+};
+
+std::pair<Point, Point> ComputeBounds(const CombinedPoints& points, unsigned int num_dimensions) {
     Point lower(num_dimensions, std::numeric_limits<Coordinate>::infinity());
     Point upper(num_dimensions, -std::numeric_limits<Coordinate>::infinity());
 
-    for (const Point& point : points) {
+    for (std::size_t id = 0; id < points.size(); ++id) {
+        const Point& point = points[id];
         for (unsigned int dimension = 0; dimension < num_dimensions; ++dimension) {
             lower[dimension] = std::min(lower[dimension], point[dimension]);
             upper[dimension] = std::max(upper[dimension], point[dimension]);
@@ -212,7 +222,7 @@ std::pair<Point, Point> ChildBounds(const CellKey& key, const Point& lower, cons
     return {child_lower, child_upper};
 }
 
-void AppendQuadtreeDfsOrder(const std::vector<Point>& points, const std::vector<unsigned int>& cluster,
+void AppendQuadtreeDfsOrder(const CombinedPoints& points, const std::vector<unsigned int>& cluster,
                             const Point& lower, const Point& upper, unsigned int max_levels,
                             std::vector<unsigned int>& dfs_order) {
     if ((!SplitUntilSingleton(max_levels) && max_levels == 1) || cluster.size() <= 1) {
@@ -277,7 +287,7 @@ void AppendQuadtreeDfsOrder(const std::vector<Point>& points, const std::vector<
     }
 }
 
-std::vector<Point> LoadCombinedPoints(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata) {
+void CheckQuadtreeInputs(const PointSetMetadata& from_metadata, const PointSetMetadata& to_metadata) {
     if (from_metadata.num_dimensions != to_metadata.num_dimensions) {
         Log::error("Point set dimensions do not match: {} and {}.", from_metadata.num_dimensions,
                    to_metadata.num_dimensions);
@@ -285,19 +295,6 @@ std::vector<Point> LoadCombinedPoints(const PointSetMetadata& from_metadata, con
     if (to_metadata.num_points == 0) {
         Log::error("Quadtree sampling requires a non-empty target point set.");
     }
-
-    std::vector<Point> from_points =
-        PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
-    std::vector<Point> to_points =
-        PointSet::LoadPointsFromFile(to_metadata.file_path, to_metadata.num_points, to_metadata.num_dimensions);
-
-    std::vector<Point> combined_points;
-    combined_points.reserve(from_points.size() + to_points.size());
-    combined_points.insert(combined_points.end(), std::make_move_iterator(from_points.begin()),
-                           std::make_move_iterator(from_points.end()));
-    combined_points.insert(combined_points.end(), std::make_move_iterator(to_points.begin()),
-                           std::make_move_iterator(to_points.end()));
-    return combined_points;
 }
 
 void MakeWeightsPositive(std::vector<Weight>& weights) {
@@ -341,7 +338,8 @@ std::vector<Weight> UniformWeightsGenerator::Generate(const PointSetMetadata& fr
 // --------------------------------------------------
 // PrecomputedWeightsGenerator Implementation
 // --------------------------------------------------
-PrecomputedWeightsGenerator::PrecomputedWeightsGenerator(std::filesystem::path path) : path_(std::move(path)) {}
+PrecomputedWeightsGenerator::PrecomputedWeightsGenerator(std::filesystem::path path, bool upper_bounds)
+    : path_(std::move(path)), upper_bounds_(upper_bounds) {}
 
 bool PrecomputedWeightsGenerator::RequiresIndex() const { return false; }
 
@@ -399,7 +397,14 @@ std::vector<Weight> QuadtreeWeightsGenerator::Generate(const PointSetMetadata& f
     }
 
     Log::info("Generating weights using quadtree sampling...");
-    const std::vector<Point> combined_points = LoadCombinedPoints(from_metadata, to_metadata);
+    CheckQuadtreeInputs(from_metadata, to_metadata);
+    const std::vector<Point> from_points =
+        PointSet::LoadPointsFromFile(from_metadata.file_path, from_metadata.num_points, from_metadata.num_dimensions);
+    // The targets are kept for the exact stage, which would otherwise read them again.
+    auto to_points = std::make_shared<const std::vector<Point>>(
+        PointSet::LoadPointsFromFile(to_metadata.file_path, to_metadata.num_points, to_metadata.num_dimensions));
+    target_points_ = to_points;
+    const CombinedPoints combined_points{.from = from_points, .to = *to_points};
     const unsigned int total_points = static_cast<unsigned int>(combined_points.size());
     const unsigned int target_offset = from_metadata.num_points;
 

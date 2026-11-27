@@ -85,6 +85,9 @@ class QalshAnnSearcher : public AnnSearcher {
     std::unique_ptr<qalsh::SearchEngine> engine_;
 };
 
+// The stopping ratio gamma of the continuous rule: --qalsh-continuous-ratio if set, else c^1.5.
+float QalshContinuousRatio(float approximation_ratio);
+
 // The factor gamma of Theorem 2 for the stopping rule that the in-memory QALSH search uses: the search returns a
 // candidate only when its distance is at most gamma times a radius up to which every projection line is processed.
 double QalshStoppingFactor(float approximation_ratio);

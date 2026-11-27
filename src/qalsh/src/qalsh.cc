@@ -436,7 +436,8 @@ BoundedDistance DistanceKernel(PointView lhs, PointView rhs, Distance upper_boun
 // upper_bound) is not exact, where `limit` is the kernel's limit for that upper bound.
 //
 // For every coordinate, |a - b| >= |a - b'| - e with b' the rounded copy and e >= |b - b'|: zero for an exact copy,
-// otherwise e = 2^-8 |b'| + 2^-133, at least twice the rounding error of round to nearest. So the sum over coordinates
+// otherwise e = 2^-7 |b'| + 2^-133. Round to nearest with an 8-bit significand errs by at most 2^-8 |b'| (attained at a
+// tie just below a power of two) plus half the subnormal spacing, so e is at least twice the rounding error. So the sum over coordinates
 // of max(0, |a - b'| - e), squared for L2, is at most the exact sum S. In float arithmetic (unit roundoff u = 2^-24),
 // fl(a - b') is exact up to a factor 1 + u and the slack in e absorbs that error, so each computed term is at most
 // (1 + 5u) times its exact counterpart for |a - b|; any summation order adds at most a factor 1 + (d - 1) u. The
@@ -454,7 +455,7 @@ template <Metric Norm>
     if (static_cast<double>(threshold) < threshold_double) {
         threshold = std::nextafter(threshold, std::numeric_limits<float>::infinity());
     }
-    const float scale = exact_copy ? 0.0F : 0x1p-8F;
+    const float scale = exact_copy ? 0.0F : 0x1p-7F;
     const float floor = exact_copy ? 0.0F : 0x1p-133F;
     float sum = 0.0F;
     for (std::size_t begin = 0; begin < dimensions; begin += 128) {
@@ -505,6 +506,7 @@ thread_local SearchScratch search_scratch;
 
 // Ids per 64-byte cache line of an id column.
 constexpr std::size_t kIdsPerLine = 64U / sizeof(PointId);
+
 
 }  // namespace
 
@@ -580,6 +582,13 @@ void DefaultQalshStrategy::set_check_after_radius_advance(bool enabled) {
 
 void DefaultQalshStrategy::set_continuous_stop(bool enabled) {
     continuous_stop_ = enabled;
+}
+
+void DefaultQalshStrategy::set_continuous_ratio(float ratio) {
+    if (!(ratio == 0.0F || (std::isfinite(ratio) && ratio > 1.0F))) {
+        throw std::invalid_argument("continuous stopping ratio must be 0 or greater than one");
+    }
+    continuous_ratio_ = ratio;
 }
 
 SearchEngine::SearchEngine(std::shared_ptr<const ProjectionIndex> index,
@@ -761,11 +770,12 @@ SearchResult SearchEngine::search(PointView query, std::uint32_t k, const Defaul
         bound = WindowBound(metadata.qalsh.bucket_width, radius);
         return !continuous && check_after_radius_advance && should_terminate();
     };
-    // The continuous stop: the k-th distance is at most c times the radius of a front at `front` from the query's
-    // projection.
+    // The continuous stop: the k-th distance is at most stop_ratio times the radius of a front at `front` from the
+    // query's projection. The ratio is c unless the strategy sets another one.
+    const float stop_ratio = strategy.continuous_ratio_ > 0.0F ? strategy.continuous_ratio_ : approximation_ratio;
     const float front_to_radius = 2.0F / metadata.qalsh.bucket_width;
     const auto front_reached = [&](float front) {
-        return neighbors.size() >= k && neighbors.back().distance <= approximation_ratio * (front * front_to_radius);
+        return neighbors.size() >= k && neighbors.back().distance <= stop_ratio * (front * front_to_radius);
     };
 
     switch (options_.scan_order) {
@@ -777,9 +787,10 @@ SearchResult SearchEngine::search(PointView query, std::uint32_t k, const Defaul
             // counter runs out; true asks the search to finish.
             const auto count_entries = [&](std::uint32_t table, std::size_t start, std::ptrdiff_t step,
                                            std::size_t count) {
-                const PointId* ids = index.tables_[table].ids.data() + start;
-                for (std::size_t offset = 0; offset < count; ++offset, ids += step) {
-                    const PointId point_id = *ids;
+                // Indexing from `start` never forms a pointer before the column, as stepping past index 0 would.
+                const PointId* const ids = index.tables_[table].ids.data() + start;
+                for (std::size_t offset = 0; offset < count; ++offset) {
+                    const PointId point_id = ids[static_cast<std::ptrdiff_t>(offset) * step];
                     const std::uint8_t remaining = counters[point_id];
                     if (remaining > 1U) {
                         counters[point_id] = static_cast<std::uint8_t>(remaining - 1U);
@@ -926,8 +937,9 @@ SearchResult SearchEngine::search(PointView query, std::uint32_t k, const Defaul
             };
             // Counts a run and records each point whose counter runs out.
             const auto count_run = [&](const PointId* ids, std::ptrdiff_t step, std::size_t count) {
-                for (std::size_t offset = 0; offset < count; ++offset, ids += step) {
-                    const PointId point_id = *ids;
+                // Indexing from `ids` never forms a pointer before the column, as stepping past index 0 would.
+                for (std::size_t offset = 0; offset < count; ++offset) {
+                    const PointId point_id = ids[static_cast<std::ptrdiff_t>(offset) * step];
                     const std::uint8_t remaining = counters[point_id];
                     if (remaining > 1U) {
                         counters[point_id] = static_cast<std::uint8_t>(remaining - 1U);
@@ -947,11 +959,12 @@ SearchResult SearchEngine::search(PointView query, std::uint32_t k, const Defaul
                                                                                 static_cast<float>(slabs));
                     const float previous_bound = slab_bound;
                     slab_bound = std::clamp(next, slab_bound, bound);
-                    // Under the continuous stop the search ends once the front reaches the k-th distance over c, so
-                    // the slab need not reach past that front. Entries beyond it would only add hits, since their
-                    // candidates are never evaluated, and a later slab takes any entry that rounding leaves out.
+                    // Under the continuous stop the search ends once the front reaches the k-th distance over the
+                    // stopping ratio, so the slab need not reach past that front. Entries beyond it would only add
+                    // hits, since their candidates are never evaluated, and a later slab takes any entry that rounding
+                    // leaves out.
                     if (continuous && neighbors.size() >= k) {
-                        const float stop_front = neighbors.back().distance / (approximation_ratio * front_to_radius);
+                        const float stop_front = neighbors.back().distance / (stop_ratio * front_to_radius);
                         if (stop_front > previous_bound && stop_front < slab_bound) slab_bound = stop_front;
                     }
                     events.clear();

@@ -31,12 +31,14 @@ PointSetMetadata MakePointSetMetadata(const std::filesystem::path& dataset_direc
     };
 }
 
+// |estimate - C| / C in percent, with no floor on C: only C = 0 is special.
 float RelativeErrorPercentage(float estimation, float ground_truth) {
-    if (std::abs(ground_truth) < Global::kEpsilon) {
-        return std::abs(estimation) < Global::kEpsilon ? 0.0 : std::numeric_limits<float>::infinity();
+    if (ground_truth == 0.0F) {
+        return estimation == 0.0F ? 0.0F : std::numeric_limits<float>::infinity();
     }
-
-    return std::fabs(estimation - ground_truth) / ground_truth * 100;  // NOLINT: readability-magic-numbers
+    const double error = std::fabs(static_cast<double>(estimation) - static_cast<double>(ground_truth)) /
+                         std::fabs(static_cast<double>(ground_truth));
+    return static_cast<float>(error * 100.0);  // NOLINT: readability-magic-numbers
 }
 
 }  // namespace

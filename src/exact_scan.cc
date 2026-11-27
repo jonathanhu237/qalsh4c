@@ -89,7 +89,15 @@ ExactScan::ExactScan(const std::vector<const Coordinate*>& queries, unsigned int
     initial_results_.resize(num_queries_);
     for (unsigned int query = 0; query < num_queries_; ++query) {
         std::copy_n(queries[query], d, queries_.data() + query * d);
-        initial_results_[query] = AnnResult{.distance = upper_bounds[query], .point_id = 0};
+        // The hint is enlarged by twice the relative error of a float sum of d terms, which covers the gap between
+        // this scan's kernel and the double kernel that produced a crude distance, then rounded up.
+        const Distance bound = upper_bounds[query];
+        Distance hint = std::numeric_limits<Distance>::infinity();
+        if (bound < std::numeric_limits<Distance>::infinity()) {
+            hint = std::nextafter(static_cast<float>(static_cast<double>(bound) * (1.0 + 2.0 * summation_error_)),
+                                  std::numeric_limits<float>::infinity());
+        }
+        initial_results_[query] = AnnResult{.distance = hint, .point_id = kNoTarget};
     }
     if (l1_) {
         return;

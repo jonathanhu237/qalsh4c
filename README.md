@@ -6,15 +6,15 @@ CH(A -> B) = sum over a in A of d(a, B) by the importance-sampling estimator of 
 1. **Crude distances.** QALSH-CrudeNN answers one query per source vector a and returns a crude distance
    D_a >= d(a, B). It scans the projection entries of all m QALSH lines in non-decreasing distance from the query's
    projection (the incremental scan of I-LSH, a "continuous front"), has no candidate budget, and returns as soon as
-   the best distance is at most c times the radius of the front.
-2. **Sample size.** E[D_a] <= kappa d(a, B), where kappa = 1 + c * int_{1/c}^inf F(x) dx and F is a binomial tail of
+   the best distance is at most gamma times the radius of the front (gamma = c^1.5 by default).
+2. **Sample size.** E[D_a] <= kappa d(a, B), where kappa = 1 + gamma * int_{1/gamma}^inf F(x) dx and F is a binomial tail of
    the QALSH collision probability. The program computes a certified upper bound on kappa from the QALSH parameters
    alone (interval arithmetic, `src/kappa.cc`) and the sample size T = ceil((kappa - 1) / (delta epsilon^2)).
 3. **Sampling.** T source vectors are drawn with probability D_a / D, their exact nearest-neighbor distances are
    computed, and eta = (1/T) sum D d(x, B) / D_x is returned.
 
-Everything that the estimator does runs in C++. The Python and shell files under `scripts/dasfaa` only run the
-binary, the FAISS and HNSW baselines, and summarize results.
+Everything that the estimator does runs in C++. The Python and shell files under `scripts/vldb` and `scripts/dasfaa`
+only run the binary, the FAISS, HNSW and IVF baselines, and summarize results.
 
 ## Build
 
@@ -44,7 +44,7 @@ small example used by the tests.
 ## Usage
 
 ```bash
-# Certified kappa and T for l1 at c = 2 (the default continuous front).
+# Certified kappa and T for l1 at c = 2 (the default continuous front, gamma = c^1.5).
 qalsh4c kappa -p 1 -c 2 -e 0.3 0.1
 
 # QALSH4C: T chosen from epsilon and delta (defaults 0.1 and 0.1), or given with -n.
@@ -69,12 +69,20 @@ Options of `estimate ... sampling`:
 | `--exact-distances FILE` | Look up d(a, B) of the sampled vectors in a float64 file (from `--save-distances`) instead of computing them; the estimates are the same. Used by the accuracy experiments, which repeat the estimator many times |
 | `precomputed -f FILE` | Weights from a float32 file, for example saved crude distances or HNSW distances |
 
-Global options of the QALSH search: `-T` threads, `--use-fixed-seed`, and, for the stopping-rule comparison of the
-paper, `--qalsh-stop-rule round --qalsh-scan-order quanta --qalsh-advance-check false` (rounds R_t = R_0 c^t with
-end-of-round tests, gamma = c) plus `--qalsh-stop-within-round` (QALSH's test on every new candidate, gamma = c^2) and
-`--initial-radius 1.4e-45` (R_0 = 2^-149, valid for any float32 data). `kappa` takes the same options and certifies
-the constant of the selected rule.
+Global options of the QALSH search: `-T` threads, `--use-fixed-seed` or `--seed N`, `--qalsh-continuous-ratio`
+(the stopping ratio gamma of the continuous front; 0, the default, means c^1.5), and, for the stopping-rule
+comparison of the paper, `--qalsh-stop-rule round --qalsh-scan-order quanta --qalsh-advance-check false` (rounds
+R_t = R_0 c^t with end-of-round tests, gamma = c, with `--qalsh-mid-round-ratio 0` for pure end-of-round stops) plus
+`--qalsh-stop-within-round` (QALSH's test on every new candidate, gamma = c^2). The round rules start from
+`--initial-radius`, by default 2^-149 (at most any positive float32 distance). `kappa` takes the same options and
+certifies the constant of the selected rule.
 
 ## Experiments
 
-`scripts/dasfaa/runs/README.md` describes the pipeline that produced the numbers of the DASFAA 2027 paper.
+`scripts/vldb/v3.sh` runs every experiment of the PVLDB paper, one phase after another, into one results directory:
+the cost table (`realcost.sh`), the 50-run randomness test (`randomness.sh`), ANN indexes and other sampling methods
+(`ann.sh`, `anncmp.py`, `ann_weights.py`), equal time (`equaltime.sh`), the stopping-rule ablation (`ablation.sh`),
+scaling (`dscaling.sh`, `bscaling.sh`), threads (`threads.sh`), the c sweep (`csweep.sh`), the eps sweep
+(`epsweep.py`) and memory (`memory.sh`). `summarize_vldb.py` and the `make_*_figure.py` scripts turn the results into
+the tables and figures. `scripts/dasfaa/runs/README.md` describes the earlier DASFAA pipeline, whose helpers the VLDB
+scripts reuse.

@@ -177,6 +177,9 @@ std::mt19937 Random::SeededGenerator() {
     if (Global::kUseFixedSeed) {
         return std::mt19937(Global::kDefaultSeed);
     }
+    if (Global::kSeed >= 0) {
+        return std::mt19937(static_cast<std::mt19937::result_type>(Global::kSeed));
+    }
     return std::mt19937(std::random_device{}());
 }
 

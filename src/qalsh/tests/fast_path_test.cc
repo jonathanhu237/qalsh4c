@@ -180,6 +180,7 @@ std::size_t RunCase(const Case& test_case, std::uint32_t seed) {
         bool budget_override;
         bool check_after_radius_advance;
         bool continuous{false};
+        float continuous_ratio{0.0F};
     };
     const StrategySetting settings[] = {
         {"library default", true, 0.0F, std::nullopt, false, true},
@@ -190,6 +191,8 @@ std::size_t RunCase(const Case& test_case, std::uint32_t seed) {
         {"within round", true, 0.0F, std::nullopt, true, true},
         {"budget", false, 1.0F, std::size_t{5}, true, true},
         {"continuous", false, 1.0F, std::nullopt, true, true, true},
+        {"continuous, ratio c^1.5", false, 1.0F, std::nullopt, true, true, true, 2.828427F},
+        {"continuous, ratio c^2", false, 1.0F, std::nullopt, true, true, true, 4.0F},
     };
     std::size_t compared = 0;
     for (const auto& setting : settings) {
@@ -202,6 +205,7 @@ std::size_t RunCase(const Case& test_case, std::uint32_t seed) {
                     strategy.set_mid_round_ratio(setting.mid_round_ratio);
                     strategy.set_check_after_radius_advance(setting.check_after_radius_advance);
                     strategy.set_continuous_stop(setting.continuous);
+                    strategy.set_continuous_ratio(setting.continuous_ratio);
                     return strategy;
                 };
                 const std::string where = std::string(test_case.metric == qalsh::Metric::l1 ? "l1" : "l2") + " n=" +
@@ -226,6 +230,30 @@ std::size_t RunCase(const Case& test_case, std::uint32_t seed) {
                     ++compared;
                 }
             }
+        }
+    }
+    // A larger continuous ratio tests a weaker condition on the same front, so it stops at the same entry or an
+    // earlier one: ratio c^2 never evaluates more candidates than c^1.5, and c^1.5 never more than c.
+    for (const std::uint32_t k : {1U, 3U}) {
+        for (std::size_t query = 0; query < queries.size(); ++query) {
+            qalsh::DefaultQalshStrategy tight;
+            tight.set_candidate_budget(std::nullopt);
+            tight.set_check_after_evaluation(false);
+            tight.set_mid_round_ratio(1.0F);
+            tight.set_continuous_stop(true);
+            qalsh::DefaultQalshStrategy middle = tight;
+            middle.set_continuous_ratio(2.828427F);
+            qalsh::DefaultQalshStrategy loose = tight;
+            loose.set_continuous_ratio(4.0F);
+            const auto tight_result = distance_reference.search(queries[query], k, tight);
+            const auto middle_result = distance_reference.search(queries[query], k, middle);
+            const auto loose_result = distance_reference.search(queries[query], k, loose);
+            const std::string where = "k=" + std::to_string(k) + " query " + std::to_string(query);
+            Check(middle_result.evaluated_candidates <= tight_result.evaluated_candidates,
+                  "ratio c^1.5 evaluated more candidates than ratio c, " + where);
+            Check(loose_result.evaluated_candidates <= middle_result.evaluated_candidates,
+                  "ratio c^2 evaluated more candidates than ratio c^1.5, " + where);
+            ++compared;
         }
     }
     return compared;

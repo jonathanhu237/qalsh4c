@@ -304,6 +304,7 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     strategy.set_mid_round_ratio(Global::kQalshStopAtRoundBoundary ? Global::kQalshMidRoundRatio : 0.0F);
     strategy.set_check_after_radius_advance(Global::kQalshCheckAfterRadiusAdvance);
     strategy.set_continuous_stop(Global::kQalshStopRule == "continuous");
+    strategy.set_continuous_ratio(QalshContinuousRatio(index_data_->qalsh_config.approximation_ratio));
     const qalsh::SearchResult result = engine_->search(query_point, 1, strategy);
     g_qalsh_hit_counter.queries += 1;
     g_qalsh_hit_counter.hits += result.projection_hits;
@@ -313,11 +314,18 @@ AnnResult QalshAnnSearcher::Search(const Point& query_point) {
     return ToAnnResult(result);
 }
 
+float QalshContinuousRatio(float approximation_ratio) {
+    // The paper's default stopping ratio gamma = c^1.5 (2.828427 at c = 2), unless --qalsh-continuous-ratio sets one.
+    return Global::kQalshContinuousRatio > 0.0F ? Global::kQalshContinuousRatio
+                                                : approximation_ratio * std::sqrt(approximation_ratio);
+}
+
 double QalshStoppingFactor(float approximation_ratio) {
     const double c = approximation_ratio;
     if (Global::kQalshStopRule == "continuous") {
-        // The continuous front returns once the best distance is at most c times the radius of the front.
-        return c;
+        // The continuous front returns once the best distance is at most gamma times the radius of the front; the
+        // bound uses the same float gamma as the search.
+        return static_cast<double>(QalshContinuousRatio(approximation_ratio));
     }
     // Round rules with radii R_t = R_0 c^t. A test right after the radius grows, or on every new candidate, may accept a
     // candidate within c R_t while only round t - 1, of radius R_t / c, is complete.

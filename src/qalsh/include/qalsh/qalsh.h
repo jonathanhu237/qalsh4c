@@ -188,6 +188,10 @@ class DefaultQalshStrategy final {
      * approximation_ratio times the larger of the nearest neighbor's collision radius and its distance over
      * approximation_ratio. */
     void set_continuous_stop(bool enabled);
+    /** With the continuous stop: stop once the k-th distance is at most this ratio times the radius of the front, in
+     * place of approximation_ratio (0, the default, keeps approximation_ratio). A larger ratio stops earlier, and the
+     * returned distance is then at most this ratio times that larger radius. */
+    void set_continuous_ratio(float ratio);
     /** Stop inside a round once a candidate lies within ratio * radius (0 disables). */
     void set_mid_round_ratio(float ratio);
 
@@ -201,6 +205,7 @@ class DefaultQalshStrategy final {
     float mid_round_ratio_{0.0F};
     bool check_after_radius_advance_{true};
     bool continuous_stop_{false};
+    float continuous_ratio_{0.0F};
 };
 
 class SearchEngine {

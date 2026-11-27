@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <vector>
 
 #include "ann_searcher.h"
@@ -12,8 +13,13 @@
 // Calc::LpDistanceBoundedRaw, so the distances equal those of a scalar scan.
 class ExactScan {
    public:
-    // Each query keeps its upper bound, with point id 0, unless a target is strictly closer, as in
-    // LinearScanAnnSearcher::SearchWithUpperBound. The query coordinates are copied.
+    // The point id of a result that no target reached.
+    static constexpr unsigned int kNoTarget = std::numeric_limits<unsigned int>::max();
+
+    // An upper bound is a pruning hint, not a result: targets farther than it (enlarged by the summation error, so a
+    // target whose distance another kernel put at the bound still qualifies) are skipped, and a query keeps point id
+    // kNoTarget until some target is scanned within it. The caller rescans such queries without a bound. The query
+    // coordinates are copied.
     ExactScan(const std::vector<const Coordinate*>& queries, unsigned int num_dimensions, float norm_order,
               const std::vector<Distance>& upper_bounds);
 
